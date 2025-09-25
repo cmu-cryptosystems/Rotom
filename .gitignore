@@ -1,0 +1,16 @@
+.pytest_cache
+__pycache__/
+layout_cache
+*.so
+data
+.venv
+heir/
+heir*
+
+# Documentation generated files
+docs/html/
+docs/doctrees/
+docs/_build/
+docs/.doctrees/
+docs/*.doctrees
+docs/source/api_reference/*.rst
