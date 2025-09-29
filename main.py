@@ -19,18 +19,15 @@ from benchmarks.microbenchmarks.ttm_micro_32 import ttm_micro_32
 from benchmarks.rotom_benchmarks.bert_attention import bert_attention
 from benchmarks.rotom_benchmarks.convolution import convolution
 from benchmarks.rotom_benchmarks.convolution_32768 import convolution_32768
-
-# Import benchmark functions
-from benchmarks.rotom_benchmarks.distance import distance
 from benchmarks.rotom_benchmarks.double_matmul.double_matmul_128_64 import (
     double_matmul_128_64,
 )
 from benchmarks.rotom_benchmarks.double_matmul.double_matmul_256_128 import (
     double_matmul_256_128,
 )
-from benchmarks.rotom_benchmarks.logreg import logreg
-from benchmarks.rotom_benchmarks.retrieval import retrieval
-from benchmarks.rotom_benchmarks.ttm import ttm
+
+# Import benchmark functions
+from benchmarks.rotom_benchmarks.matmul.matmul_128_128 import matmul_128_128
 from frontends.tensor import TensorTerm
 from ir.dim import *
 from ir.kernel_cost import KernelCost
@@ -67,6 +64,90 @@ def run_benchmark_or_microbenchmark(args):
         assert kernel
         assert inputs
 
+        circuit_ir = Lower(kernel).run()
+
+        runtime = 0
+        if args.backend.lower() == "toy":
+            results = Toy(circuit_ir, inputs, args).run()
+            check_results(kernel.term, inputs, kernel, results, runtime, args)
+        elif args.backend.lower() == "ckks":
+            runtime, results = CKKS(circuit_ir, inputs, args).run()
+            check_results(kernel.term, inputs, kernel, results, runtime, args)
+        else:
+            raise NotImplementedError("unknown backend")
+
+        print("runtime:", runtime)
+        return
+
+    if args.benchmark:
+        tensor_ir = None
+        inputs = None
+        n = args.n
+
+        match args.benchmark:
+            case "matmul":
+                tensor_ir, inputs = matmul_128_128()
+            case "double_matmul_128_64":
+                tensor_ir, inputs = double_matmul_128_64()
+            case "double_matmul_256_128":
+                tensor_ir, inputs = double_matmul_256_128()
+            case "convolution":
+                tensor_ir, inputs, n = convolution()
+                args.n = n
+            case "convolution_32768":
+                tensor_ir, inputs, n = convolution_32768()
+                args.n = n
+            case "bert_attention":
+                tensor_ir, inputs, n = bert_attention()
+                args.n = n
+            case _:
+                raise NotImplementedError("unknown benchmark")
+
+        assert tensor_ir
+        assert inputs
+        assert n
+        # Generate kernel from tensor_ir
+        kernel = LayoutAssignment(tensor_ir, args).run()
+
+        # Output found kernel
+        print("found kernel:")
+        for k in kernel.post_order():
+            print(k)
+        print()
+
+        # Lower to circuit IR
+        circuit_ir = Lower(kernel).run()
+
+        # Run backend with result checking
+        runtime = 0
+        if args.backend.lower() == "toy":
+            results = Toy(circuit_ir, inputs, args).run()
+            check_results(tensor_ir, inputs, kernel, results, runtime, args)
+        elif args.backend.lower() == "ckks":
+            runtime, results = CKKS(circuit_ir, inputs, args).run()
+            check_results(tensor_ir, inputs, kernel, results, runtime, args)
+        else:
+            raise NotImplementedError("unknown backend")
+
+        print("runtime:", runtime)
+        return
+    else:
+        args.benchmark = "main"
+
+        n = 8
+        a = TensorTerm.Tensor("a", [4, 2], True)
+        b = TensorTerm.Tensor("b", [2, 4], False)
+        c = TensorTerm.Tensor("c", [4, 2], False)
+        tensor_ir = a @ b @ c
+        inputs = {}
+        inputs["a"] = np.array([[i * 4 + j for j in range(2)] for i in range(4)])
+        inputs["b"] = np.array([[i * 2 + j for j in range(4)] for i in range(2)])
+        inputs["c"] = np.array([[i * 4 + j for j in range(2)] for i in range(4)])
+
+        # Generate kernel from tensor_ir
+        kernel = LayoutAssignment(tensor_ir, args).run()
+
+        # Print kernel information
         print(
             "picked kernel:",
             kernel,
@@ -82,67 +163,22 @@ def run_benchmark_or_microbenchmark(args):
             print(KernelCost(k, args.net).ops())
         print()
 
+        # Lower to circuit IR
         circuit_ir = Lower(kernel).run()
 
+        # Run backend with result checking
         runtime = 0
         if args.backend.lower() == "toy":
             results = Toy(circuit_ir, inputs, args).run()
+            check_results(tensor_ir, inputs, kernel, results, runtime, args)
         elif args.backend.lower() == "ckks":
             runtime, results = CKKS(circuit_ir, inputs, args).run()
-        elif args.backend.lower() == "heir":
-            # Note: HEIR backend not implemented yet
-            raise NotImplementedError("HEIR backend not implemented")
-        elif args.backend.lower() == "heco":
-            # Note: HECO backend not implemented yet
-            raise NotImplementedError("HECO backend not implemented")
+            check_results(tensor_ir, inputs, kernel, results, runtime, args)
         else:
             raise NotImplementedError("unknown backend")
 
         print("runtime:", runtime)
         return
-
-    if args.benchmark:
-        tensor_ir = None
-        inputs = None
-        n = args.n
-
-        match args.benchmark:
-            case "distance":
-                tensor_ir, inputs = distance()
-            case "ttm":
-                tensor_ir, inputs = ttm()
-            case "retrieval":
-                tensor_ir, inputs = retrieval()
-            case "double_matmul_128_64":
-                tensor_ir, inputs = double_matmul_128_64()
-            case "double_matmul_256_128":
-                tensor_ir, inputs = double_matmul_256_128()
-            case "logreg":
-                tensor_ir, inputs = logreg()
-            case "convolution":
-                tensor_ir, inputs = convolution()
-            case "convolution_32768":
-                tensor_ir, inputs = convolution_32768()
-            case "bert_attention":
-                tensor_ir, inputs = bert_attention()
-            case _:
-                raise NotImplementedError("unknown benchmark")
-
-        assert tensor_ir
-        assert inputs
-        assert n
-    else:
-        args.benchmark = "main"
-
-        n = 8
-        a = TensorTerm.Tensor("a", [4, 2], True)
-        b = TensorTerm.Tensor("b", [2, 4], False)
-        c = TensorTerm.Tensor("c", [4, 2], False)
-        tensor_ir = a @ b @ c
-        inputs = {}
-        inputs["a"] = np.array([[i * 4 + j for j in range(2)] for i in range(4)])
-        inputs["b"] = np.array([[i * 2 + j for j in range(4)] for i in range(2)])
-        inputs["c"] = np.array([[i * 4 + j for j in range(2)] for i in range(4)])
 
 
 def main(args):

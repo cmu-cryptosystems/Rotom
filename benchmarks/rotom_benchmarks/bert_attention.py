@@ -32,15 +32,9 @@ def bert_attention():
     bv = TensorTerm.Tensor("bv", [768], False)
 
     q = h @ wq + bq
-    k = (h @ wk) + bk
-    v = (h @ wv) + bv
-
-    # reshape q and k
-    blocked_q = q.reshape(1, {1: 12, 2: 64}).permute({0: 1, 1: 0, 2: 2})
-    blocked_kt = k.reshape(1, {1: 12, 2: 64}).permute({0: 2, 1: 0, 2: 1})
-    blocked_v = v.reshape(1, {1: 12, 2: 64}).permute({0: 1, 1: 0, 2: 2})
-
-    q_kt = blocked_q.block_matmul(blocked_kt)
-
-    q_kt_v = q_kt.block_matmul(blocked_v)
-    return q_kt_v, inputs
+    k = h @ wk + bk
+    qk = q @ k.T
+    # qk = softmax(qk)
+    v = h @ wv + bv
+    result = qk @ v
+    return result, inputs, 8192
