@@ -157,6 +157,7 @@ class LayoutAssignment:
                 raise NotImplementedError(term.op)
             case _:
                 raise NotImplementedError(term.op)
+        assert kernels
         return kernels
 
     def run(self):
