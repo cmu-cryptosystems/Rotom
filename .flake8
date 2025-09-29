@@ -1,0 +1,28 @@
+[flake8]
+max-line-length = 88
+extend-ignore = 
+    E203,  # whitespace before ':'
+    E501,  # line too long (handled by black)
+    W503,  # line break before binary operator
+    E402,  # module level import not at top of file
+exclude = 
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    build,
+    dist,
+    .eggs,
+    *.egg,
+    .pytest_cache,
+    .mypy_cache,
+    docs,
+    data
+max-complexity = 10
+per-file-ignores =
+    # Allow unused imports in __init__.py files
+    __init__.py:F401
+    # Allow assert statements in tests
+    tests/*:S101
+    # Allow long lines in generated files
+    */generated/*:E501
