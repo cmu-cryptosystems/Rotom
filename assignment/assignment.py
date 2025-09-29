@@ -520,9 +520,12 @@ class LayoutAssignment:
         for kernel in kernels:
             kernel_shape_map = {}
             for dim in kernel.layout.get_dims():
-                if dim.dim is not None and dim.dim not in kernel_shape_map:
-                    kernel_shape_map[dim.dim] = 1
-                if dim.dim is not None:
+                # Skip EMPTY dimensions - they should have dim=None and shouldn't contribute to shape
+                if dim.dim_type == DimType.EMPTY:
+                    continue
+                elif dim.dim is not None and dim.dim not in kernel_shape_map:
+                    kernel_shape_map[dim.dim] = dim.extent
+                elif dim.dim is not None:
                     kernel_shape_map[dim.dim] *= dim.extent
 
             # flatten kernel_shape
