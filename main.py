@@ -28,6 +28,7 @@ from benchmarks.rotom_benchmarks.double_matmul.double_matmul_256_128 import (
 
 # Import benchmark functions
 from benchmarks.rotom_benchmarks.matmul.matmul_128_128 import matmul_128_128
+from benchmarks.rotom_benchmarks.distance import distance
 from frontends.tensor import TensorTerm
 from ir.dim import *
 from ir.kernel_cost import KernelCost
@@ -85,6 +86,8 @@ def run_benchmark_or_microbenchmark(args):
         n = args.n
 
         match args.benchmark:
+            case "distance":
+                tensor_ir, inputs = distance()
             case "matmul":
                 tensor_ir, inputs = matmul_128_128()
             case "double_matmul_128_64":

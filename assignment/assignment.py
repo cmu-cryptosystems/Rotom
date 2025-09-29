@@ -196,6 +196,8 @@ class LayoutAssignment:
             kernels = Optimizer(self.roll_flag).run(candidate_kernels)
 
             # prune the search space
+            print("term:", term)
+            print("padded shape:", self.shape.padded_shapes[term])
             kernels = self.shape_check(self.shape.padded_shapes[term], kernels)
             # kernels = self.prune_tiles(kernels)
             kernels = self.add_equivalent_kernels(kernels)
@@ -520,9 +522,12 @@ class LayoutAssignment:
         for kernel in kernels:
             kernel_shape_map = {}
             for dim in kernel.layout.get_dims():
-                if dim.dim is not None and dim.dim not in kernel_shape_map:
-                    kernel_shape_map[dim.dim] = 1
-                if dim.dim is not None:
+                # Skip EMPTY dimensions - they should have dim=None and shouldn't contribute to shape
+                if dim.dim_type == DimType.EMPTY:
+                    continue
+                elif dim.dim is not None and dim.dim not in kernel_shape_map:
+                    kernel_shape_map[dim.dim] = dim.extent
+                elif dim.dim is not None:
                     kernel_shape_map[dim.dim] *= dim.extent
 
             # flatten kernel_shape
@@ -532,6 +537,12 @@ class LayoutAssignment:
                     kernel_shape.append(1)
                 else:
                     kernel_shape.append(kernel_shape_map[i])
+
+            print("kernel shape:", kernel_shape)
+            print("shape:", shape)
+            print(kernel)
+            print(kernel_shape_map)
+            print("dims:", kernel.layout.get_dims())
 
             for i, k in enumerate(kernel_shape):
                 if k != shape[i]:
