@@ -28,7 +28,7 @@ from benchmarks.rotom_benchmarks.double_matmul.double_matmul_256_128 import (
 )
 from benchmarks.rotom_benchmarks.matmul.matmul_128_128 import matmul_128_128
 
-# Import Rotom 
+# Import Rotom
 from frontends.tensor import TensorTerm
 from ir.dim import *
 from ir.kernel_cost import KernelCost
