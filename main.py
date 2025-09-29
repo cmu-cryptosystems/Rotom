@@ -19,6 +19,7 @@ from benchmarks.microbenchmarks.ttm_micro_32 import ttm_micro_32
 from benchmarks.rotom_benchmarks.bert_attention import bert_attention
 from benchmarks.rotom_benchmarks.convolution import convolution
 from benchmarks.rotom_benchmarks.convolution_32768 import convolution_32768
+from benchmarks.rotom_benchmarks.distance import distance
 from benchmarks.rotom_benchmarks.double_matmul.double_matmul_128_64 import (
     double_matmul_128_64,
 )
@@ -28,7 +29,6 @@ from benchmarks.rotom_benchmarks.double_matmul.double_matmul_256_128 import (
 
 # Import benchmark functions
 from benchmarks.rotom_benchmarks.matmul.matmul_128_128 import matmul_128_128
-from benchmarks.rotom_benchmarks.distance import distance
 from frontends.tensor import TensorTerm
 from ir.dim import *
 from ir.kernel_cost import KernelCost
