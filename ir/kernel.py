@@ -13,18 +13,19 @@ Key Components:
 """
 
 from enum import Enum
+
 from .layout_utils import dimension_merging
 
 
 class KernelOp(Enum):
     """
     Enumeration of kernel operations for tensor computations.
-    
+
     Defines all the kernel operations supported by Rotom,
     including tensor operations, matrix operations, conversions, and
     indexing operations. These operations form the high-level interface
     between tensor computations and homomorphic encryption.
-    
+
     Operation Categories:
         Tensor ops: TENSOR, CS, CONST, ADD, SUB, MUL, SUM, PRODUCT
         Matrix ops: MATMUL, BLOCK_MATMUL, BSGS_MATMUL, STRASSEN_MATMUL
@@ -76,12 +77,12 @@ class KernelOp(Enum):
 class Kernel:
     """
     Represents a kernel operation in the layout IR.
-    
+
     A Kernel encapsulates a single tensor operation with its operands
     and associated layout information. Kernels are the primary unit
     of computation in the IR and are used to represent tensor operations
     like matrix multiplication, convolution, and element-wise operations.
-    
+
     Attributes:
         op: The kernel operation type (from KernelOp enum)
         cs: List of child kernels (operands)
@@ -91,7 +92,7 @@ class Kernel:
     def __init__(self, op, cs, layout):
         """
         Create a kernel operation.
-        
+
         Args:
             op: The kernel operation type
             cs: List of child kernels (operands)
@@ -103,7 +104,7 @@ class Kernel:
 
     def __repr__(self):
         """String representation of the kernel.
-        
+
         Returns:
             str: Human-readable representation of the kernel
         """
@@ -115,7 +116,7 @@ class Kernel:
 
     def copy(self):
         """Create a copy of the kernel.
-        
+
         Returns:
             Kernel: A new kernel with copied children and same layout
         """
@@ -123,7 +124,7 @@ class Kernel:
 
     def __len__(self):
         """Get the length of the kernel (layout dimensions).
-        
+
         Returns:
             int: Number of dimensions in the layout
         """
@@ -131,7 +132,7 @@ class Kernel:
 
     def unique_str(self):
         """Generate a unique string representation of the kernel.
-        
+
         Returns:
             str: Unique string identifier for the kernel
         """
@@ -142,7 +143,7 @@ class Kernel:
 
     def __hash__(self):
         """Compute hash of the kernel.
-        
+
         Returns:
             int: Hash value based on unique string representation
         """
@@ -150,10 +151,10 @@ class Kernel:
 
     def __eq__(self, other):
         """Check equality of two kernels.
-        
+
         Args:
             other: Another kernel to compare with
-            
+
         Returns:
             bool: True if kernels are equal, False otherwise
         """
@@ -161,10 +162,10 @@ class Kernel:
 
     def helper_post_order(self, seen):
         """Helper routine for post-order traversal.
-        
+
         Args:
             seen: Set of already visited nodes
-            
+
         Returns:
             tuple: (list of nodes in post-order, updated seen set)
         """
@@ -182,7 +183,7 @@ class Kernel:
                 seen.add(self)
                 res.append(self)
                 return res, seen
-            case(
+            case (
                 KernelOp.ROLL
                 | KernelOp.SPLIT_ROLL
                 | KernelOp.ROT_ROLL
@@ -225,7 +226,7 @@ class Kernel:
 
     def post_order(self):
         """Perform post-order traversal of the kernel computation DAG.
-        
+
         Returns:
             list: List of kernels in post-order (children before parents)
         """
@@ -236,10 +237,10 @@ class Kernel:
 
 class KernelDag:
     """Represents a directed acyclic graph of kernel operations.
-    
+
     A KernelDag groups multiple kernels into a single computation graph,
     allowing for complex multi-kernel operations and optimizations.
-    
+
     Attributes:
         kernel: The root kernel operation
         cs: List of child kernel operations
@@ -247,7 +248,7 @@ class KernelDag:
 
     def __init__(self, kernel, cs_kernels):
         """Initialize a kernel DAG.
-        
+
         Args:
             kernel: The root kernel operation
             cs_kernels: List of child kernel operations
@@ -257,7 +258,7 @@ class KernelDag:
 
     def __repr__(self):
         """String representation of the kernel DAG.
-        
+
         Returns:
             str: Human-readable representation of the DAG
         """
@@ -265,10 +266,10 @@ class KernelDag:
 
     def helper_post_order(self, seen):
         """Helper routine for post-order traversal.
-        
+
         Args:
             seen: Set of already visited nodes
-            
+
         Returns:
             tuple: (list of nodes in post-order, updated seen set)
         """
@@ -286,7 +287,7 @@ class KernelDag:
 
     def post_order(self):
         """Perform post-order traversal of the kernel DAG.
-        
+
         Returns:
             list: List of kernels in post-order (children before parents)
         """

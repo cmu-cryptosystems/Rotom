@@ -1,6 +1,6 @@
 from ir.dim import DimType
-from util.layout_util import align_dimension_extents, get_segments
 from lower.lower_util import rotate_and_sum
+from util.layout_util import align_dimension_extents, get_segments
 
 
 def lower_replicate(env, kernel):
@@ -51,8 +51,7 @@ def lower_replicate(env, kernel):
             for j in range(j_len):
                 for k in range(k_len):
                     indices.append(j * k_len)
-        relevant_ct_indices = [a + b for a,
-                               b in zip(relevant_ct_indices, indices)]
+        relevant_ct_indices = [a + b for a, b in zip(relevant_ct_indices, indices)]
 
     cts = {}
     for i, ct_index in enumerate(relevant_ct_indices):

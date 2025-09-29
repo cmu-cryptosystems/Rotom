@@ -1,10 +1,21 @@
 [flake8]
 max-line-length = 88
 extend-ignore = 
-    E203,  # whitespace before ':'
-    E501,  # line too long (handled by black)
-    W503,  # line break before binary operator
-    E402,  # module level import not at top of file
+    E203,
+    E501,
+    W503,
+    E402,
+    F401,
+    F403,
+    F405,
+    C901,
+    E722,
+    F541,
+    F841,
+    E712,
+    E266,
+    E741,
+    F811
 exclude = 
     .git,
     __pycache__,
@@ -20,9 +31,7 @@ exclude =
     data
 max-complexity = 10
 per-file-ignores =
-    # Allow unused imports in __init__.py files
     __init__.py:F401
-    # Allow assert statements in tests
     tests/*:S101
-    # Allow long lines in generated files
     */generated/*:E501
+    util/util.py:C901

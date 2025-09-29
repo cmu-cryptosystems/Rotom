@@ -1,8 +1,9 @@
 from copy import deepcopy as copy
+
 from ir.dim import DimType
-from ir.he import HETerm, HEOp
+from ir.he import HEOp, HETerm
 from lower.lower_util import rotate_and_sum
-from util.layout_util import get_cts_by_dim, convert_layout_to_mask, get_segment
+from util.layout_util import convert_layout_to_mask, get_cts_by_dim, get_segment
 
 
 def lower_sum(env, kernel):
@@ -61,9 +62,7 @@ def lower_sum(env, kernel):
             break
 
     if needs_mask:
-        mask = HETerm(
-            HEOp.MASK, [convert_layout_to_mask(kernel.layout)], False, "mask"
-        )
+        mask = HETerm(HEOp.MASK, [convert_layout_to_mask(kernel.layout)], False, "mask")
         masked_cts = {}
         for index, term in cts.items():
             mask_term = mask * term

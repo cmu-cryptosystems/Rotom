@@ -8,6 +8,6 @@ Modules:
     tensor: High-level tensor operations and expressions for FHE computations
 """
 
-from .tensor import TensorTerm, TensorOp
+from .tensor import TensorOp, TensorTerm
 
-__all__ = ['TensorTerm', 'TensorOp']
+__all__ = ["TensorTerm", "TensorOp"]

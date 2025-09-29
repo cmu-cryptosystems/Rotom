@@ -13,30 +13,30 @@ Key functions:
 - gen_strassens: Main function for generating Strassen's algorithm layouts
 """
 
+from copy import deepcopy as copy
+
+from assignment.gen.gen_binop import gen_binop
 from ir.dim import DimType
-from ir.layout import Layout
 from ir.kernel import Kernel, KernelOp
 from ir.kernel_cost import KernelCost
-from assignment.gen.gen_binop import gen_binop
+from ir.layout import Layout
 from opt.bsgs_matmul import run_bsgs_matmul
 from opt.ct_roll_bsgs import run_ct_roll_bsgs
 from opt.roll_propagation import run_roll_propogation
 from opt.roll_reordering import run_roll_reordering
 from opt.rot_roll import run_rot_roll
 
-from copy import deepcopy as copy
-
 
 def get_shape(kernel):
     """Extracts shape information from a kernel layout.
-    
+
     This function analyzes a kernel's layout dimensions and returns
     the corresponding tensor shape. It aggregates dimensions with the
     same index to compute the total extent for each dimension.
-    
+
     Args:
         kernel: Kernel to extract shape from
-        
+
     Returns:
         List of integers representing the tensor shape
     """
@@ -255,8 +255,7 @@ def strassens_opt(term, a_tiles, b_tiles, roll_flag, network):
     output_kernels = []
     for layout in M1.keys():
         C1 = add_tiles(
-            sub_tiles(add_tiles(M1[layout], M4[layout]),
-                      M5[layout]), M7[layout]
+            sub_tiles(add_tiles(M1[layout], M4[layout]), M5[layout]), M7[layout]
         )
         C1.layout.offset = A1.layout.offset
         C2 = add_tiles(M3[layout], M5[layout])
@@ -264,8 +263,7 @@ def strassens_opt(term, a_tiles, b_tiles, roll_flag, network):
         C3 = add_tiles(M2[layout], M4[layout])
         C3.layout.offset = A3.layout.offset
         C4 = add_tiles(
-            add_tiles(sub_tiles(M1[layout], M2[layout]),
-                      M3[layout]), M6[layout]
+            add_tiles(sub_tiles(M1[layout], M2[layout]), M3[layout]), M6[layout]
         )
         C4.layout.offset = A4.layout.offset
 

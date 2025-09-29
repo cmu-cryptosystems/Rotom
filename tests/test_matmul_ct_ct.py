@@ -1,13 +1,14 @@
+import random
+
 import numpy as np
 
+from assignment.assignment import LayoutAssignment
+from backends.toy import Toy
 from frontends.tensor import TensorTerm
 from ir.dim import *
-from assignment.assignment import LayoutAssignment
 from lower.lower import Lower
-from backends.toy import Toy
-from util.layout_util import apply_layout
 from tests.test_util import get_default_args
-import random
+from util.layout_util import apply_layout
 
 
 # Test matrix multiply with secret inputs
@@ -25,10 +26,12 @@ def test_matmul_ct_ct_1():
     # create inputs
     size = 4
     inputs = {}
-    inputs["a"] = np.array([[random.choice(range(2))
-                           for j in range(size)] for i in range(size)])
-    inputs["b"] = np.array([[random.choice(range(2))
-                           for j in range(size)] for i in range(size)])
+    inputs["a"] = np.array(
+        [[random.choice(range(2)) for j in range(size)] for i in range(size)]
+    )
+    inputs["b"] = np.array(
+        [[random.choice(range(2)) for j in range(size)] for i in range(size)]
+    )
 
     # generate test case
     tensor_ir, expected = matmul_ct_ct(inputs)
@@ -51,10 +54,12 @@ def test_matmul_ct_ct_2():
     # create inputs
     size = 8
     inputs = {}
-    inputs["a"] = np.array([[random.choice(range(2))
-                           for j in range(size)] for i in range(size)])
-    inputs["b"] = np.array([[random.choice(range(2))
-                           for j in range(size)] for i in range(size)])
+    inputs["a"] = np.array(
+        [[random.choice(range(2)) for j in range(size)] for i in range(size)]
+    )
+    inputs["b"] = np.array(
+        [[random.choice(range(2)) for j in range(size)] for i in range(size)]
+    )
 
     # generate test case
     tensor_ir, expected = matmul_ct_ct(inputs)
@@ -78,10 +83,12 @@ def test_matmul_ct_ct_3():
     # create inputs
     size = 16
     inputs = {}
-    inputs["a"] = np.array([[random.choice(range(2))
-                           for j in range(size)] for i in range(size)])
-    inputs["b"] = np.array([[random.choice(range(2))
-                           for j in range(size)] for i in range(size)])
+    inputs["a"] = np.array(
+        [[random.choice(range(2)) for j in range(size)] for i in range(size)]
+    )
+    inputs["b"] = np.array(
+        [[random.choice(range(2)) for j in range(size)] for i in range(size)]
+    )
 
     # generate test case
     tensor_ir, expected = matmul_ct_ct(inputs)
@@ -105,10 +112,12 @@ def test_matmul_ct_ct_4():
     # create inputs
     size = 64
     inputs = {}
-    inputs["a"] = np.array([[random.choice(range(2))
-                           for j in range(size)] for i in range(size)])
-    inputs["b"] = np.array([[random.choice(range(2))
-                           for j in range(size)] for i in range(size)])
+    inputs["a"] = np.array(
+        [[random.choice(range(2)) for j in range(size)] for i in range(size)]
+    )
+    inputs["b"] = np.array(
+        [[random.choice(range(2)) for j in range(size)] for i in range(size)]
+    )
 
     # generate test case
     tensor_ir, expected = matmul_ct_ct(inputs)
@@ -132,10 +141,12 @@ def test_matmul_ct_ct_5():
     # create inputs
     size = 4
     inputs = {}
-    inputs["a"] = np.array([[random.choice(range(2))
-                           for j in range(size)] for i in range(size)])
-    inputs["b"] = np.array([[random.choice(range(2))
-                           for j in range(size)] for i in range(size)])
+    inputs["a"] = np.array(
+        [[random.choice(range(2)) for j in range(size)] for i in range(size)]
+    )
+    inputs["b"] = np.array(
+        [[random.choice(range(2)) for j in range(size)] for i in range(size)]
+    )
 
     # generate test case
     tensor_ir, expected = matmul_ct_ct(inputs)
@@ -159,10 +170,12 @@ def test_matmul_ct_ct_6():
     # create inputs
     size = 8
     inputs = {}
-    inputs["a"] = np.array([[random.choice(range(2))
-                           for j in range(size)] for i in range(size)])
-    inputs["b"] = np.array([[random.choice(range(2))
-                           for j in range(size)] for i in range(size)])
+    inputs["a"] = np.array(
+        [[random.choice(range(2)) for j in range(size)] for i in range(size)]
+    )
+    inputs["b"] = np.array(
+        [[random.choice(range(2)) for j in range(size)] for i in range(size)]
+    )
 
     # generate test case
     tensor_ir, expected = matmul_ct_ct(inputs)
@@ -187,10 +200,12 @@ def test_matmul_ct_ct_7():
     # create inputs
     size = 16
     inputs = {}
-    inputs["a"] = np.array([[random.choice(range(2))
-                           for j in range(size)] for i in range(size)])
-    inputs["b"] = np.array([[random.choice(range(2))
-                           for j in range(size)] for i in range(size)])
+    inputs["a"] = np.array(
+        [[random.choice(range(2)) for j in range(size)] for i in range(size)]
+    )
+    inputs["b"] = np.array(
+        [[random.choice(range(2)) for j in range(size)] for i in range(size)]
+    )
 
     # generate test case
     tensor_ir, expected = matmul_ct_ct(inputs)
@@ -217,10 +232,12 @@ def test_matmul_ct_ct_8():
     # create inputs
     size = 64
     inputs = {}
-    inputs["a"] = np.array([[random.choice(range(2))
-                           for j in range(size)] for i in range(size)])
-    inputs["b"] = np.array([[random.choice(range(2))
-                           for j in range(size)] for i in range(size)])
+    inputs["a"] = np.array(
+        [[random.choice(range(2)) for j in range(size)] for i in range(size)]
+    )
+    inputs["b"] = np.array(
+        [[random.choice(range(2)) for j in range(size)] for i in range(size)]
+    )
 
     # generate test case
     tensor_ir, expected = matmul_ct_ct(inputs)

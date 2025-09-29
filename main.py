@@ -1,45 +1,47 @@
-from argparse import ArgumentParser, BooleanOptionalAction
-import numpy as np
 import random
+from argparse import ArgumentParser, BooleanOptionalAction
 
-from frontends.tensor import TensorTerm
-from ir.dim import *
-from ir.layout import *
+import numpy as np
+
 from assignment.assignment import LayoutAssignment
-from lower.lower import Lower
 from backends.openfhe_backend import CKKS
 from backends.toy import Toy
-from util.checker import check_results
-from ir.kernel_cost import KernelCost
 
 # Import microbenchmark functions
 from benchmarks.microbenchmarks.conversion import conversion
 from benchmarks.microbenchmarks.roll import roll
 from benchmarks.microbenchmarks.rot_roll import rot_roll
+from benchmarks.microbenchmarks.slot_bsgs_roll import slot_bsgs_roll
 from benchmarks.microbenchmarks.slot_conversion import slot_conversion
 from benchmarks.microbenchmarks.slot_roll import slot_roll
-from benchmarks.microbenchmarks.slot_bsgs_roll import slot_bsgs_roll
 from benchmarks.microbenchmarks.ttm_micro import ttm_micro
 from benchmarks.microbenchmarks.ttm_micro_32 import ttm_micro_32
+from benchmarks.rotom_benchmarks.bert_attention import bert_attention
+from benchmarks.rotom_benchmarks.convolution import convolution
+from benchmarks.rotom_benchmarks.convolution_32768 import convolution_32768
 
 # Import benchmark functions
 from benchmarks.rotom_benchmarks.distance import distance
-from benchmarks.rotom_benchmarks.ttm import ttm
-from benchmarks.rotom_benchmarks.retrieval import retrieval
-from benchmarks.rotom_benchmarks.double_matmul.double_matmul_128_64 import double_matmul_128_64
-from benchmarks.rotom_benchmarks.double_matmul.double_matmul_256_128 import double_matmul_256_128
+from benchmarks.rotom_benchmarks.double_matmul.double_matmul_128_64 import (
+    double_matmul_128_64,
+)
+from benchmarks.rotom_benchmarks.double_matmul.double_matmul_256_128 import (
+    double_matmul_256_128,
+)
 from benchmarks.rotom_benchmarks.logreg import logreg
-from benchmarks.rotom_benchmarks.convolution import convolution
-from benchmarks.rotom_benchmarks.convolution_32768 import convolution_32768
-from benchmarks.rotom_benchmarks.bert_attention import bert_attention
-
-
-
+from benchmarks.rotom_benchmarks.retrieval import retrieval
+from benchmarks.rotom_benchmarks.ttm import ttm
+from frontends.tensor import TensorTerm
+from ir.dim import *
+from ir.kernel_cost import KernelCost
+from ir.layout import *
+from lower.lower import Lower
+from util.checker import check_results
 
 
 def run_benchmark_or_microbenchmark(args):
     """Run either a microbenchmark or benchmark based on args"""
-    
+
     if args.microbenchmark != "main":
         kernel = None
         n = args.n
@@ -61,7 +63,7 @@ def run_benchmark_or_microbenchmark(args):
                 kernel, inputs = ttm_micro(args.n)
             case "ttm_32":
                 kernel, inputs = ttm_micro_32(args.n)
-                
+
         assert kernel
         assert inputs
 
@@ -86,8 +88,7 @@ def run_benchmark_or_microbenchmark(args):
         if args.backend.lower() == "toy":
             results = Toy(circuit_ir, inputs, args).run()
         elif args.backend.lower() == "ckks":
-            runtime, results = CKKS(
-                circuit_ir, inputs, args).run()
+            runtime, results = CKKS(circuit_ir, inputs, args).run()
         elif args.backend.lower() == "heir":
             # Note: HEIR backend not implemented yet
             raise NotImplementedError("HEIR backend not implemented")
@@ -139,20 +140,14 @@ def run_benchmark_or_microbenchmark(args):
         c = TensorTerm.Tensor("c", [4, 2], False)
         tensor_ir = a @ b @ c
         inputs = {}
-        inputs["a"] = np.array(
-            [[i*4+j for j in range(2)] for i in range(4)]
-        )
-        inputs["b"] = np.array(
-            [[i*2+j for j in range(4)] for i in range(2)]
-        )
-        inputs["c"] = np.array(
-            [[i*4+j for j in range(2)] for i in range(4)]
-        )
+        inputs["a"] = np.array([[i * 4 + j for j in range(2)] for i in range(4)])
+        inputs["b"] = np.array([[i * 2 + j for j in range(4)] for i in range(2)])
+        inputs["c"] = np.array([[i * 4 + j for j in range(2)] for i in range(4)])
 
 
 def main(args):
     """Main function to run the benchmark"""
-    
+
     # Check if we should run microbenchmark or benchmark
     if args.microbenchmark != "main" or args.benchmark != "main":
         run_benchmark_or_microbenchmark(args)
@@ -164,7 +159,9 @@ def main(args):
 
     # create inputs
     inputs = {}
-    inputs["a"] = np.array([[random.randint(0, 2) for i in range(64)] for j in range(64)])
+    inputs["a"] = np.array(
+        [[random.randint(0, 2) for i in range(64)] for j in range(64)]
+    )
     inputs["b"] = np.array([random.randint(0, 2) for i in range(64)])
 
     # generate test case
@@ -200,18 +197,19 @@ if __name__ == "__main__":
     parser.add_argument("--n", type=int, default=4096)
     parser.add_argument("--size", type=int, default=4)
     parser.add_argument("--rolls", action=BooleanOptionalAction, default=False)
-    parser.add_argument(
-        "--strassens", action=BooleanOptionalAction, default=False)
+    parser.add_argument("--strassens", action=BooleanOptionalAction, default=False)
     parser.add_argument("--net", default="lan")
     parser.add_argument("--cache", action=BooleanOptionalAction, default=False)
-    parser.add_argument(
-        "--serialize", action=BooleanOptionalAction, default=False)
+    parser.add_argument("--serialize", action=BooleanOptionalAction, default=False)
     parser.add_argument("--mock", action=BooleanOptionalAction, default=False)
     parser.add_argument("--fuzz", action=BooleanOptionalAction, default=False)
+    parser.add_argument("--fuzz_result", action=BooleanOptionalAction, default=False)
     parser.add_argument(
-        "--fuzz_result", action=BooleanOptionalAction, default=False)
-    parser.add_argument("--not-secure", action=BooleanOptionalAction, default=False,
-                       help="Disable 128-bit security level for OpenFHE backend")
+        "--not-secure",
+        action=BooleanOptionalAction,
+        default=False,
+        help="Disable 128-bit security level for OpenFHE backend",
+    )
     parser.add_argument("--fn", type=str, default="fn")
     args = parser.parse_args()
 

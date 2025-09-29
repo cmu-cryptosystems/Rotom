@@ -18,14 +18,14 @@ from ir.kernel import KernelOp
 def run_bsgs_matmul(candidate):
     """
     Apply BSGS optimization to matrix multiplication kernels.
-    
+
     BSGS (Baby-Step Giant-Step) can be applied to matrix multiplication
     when both layouts have the same roll pattern and one operand is
     plaintext. This optimization reduces rotation costs significantly.
-    
+
     Args:
         candidate: Kernel to apply BSGS optimization to
-        
+
     Returns:
         Updated kernel with BSGS optimization applied where applicable
     """
