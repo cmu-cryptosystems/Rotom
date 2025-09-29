@@ -6,7 +6,7 @@ iniconfig==2.1.0
 kiwisolver==1.4.9
 matplotlib==3.10.5
 numpy==2.2.6
-openfhe==1.4.0.1.22.4
+openfhe==1.4.0.1.24.4
 packaging==25.0
 pillow==11.3.0
 pluggy==1.6.0
