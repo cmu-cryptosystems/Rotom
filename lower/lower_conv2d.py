@@ -1,9 +1,10 @@
 import math
+
 import numpy as np
 
-from ir.dim import DimType
-from ir.he import HETerm, HEOp
 from ir.analysis.shape import Shape
+from ir.dim import DimType
+from ir.he import HEOp, HETerm
 from lower.lower_util import rotate_and_sum
 from util.layout_util import convert_layout_to_mask, get_segment
 from util.util import split_lists
@@ -28,8 +29,7 @@ def sum_slot_dim(kernel, ct, slot_sum_dims):
 
     if needs_mask:
         mask = HETerm(
-            HEOp.MASK, [convert_layout_to_mask(
-                kernel.layout)], False, "output mask"
+            HEOp.MASK, [convert_layout_to_mask(kernel.layout)], False, "output mask"
         )
         mask_term = ct * mask
         return mask_term
@@ -40,10 +40,10 @@ def lower_conv2d(env, kernel):
     """same as a normal mul, but with filtering rules"""
     assert env[kernel.cs[0]].keys() == env[kernel.cs[1]].keys()
 
-    print('kernel', kernel)
+    print("kernel", kernel)
     for k in kernel.post_order():
-        print('k', k)
-    
+        print("k", k)
+
     shape = Shape(kernel.layout.term)
     shape.run()
 
@@ -67,8 +67,7 @@ def lower_conv2d(env, kernel):
         for ct in cts:
             a_cts.append(HETerm(HEOp.CS, [ct], ct.secret))
         a_cs.append(a_cts)
-    b_cs = [HETerm(HEOp.CS, [ct], ct.secret)
-            for ct in env[kernel.cs[1]].values()]
+    b_cs = [HETerm(HEOp.CS, [ct], ct.secret) for ct in env[kernel.cs[1]].values()]
 
     split_a_cs = split_lists(a_cs, i_h)
     split_b_cs = split_lists(b_cs, i_h)
@@ -77,8 +76,7 @@ def lower_conv2d(env, kernel):
     if padding == [0, 0, 1, 1]:
         new_splits = []
         for split in split_b_cs:
-            rot_split = [split[(i + 1) % len(split)]
-                         for i in range(len(split))]
+            rot_split = [split[(i + 1) % len(split)] for i in range(len(split))]
             new_splits.append(rot_split)
         split_b_cs = new_splits
         split_b_cs = [
@@ -164,4 +162,3 @@ def lower_conv2d(env, kernel):
             slot_sum_dims.append(dim)
     ct = sum_slot_dim(kernel, sum_together, slot_sum_dims)
     return {0: ct}
-

@@ -18,16 +18,20 @@ These optimizations are applied after layout assignment to further
 improve the efficiency of the generated FHE circuits.
 """
 
+from .bsgs_matmul import run_bsgs_matmul
+from .layout_hoisting import run_layout_hoisting
 from .opt import Optimizer
+from .replication_hoisting import run_replication_hoisting
 from .roll_propagation import run_roll_propogation
 from .roll_reordering import run_roll_reordering
-from .bsgs_matmul import run_bsgs_matmul
 from .strassens import run_strassens
-from .replication_hoisting import run_replication_hoisting
-from .layout_hoisting import run_layout_hoisting
 
 __all__ = [
-    'Optimizer', 'run_roll_propogation', 'run_roll_reordering',
-    'run_bsgs_matmul', 'run_strassens', 'run_replication_hoisting',
-    'run_layout_hoisting'
+    "Optimizer",
+    "run_roll_propogation",
+    "run_roll_reordering",
+    "run_bsgs_matmul",
+    "run_strassens",
+    "run_replication_hoisting",
+    "run_layout_hoisting",
 ]

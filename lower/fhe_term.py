@@ -34,7 +34,6 @@ class FHETerm:
         else:
             self.hash = hash(f"{self.op}:{cs_hashes}")
 
-
     def ops(self):
         count = {}
         for term in self.post_order():
@@ -90,7 +89,9 @@ class FHETerm:
             match term.op:
                 case FHEOp.PACK | FHEOp.CS_PACK:
                     instruction_strs.append(
-                        term.format_metadata(f"{i} {term.secret}: ({term.cs[0].layout_str()})")
+                        term.format_metadata(
+                            f"{i} {term.secret}: ({term.cs[0].layout_str()})"
+                        )
                     )
                 case FHEOp.MASK:
                     instruction_strs.append(
@@ -99,22 +100,34 @@ class FHETerm:
                 case FHEOp.ADD:
                     a = env[term.cs[0]]
                     b = env[term.cs[1]]
-                    instruction_strs.append(term.format_metadata(f"{i} {term.secret}: (+ {a} {b})"))
+                    instruction_strs.append(
+                        term.format_metadata(f"{i} {term.secret}: (+ {a} {b})")
+                    )
                 case FHEOp.SUB:
                     a = env[term.cs[0]]
                     b = env[term.cs[1]]
-                    instruction_strs.append(term.format_metadata(f"{i} {term.secret}: (- {a} {b})"))
+                    instruction_strs.append(
+                        term.format_metadata(f"{i} {term.secret}: (- {a} {b})")
+                    )
                 case FHEOp.MUL:
                     a = env[term.cs[0]]
                     b = env[term.cs[1]]
-                    instruction_strs.append(term.format_metadata(f"{i} {term.secret}: (* {a} {b}), ({term.cs[0].secret}, {term.cs[1].secret})"))
+                    instruction_strs.append(
+                        term.format_metadata(
+                            f"{i} {term.secret}: (* {a} {b}), ({term.cs[0].secret}, {term.cs[1].secret})"
+                        )
+                    )
                 case FHEOp.ROT:
                     a = env[term.cs[0]]
                     b = str(term.cs[1])
-                    instruction_strs.append(term.format_metadata(f"{i} {term.secret}: (<< {a} {b})"))
+                    instruction_strs.append(
+                        term.format_metadata(f"{i} {term.secret}: (<< {a} {b})")
+                    )
                 case FHEOp.POLY:
                     a = env[term.cs[0]]
-                    instruction_strs.append(term.format_metadata(f"{i} {term.secret}: (poly {a})"))
+                    instruction_strs.append(
+                        term.format_metadata(f"{i} {term.secret}: (poly {a})")
+                    )
         return instruction_strs
 
     def __repr__(self):

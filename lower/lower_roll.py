@@ -1,7 +1,8 @@
-from ir.he import HETerm, HEOp
+from ir.he import HEOp, HETerm
 from lower.lower_util import bsgs, get_rots_per_ct
-from util.util import split_lists
 from util.layout_util import get_segments
+from util.util import split_lists
+
 
 def lower_roll(env, kernel):
     n = kernel.layout.n
@@ -89,6 +90,7 @@ def lower_roll(env, kernel):
                 cts[ct_index] = sum_base
         return cts
 
+
 def lower_rot_roll(env, kernel):
     roll = kernel.cs[0]
     rot_stride = 1
@@ -128,8 +130,14 @@ def lower_split_roll(env, kernel):
         rot_amt_2 = -((segment[1] * segment[2] - rot_amt) % (segment[1] * segment[2]))
 
         if (rot_amt, rot_amt_2) not in cache:
-            rots[rot_amt] = [1 if i % (segment[1] * segment[2]) < abs(rot_amt_2) else 0 for i in range(segment[0])]
-            rots[rot_amt_2] = [1 if i % (segment[1] * segment[2]) >= abs(rot_amt_2) else 0 for i in range(segment[0])]
+            rots[rot_amt] = [
+                1 if i % (segment[1] * segment[2]) < abs(rot_amt_2) else 0
+                for i in range(segment[0])
+            ]
+            rots[rot_amt_2] = [
+                1 if i % (segment[1] * segment[2]) >= abs(rot_amt_2) else 0
+                for i in range(segment[0])
+            ]
             cache[(rot_amt, rot_amt_2)] = rots
         else:
             rots = cache[(rot_amt, rot_amt_2)]
@@ -149,10 +157,9 @@ def lower_split_roll(env, kernel):
 
             # rotate mask
             mask = [mask[(i - rot_amts[0]) % n] for i in range(len(mask))]
-            mask2 = [i^1 for i in mask]
+            mask2 = [i ^ 1 for i in mask]
             mask_term = HETerm(HEOp.MASK, [mask], False, "roll mask")
             mask_term_2 = HETerm(HEOp.MASK, [mask2], False, "roll mask 2")
-
 
             # create masked_a_term
             if isinstance(base_term, list):

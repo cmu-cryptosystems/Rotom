@@ -21,14 +21,14 @@ from util.kernel_util import get_cs_op_kernels
 def run_layout_hoisting(candidate):
     """
     Apply layout hoisting optimization to improve computation efficiency.
-    
+
     This function hoists layout assignments for matrix multiplication
     operations, creating optimized tensor representations and improving
     overall computation efficiency.
-    
+
     Args:
         candidate: Kernel to apply layout hoisting to
-        
+
     Returns:
         List of optimized kernels with hoisted layouts
     """

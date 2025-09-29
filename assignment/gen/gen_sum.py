@@ -10,25 +10,25 @@ Key functions:
 - gen_sum: Main function for generating sum operation layouts
 """
 
-from ir.dim import DimType
-from ir.layout import Layout
-from ir.kernel import Kernel, KernelOp
-from ir.layout_utils import dimension_merging
-
 from copy import deepcopy as copy
+
+from ir.dim import DimType
+from ir.kernel import Kernel, KernelOp
+from ir.layout import Layout
+from ir.layout_utils import dimension_merging
 
 
 def gen_sum(term, kernels):
     """Generates layouts for sum operations along a specified dimension.
-    
+
     This function creates kernel layouts for sum operations that reduce
     tensors along a specified dimension. The sum dimension is converted
     to an empty dimension type while preserving other dimensions.
-    
+
     Args:
         term: TensorTerm representing the sum operation
         kernels: List of input kernels to generate sum layouts for
-        
+
     Returns:
         Set of Kernel objects representing sum operation layouts
     """
@@ -57,7 +57,7 @@ def gen_sum(term, kernels):
                 term,
                 new_perms,
                 new_dims,
-                {}, 
+                {},
                 kernel.layout.n,
                 kernel.layout.secret,
             )

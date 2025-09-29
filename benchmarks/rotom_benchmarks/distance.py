@@ -1,6 +1,8 @@
-from frontends.tensor import TensorTerm
-import numpy as np
 import random
+
+import numpy as np
+
+from frontends.tensor import TensorTerm
 
 
 def distance():
@@ -12,6 +14,6 @@ def distance():
 
     point = TensorTerm.Tensor("point", [64], True)
     tests = TensorTerm.Tensor(f"tests", [128, 64], False)
-    prod = (tests * point) 
+    prod = tests * point
     comp = (prod - prod).sum(1)
     return comp, inputs

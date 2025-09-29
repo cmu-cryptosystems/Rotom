@@ -4,16 +4,17 @@ Simple HTTP server for serving documentation files.
 Alternative to python -m http.server when there are encoding issues.
 """
 
-import os
-import sys
 import http.server
+import os
 import socketserver
+import sys
+
 
 def serve_docs(port=8000, directory="html"):
     """Serve documentation files on the specified port."""
     # Change to the documentation directory
     os.chdir(directory)
-    
+
     # Create server
     handler = http.server.SimpleHTTPRequestHandler
     with socketserver.TCPServer(("", port), handler) as httpd:
@@ -23,6 +24,7 @@ def serve_docs(port=8000, directory="html"):
             httpd.serve_forever()
         except KeyboardInterrupt:
             print("\nServer stopped.")
+
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000

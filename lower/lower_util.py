@@ -1,7 +1,7 @@
-from ir.he import HETerm, HEOp
-from util.layout_util import get_dim_indices, mul, add_vec
-
 import math
+
+from ir.he import HEOp, HETerm
+from util.layout_util import add_vec, get_dim_indices, mul
 
 
 def rotate_and_sum(base_term, extent, mul_offset, replicate=False):

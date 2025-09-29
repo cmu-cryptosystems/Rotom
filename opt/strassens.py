@@ -20,15 +20,15 @@ from util.kernel_util import get_cs_op_kernels
 def check_tiled_layout(kernel, sequence):
     """
     Check that the kernel layout matches the required tiled layout pattern.
-    
+
     For Strassen's algorithm, we need specific tiled layout patterns:
     - cs[0]: row-major and tiled
     - cs[1]: col-major and tiled
-    
+
     Args:
         kernel: Kernel to check for tiled layout
         sequence: Expected dimension sequence for the tiled layout
-        
+
     Returns:
         Boolean indicating if the layout matches the tiled pattern
     """
@@ -52,13 +52,13 @@ def check_tiled_layout(kernel, sequence):
 def check_strassen_tiles(kernel):
     """
     Check if Strassen's algorithm can be applied to the kernel.
-    
+
     This function verifies that both operands have the required tiled
     layout patterns for Strassen's algorithm to be applicable.
-    
+
     Args:
         kernel: Kernel to check for Strassen applicability
-        
+
     Returns:
         Boolean indicating if Strassen's algorithm can be applied
     """
@@ -73,14 +73,14 @@ def check_strassen_tiles(kernel):
 def run_strassens(candidate):
     """
     Apply Strassen's algorithm optimization to matrix multiplication kernels.
-    
+
     This function applies Strassen's algorithm to reduce the number of
     multiplications required for matrix multiplication operations.
     It requires both operands to be secret and have compatible tiled layouts.
-    
+
     Args:
         candidate: Kernel to apply Strassen optimization to
-        
+
     Returns:
         Updated kernel with Strassen optimization applied where applicable
     """

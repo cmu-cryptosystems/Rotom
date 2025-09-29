@@ -12,21 +12,22 @@ Key Concepts:
 - Operation Efficiency: Improving the efficiency of data movement
 """
 
-from ir.layout import Layout
-from ir.kernel import Kernel, KernelOp
 from copy import deepcopy as copy
+
+from ir.kernel import Kernel, KernelOp
+from ir.layout import Layout
 
 
 def roll_reordering(kernel):
     """
     Apply roll reordering optimization to consecutive roll operations.
-    
+
     This function reorders consecutive roll operations to improve
     efficiency by minimizing the total cost of data movement.
-    
+
     Args:
         kernel: Kernel to apply roll reordering to
-        
+
     Returns:
         Optimized kernel with reordered roll operations
     """

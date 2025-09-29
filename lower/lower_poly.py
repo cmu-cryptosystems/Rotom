@@ -1,4 +1,4 @@
-from ir.he import HETerm, HEOp
+from ir.he import HEOp, HETerm
 
 
 def lower_poly(env, kernel):

@@ -10,34 +10,34 @@ Key functions:
 - gen_transpose: Main function for generating transpose operation layouts
 """
 
-from ir.dim import Dim
-from ir.layout import Layout
-from ir.kernel import Kernel, KernelOp
 from copy import deepcopy as copy
+
+from ir.dim import Dim
+from ir.kernel import Kernel, KernelOp
+from ir.layout import Layout
 
 
 def gen_transpose(term, kernels):
     """Generates layouts for transpose operations.
-    
+
     This function creates kernel layouts for transpose operations that swap
     the dimensions of tensors. The transpose operation swaps dimension indices
     using XOR with 1 (0 becomes 1, 1 becomes 0).
-    
+
     Args:
         term: TensorTerm representing the transpose operation
         kernels: List of input kernels to generate transpose layouts for
-        
+
     Returns:
         Set of Kernel objects representing transpose operation layouts
-        
+
     Raises:
         NotImplementedError: If kernels have roll operations (not yet supported)
     """
     output_kernels = set()
     for kernel in kernels:
         if kernel.layout.rolls:
-            raise NotImplementedError(
-                "still need to explore transpose with rolls")
+            raise NotImplementedError("still need to explore transpose with rolls")
 
         new_dims = []
         for dim in kernel.layout.get_dims():

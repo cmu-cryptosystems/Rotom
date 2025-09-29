@@ -10,23 +10,24 @@ Key functions:
 - gen_permute: Main function for generating permute operation layouts
 """
 
-from ir.dim import Dim
-from ir.layout import Layout
-from ir.kernel import Kernel, KernelOp
 from copy import deepcopy as copy
+
+from ir.dim import Dim
+from ir.kernel import Kernel, KernelOp
+from ir.layout import Layout
 
 
 def gen_permute(term, kernels):
     """Generates layouts for permute operations.
-    
+
     This function creates kernel layouts for permute operations that reorder
     dimensions of tensors according to a specified permutation mapping.
     The permutation is applied to all non-None dimensions in the layout.
-    
+
     Args:
         term: TensorTerm representing the permute operation
         kernels: List of input kernels to generate permute layouts for
-        
+
     Returns:
         Set of Kernel objects representing permute operation layouts
     """

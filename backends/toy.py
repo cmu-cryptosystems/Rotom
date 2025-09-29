@@ -1,19 +1,20 @@
+import numpy as np
+
 from frontends.tensor import TensorOp
 from ir.he import HEOp
 from ir.kernel import KernelOp
 from util.layout_util import *
-import numpy as np
 
 
 class Toy:
     """
     Toy Backend for plaintext simulation of FHE circuits.
-    
+
     This backend executes FHE circuits in plaintext, providing a fast
     simulation environment for development, testing, and debugging. It
     implements the same interface as other backends but performs all
     operations on plaintext data.
-    
+
     Attributes:
         circuit_ir: The FHE circuit intermediate representation
         inputs: Dictionary of input tensors
@@ -25,7 +26,7 @@ class Toy:
     def __init__(self, circuit_ir, inputs, args):
         """
         Initialize the Toy backend.
-        
+
         Args:
             circuit_ir: The FHE circuit intermediate representation
             inputs: Dictionary mapping tensor names to input data
@@ -40,10 +41,10 @@ class Toy:
     def eval_mask(self, term):
         """
         Evaluate a mask operation.
-        
+
         Args:
             term: The mask term to evaluate
-            
+
         Returns:
             The mask value
         """
@@ -52,13 +53,13 @@ class Toy:
     def eval_pack(self, term):
         """
         Evaluate a pack operation for tensor data.
-        
+
         Packs tensor data according to the specified layout and returns
         the packed vector at the given packing index.
-        
+
         Args:
             term: The pack term containing layout and metadata
-            
+
         Returns:
             The packed vector at the specified index
         """
@@ -114,7 +115,10 @@ class Toy:
         print("mul:", term)
         print(self.env[term.cs[0]])
         print(self.env[term.cs[1]])
-        print("result:", [a * b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])])
+        print(
+            "result:",
+            [a * b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])],
+        )
         print()
         return [a * b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
@@ -163,7 +167,6 @@ class Toy:
                         self.env[ct_term] = self.eval(ct_term)
                     results.append(self.env[ct_term])
 
-
             print("expected layout:", term.layout)
             print("expected value:", term.layout.term.eval(self.inputs))
             expected = apply_layout(term.layout.term.eval(self.inputs), term.layout)
@@ -173,7 +176,7 @@ class Toy:
 
             # skip checks for split rolls
             if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE, KernelOp.INDEX]:
-                continue 
+                continue
 
             print("kernel:", term)
             for k in term.post_order():
@@ -191,33 +194,32 @@ class Toy:
             # Check if values are close instead of exact equality
             all_close = True
             max_diff = 0.0
-            
+
             for expected_vec, result_vec in zip(expected, results):
                 if not np.allclose(expected_vec, result_vec, rtol=1e-2, atol=1e-2):
                     all_close = False
                     diff = np.array(expected_vec) - np.array(result_vec)
                     max_diff = max(max_diff, np.max(np.abs(diff)))
-            
+
             if not all_close:
                 print("expected:")
                 for expected_vec in expected:
                     print(expected_vec)
                 print()
-                
+
                 print("result:")
                 for result_vec in results:
                     print(result_vec)
                 print()
-                
+
                 print("diff:")
                 for expected_vec, result_vec in zip(expected, results):
                     print([e - r for e, r in zip(expected_vec, result_vec)])
                 print()
                 print("kernel:", term)
-            
+
             assert all_close, f"Values not close enough. Max diff: {max_diff}"
         return results
-
 
     def fuzz(self):
         results = []
@@ -237,8 +239,7 @@ class Toy:
                         self.env[ct_term] = self.eval(ct_term)
                     results.append(self.env[ct_term])
 
-            expected = apply_layout(
-                term.layout.term.eval(self.inputs), term.layout)
+            expected = apply_layout(term.layout.term.eval(self.inputs), term.layout)
             # if results != expected:
             #     print("results:", results)
             #     print("expected:", expected)
@@ -264,8 +265,7 @@ class Toy:
                 assert results[: len(expected)] == expected
             else:
                 # print(term.layout.term)
-                expected = apply_layout(
-                    term.layout.term.eval(self.inputs), term.layout)
+                expected = apply_layout(term.layout.term.eval(self.inputs), term.layout)
                 # print("expected:")
                 # for e in expected:
                 #     print(e)

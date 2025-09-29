@@ -42,7 +42,12 @@ def mul_associativity(he_term):
                     pt_term = term.cs[0].cs[1] << term.cs[1]
                     mul_term = rot_term * pt_term
                     update_map[term] = mul_term
-                elif term.cs[0].op == HEOp.SUB and term.cs[0].cs[1].op == HEOp.MUL and not term.cs[0].cs[1].cs[1].secret and term.cs[0].cs[0] == term.cs[0].cs[1].cs[0]:
+                elif (
+                    term.cs[0].op == HEOp.SUB
+                    and term.cs[0].cs[1].op == HEOp.MUL
+                    and not term.cs[0].cs[1].cs[1].secret
+                    and term.cs[0].cs[0] == term.cs[0].cs[1].cs[0]
+                ):
                     rot_base = term.cs[0].cs[0] << term.cs[1]
                     rot_pt = term.cs[0].cs[1].cs[1] << term.cs[1]
                     sub_term = rot_base - (rot_base * rot_pt)
@@ -50,11 +55,19 @@ def mul_associativity(he_term):
                 else:
                     update_map[term] = term
             case HEOp.MUL:
-                if term.cs[0].op == HEOp.MUL and not term.cs[1].secret and not term.cs[0].cs[1].secret:
+                if (
+                    term.cs[0].op == HEOp.MUL
+                    and not term.cs[1].secret
+                    and not term.cs[0].cs[1].secret
+                ):
                     pt_mul_term = term.cs[1] * term.cs[0].cs[1]
                     mul_term = term.cs[0].cs[0] * pt_mul_term
                     update_map[term] = mul_term
-                elif term.cs[0].op == HEOp.SUB and term.cs[0].cs[1].op == HEOp.MUL and not term.cs[0].cs[1].cs[1].secret:
+                elif (
+                    term.cs[0].op == HEOp.SUB
+                    and term.cs[0].cs[1].op == HEOp.MUL
+                    and not term.cs[0].cs[1].cs[1].secret
+                ):
                     mul_base = term.cs[0].cs[0] * term.cs[1]
                     pt_mul = term.cs[0].cs[1].cs[1] * term.cs[1]
                     ct_mul = term.cs[0].cs[1].cs[0] * pt_mul

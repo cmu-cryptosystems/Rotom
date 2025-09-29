@@ -10,25 +10,26 @@ Key functions:
 - gen_index: Main function for generating index operation layouts
 """
 
+from copy import deepcopy as copy
+
 from assignment.gen.gen_compaction import find_compaction
 from ir.dim import DimType
-from ir.layout import Layout
 from ir.kernel import Kernel, KernelOp
-from copy import deepcopy as copy
+from ir.layout import Layout
 from ir.layout_utils import dimension_merging
 
 
 def gen_index(term, kernels):
     """Generates layouts for index operations.
-    
+
     This function creates kernel layouts for index operations that extract
     specific elements or slices from tensors. The index operation removes
     the first dimension and adjusts the remaining dimensions accordingly.
-    
+
     Args:
         term: TensorTerm representing the index operation
         kernels: List of input kernels to generate index layouts for
-        
+
     Returns:
         Set of Kernel objects representing index operation layouts
     """

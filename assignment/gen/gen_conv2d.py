@@ -15,26 +15,25 @@ Key functions:
 
 from copy import deepcopy as copy
 
-from ir.dim import Dim, DimType
-from ir.roll import Roll
-from ir.layout import Layout
-from ir.kernel import Kernel, KernelOp
 from ir.analysis.shape import Shape
-from copy import deepcopy as copy
+from ir.dim import Dim, DimType
+from ir.kernel import Kernel, KernelOp
+from ir.layout import Layout
+from ir.roll import Roll
 
 
 def apply_replication(term, kernel, dim):
     """Applies replication to a convolution kernel.
-    
+
     This function creates a replicated version of a kernel by adding
     a replication dimension. Replication is used in convolution operations
     to handle spatial dimensions and padding requirements.
-    
+
     Args:
         term: TensorTerm representing the convolution operation
         kernel: Kernel to apply replication to
         dim: Dimension to replicate along
-        
+
     Returns:
         Kernel: New kernel with replication applied
     """
@@ -53,17 +52,17 @@ def apply_replication(term, kernel, dim):
 
 def apply_roll(term, kernel, roll):
     """Applies a roll operation to a convolution kernel.
-    
+
     This function creates a rolled version of a kernel by adding a roll
     operation. For convolution operations, split rolls are used because
     convolutions only require parts of the rolled values, with other
     values being masked out.
-    
+
     Args:
         term: TensorTerm representing the convolution operation
         kernel: Kernel to apply roll to
         roll: Roll operation to apply
-        
+
     Returns:
         Kernel: New kernel with roll operation applied
     """
@@ -121,8 +120,7 @@ def add_replicated_dimensions(a_shape, b_shape):
     # and rolled to align with the b_kernel
     replicated_dims = {}
     if b_shape[0] > 1:
-        replicated_dims[0] = Dim(None, b_shape[0], b_shape[1] *
-            a_shape[1] * a_shape[2])
+        replicated_dims[0] = Dim(None, b_shape[0], b_shape[1] * a_shape[1] * a_shape[2])
     if b_shape[1] > 1:
         replicated_dims[1] = Dim(None, b_shape[1], a_shape[1] * a_shape[2])
     if a_shape[1] > 1:
@@ -140,9 +138,7 @@ def gen_conv2d(term, cs_kernels, shapes):
     b_shape = shapes[1]
 
     # find padding
-    padding = calculate_padding(
-        a_shape, b_shape, term.cs[2], term.cs[3]
-    )
+    padding = calculate_padding(a_shape, b_shape, term.cs[2], term.cs[3])
     term.cs.append(padding)
 
     output_kernels = set()
@@ -152,8 +148,7 @@ def gen_conv2d(term, cs_kernels, shapes):
             continue
 
         # assumes input is row-major layout (though this can be relaxed later)
-        dims_ = [dim.dim for dim in a_kernel.layout.get_dims()
-                 if dim.dim is not None]
+        dims_ = [dim.dim for dim in a_kernel.layout.get_dims() if dim.dim is not None]
         if sorted(dims_) != dims_:
             continue
 
@@ -180,7 +175,7 @@ def gen_conv2d(term, cs_kernels, shapes):
             a_kernel = apply_replication(term.cs[0], a_kernel, replicated_dims[3])
             a_roll = Roll(a_dim_map[2], replicated_dims[3])
             a_kernel = apply_roll(term.cs[0], a_kernel, a_roll)
-      
+
         # apply replication and roll for height
         if 2 in replicated_dims:
             a_kernel = apply_replication(term.cs[0], a_kernel, replicated_dims[2])
@@ -229,8 +224,7 @@ def gen_conv2d(term, cs_kernels, shapes):
             b_rolls.append(Roll(b_dims[a_roll_idx[0]], b_dims[a_roll_idx[1]]))
 
         # create layout and kernel
-        b_layout = Layout(term.cs[1], b_rolls, b_dims,
-                          {}, a_kernel.layout.n, False)
+        b_layout = Layout(term.cs[1], b_rolls, b_dims, {}, a_kernel.layout.n, False)
         b_kernel = Kernel(KernelOp.TENSOR, [], b_layout)
 
         # find output layout after convolution

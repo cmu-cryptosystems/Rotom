@@ -1,6 +1,8 @@
-from frontends.tensor import TensorTerm
-import numpy as np
 import random
+
+import numpy as np
+
+from frontends.tensor import TensorTerm
 
 
 def double_matmul_64_ct_pt():

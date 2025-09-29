@@ -1,14 +1,14 @@
-import numpy as np
 import random
 
+import numpy as np
+
+from assignment.assignment import LayoutAssignment
+from backends.toy import Toy
 from frontends.tensor import TensorTerm
 from ir.dim import *
-from assignment.assignment import LayoutAssignment
 from lower.lower import Lower
-from backends.toy import Toy
-from util.layout_util import apply_layout
-
 from tests.test_util import get_default_args
+from util.layout_util import apply_layout
 
 
 ## Test matrix multiply with secret inputs
@@ -32,7 +32,7 @@ def test_index_matmul_1():
     args = get_default_args()
     args.n = 16
     args.benchmark = "index_matmul_1"
-    args.rolls = True 
+    args.rolls = True
 
     # create inputs
     inputs = {}
@@ -59,7 +59,7 @@ def test_index_matmul_2():
     args = get_default_args()
     args.n = 16
     args.benchmark = "index_matmul_2"
-    args.rolls = True 
+    args.rolls = True
 
     # create inputs
     inputs = {}
@@ -93,7 +93,7 @@ def test_index_matmul_3():
     args = get_default_args()
     args.n = 16
     args.benchmark = "index_matmul_3"
-    args.rolls = True 
+    args.rolls = True
 
     # create inputs
     inputs = {}
@@ -120,7 +120,7 @@ def test_index_matmul_4():
     args = get_default_args()
     args.n = 16
     args.benchmark = "index_matmul_4"
-    args.rolls = True 
+    args.rolls = True
 
     # create inputs
     inputs = {}
@@ -164,12 +164,11 @@ def index_matmul_3(index):
     return res[index]
 
 
-
 # def test_index_matmul_4():
 #     # create args
 #     args = get_default_args()
 #     args.benchmark = "index_matmul_4"
-#     args.rolls = True 
+#     args.rolls = True
 
 #     # create inputs
 #     size = 48
@@ -205,7 +204,7 @@ def index_matmul_3(index):
 #     # create args
 #     args = get_default_args()
 #     args.benchmark = "index_matmul_5"
-#     args.rolls = True 
+#     args.rolls = True
 
 #     # create inputs
 #     size = 48

@@ -1,8 +1,8 @@
 from copy import copy as copy
 
 from ir.dim import Dim, DimType
-from ir.roll import Roll
 from ir.layout import Layout
+from ir.roll import Roll
 from util.util import prod, split_dim
 
 
@@ -17,8 +17,7 @@ def swap_rolls(layout, roll):
         if base_roll == roll:
             new_rolls.append(Roll(roll.dim_to_roll_by, roll.dim_to_roll))
         elif base_roll.dim_to_roll == roll.dim_to_roll:
-            new_rolls.append(
-                Roll(roll.dim_to_roll_by, base_roll.dim_to_roll_by))
+            new_rolls.append(Roll(roll.dim_to_roll_by, base_roll.dim_to_roll_by))
         else:
             new_rolls.append(base_roll.copy())
 
@@ -29,8 +28,7 @@ def swap_rolls(layout, roll):
     new_dims[roll.dim_to_roll_by] = dims[roll.dim_to_roll].copy()
 
     # create new layout
-    eq_layout = Layout(layout.term, new_rolls, new_dims,
-                       layout.n, layout.secret)
+    eq_layout = Layout(layout.term, new_rolls, new_dims, layout.n, layout.secret)
     return eq_layout
 
 
@@ -218,8 +216,8 @@ def match_dims(dims, to_match):
             b_next += 1
             continue
 
-        a_extent = prod([dim.extent for dim in dims[a_start: a_next + 1]])
-        b_extent = prod([dim.extent for dim in to_match[b_start: b_next + 1]])
+        a_extent = prod([dim.extent for dim in dims[a_start : a_next + 1]])
+        b_extent = prod([dim.extent for dim in to_match[b_start : b_next + 1]])
         if a_extent == b_extent:
             a_next += 1
             b_next += 1
@@ -303,8 +301,7 @@ def layout_to_ct_indices(layout):
             if dim.dim not in indices_map:
                 indices_map[dim.dim] = dim_indices[i]
             else:
-                indices_map[dim.dim] = add_vec(
-                    indices_map[dim.dim], dim_indices[i])
+                indices_map[dim.dim] = add_vec(indices_map[dim.dim], dim_indices[i])
 
     if len(indices_map) == 1:
         dim = [dim.dim for dim in dims if dim.dim is not None][0]
@@ -330,7 +327,7 @@ def get_segments(dims):
 
     segments = {}
     for i in range(len(dims)):
-        segment_len = int(prod([dim.extent for dim in dims[i + 1:]]))
+        segment_len = int(prod([dim.extent for dim in dims[i + 1 :]]))
         extent = dims[i].extent
         count = n // segment_len // extent
         segments[i] = [count, extent, segment_len]
@@ -429,9 +426,10 @@ def get_dim_indices_by_dim(dims):
 def add_vec(a, b):
     return [x + y if x is not None and y is not None else None for x, y in zip(a, b)]
 
+
 def add_vecs(a, b):
     result = []
-    for x,y in zip(a, b):
+    for x, y in zip(a, b):
         if x is not None and y is not None:
             result.append(x + y)
         elif x is not None:
@@ -442,8 +440,10 @@ def add_vecs(a, b):
             result.append(None)
     return result
 
+
 def add_vecs_of_vecs(a, b):
     return [add_vecs(x, y) for x, y in zip(a, b)]
+
 
 def mul_vec(a, b):
     return [x * y if x is not None and y is not None else None for x, y in zip(a, b)]
@@ -488,8 +488,7 @@ def apply_layout(pt_tensor, layout):
     for i, dim in enumerate(dims):
         if dim.dim is not None:
             if dim.dim in indices_map:
-                indices_map[dim.dim] = add_vec(
-                    indices_map[dim.dim], dim_indices[i])
+                indices_map[dim.dim] = add_vec(indices_map[dim.dim], dim_indices[i])
             else:
                 indices_map[dim.dim] = dim_indices[i]
 
@@ -509,7 +508,7 @@ def apply_layout(pt_tensor, layout):
 
     # split by cts
     base_indices_by_cts = [
-        base_indices[i * layout.n: (i + 1) * layout.n]
+        base_indices[i * layout.n : (i + 1) * layout.n]
         for i in range((layout_len // layout.n))
     ]
 
@@ -569,15 +568,11 @@ def apply_layout(pt_tensor, layout):
                     ct.append(0)
                 else:
                     try:
-                        ct.append(
-                            pt_tensor[index[0]][index[1]]
-                                [index[2]][index[3]]
-                        )
+                        ct.append(pt_tensor[index[0]][index[1]][index[2]][index[3]])
                     except IndexError:
                         ct.append(0)
             else:
-                raise NotImplementedError(
-                    "other tensor dimensions are not supported")
+                raise NotImplementedError("other tensor dimensions are not supported")
         # this places cts in row-major order
         cts.append(ct)
     return cts
@@ -586,32 +581,29 @@ def apply_layout(pt_tensor, layout):
 def parse_layout(layout_str, n, secret):
     import re
 
-    result = {
-        'roll': None,
-        'dims': []
-    }
+    result = {"roll": None, "dims": []}
 
     # Extract roll numbers if present
-    roll_match = re.search(r'roll\((\d+),(\d+)\)', layout_str)
+    roll_match = re.search(r"roll\((\d+),(\d+)\)", layout_str)
     if roll_match:
-        result['roll'] = {
-            'to': int(roll_match.group(1)),
-            'from': int(roll_match.group(2))
+        result["roll"] = {
+            "to": int(roll_match.group(1)),
+            "from": int(roll_match.group(2)),
         }
 
     # Extract all bracket terms [number:number:number] or [number:number]
-    dim_matches = re.findall(r'\[\d+:\d+(?::\d+)?\]', layout_str)
+    dim_matches = re.findall(r"\[\d+:\d+(?::\d+)?\]", layout_str)
     if dim_matches:
         for dim in dim_matches:
             # Remove the brackets and split by colon
-            result['dims'].append(dim)
+            result["dims"].append(dim)
 
-     # transform rolls
+    # transform rolls
     rolls = []
-    for roll in result['roll']:
-        rolls.append(Roll(roll['to'], roll['from']))
+    for roll in result["roll"]:
+        rolls.append(Roll(roll["to"], roll["from"]))
     dims = []
-    for dim in result['dims']:
+    for dim in result["dims"]:
         dims.append(Dim.parse(dim))
 
     return Layout(None, rolls, dims, {}, n, secret)

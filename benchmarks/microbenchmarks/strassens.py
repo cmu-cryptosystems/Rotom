@@ -1,6 +1,9 @@
-from frontends.tensor import TensorTerm
-import numpy as np
 import random
+
+import numpy as np
+
+from frontends.tensor import TensorTerm
+
 
 def strassens():
     inputs = {}
@@ -28,7 +31,7 @@ def strassens():
     inputs["b4"] = np.array(
         [[random.choice(range(2)) for _ in range(64)] for _ in range(64)]
     )
-    
+
     a1 = TensorTerm.Tensor("a1", inputs["a1"].shape, True)
     a2 = TensorTerm.Tensor("a2", inputs["a2"].shape, True)
     a3 = TensorTerm.Tensor("a3", inputs["a3"].shape, True)
@@ -54,5 +57,5 @@ def strassens():
     # return C1 + C2 + C3 + C4, inputs
     # return C1 + C2 + C3 + C4, inputs
     # return C1, inputs
-    return C2 + C3, inputs 
+    return C2 + C3, inputs
     # return a1 @ b1, inputs

@@ -8,8 +8,8 @@ the IR module to avoid circular imports with util.layout_util.
 from copy import copy as copy
 
 from ir.dim import Dim, DimType
-from ir.roll import Roll
 from ir.layout import Layout
+from ir.roll import Roll
 
 
 def merge_dims(dims, in_roll):

@@ -1,25 +1,22 @@
 def parse_layout(layout_str):
     import re
 
-    result = {
-        'roll': None,
-        'dim': []
-    }
+    result = {"roll": None, "dim": []}
 
     # Extract roll numbers if present
-    roll_match = re.search(r'roll\((\d+),(\d+)\)', layout_str)
+    roll_match = re.search(r"roll\((\d+),(\d+)\)", layout_str)
     if roll_match:
-        result['roll'] = {
-            'first': int(roll_match.group(1)),
-            'second': int(roll_match.group(2))
+        result["roll"] = {
+            "first": int(roll_match.group(1)),
+            "second": int(roll_match.group(2)),
         }
 
     # Extract all bracket terms [number:number:number] or [number:number]
-    bracket_matches = re.findall(r'\[\d+:\d+(?::\d+)?\]', layout_str)
+    bracket_matches = re.findall(r"\[\d+:\d+(?::\d+)?\]", layout_str)
     if bracket_matches:
         for bracket in bracket_matches:
             # Remove the brackets and split by colon
-            result['dim'].append(bracket)
+            result["dim"].append(bracket)
 
     return result
 

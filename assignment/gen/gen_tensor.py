@@ -11,31 +11,31 @@ Key functions:
 - gen_tensor: Main function for generating tensor layouts
 """
 
-from ir.dim import Dim, DimType
-from util.util import prod, round_up, round_to_ceiling_power_of_2
-from ir.layout import Layout
-from ir.kernel import Kernel, KernelOp
-
 import itertools
+
+from ir.dim import Dim, DimType
+from ir.kernel import Kernel, KernelOp
+from ir.layout import Layout
+from util.util import prod, round_to_ceiling_power_of_2, round_up
 
 
 def gen_tiles(extents, starting_tile):
     """Generates tile configurations for tensor layouts.
-    
+
     This function recursively generates tile configurations by exploring
     different tiling strategies. It starts with a base tile configuration
     and generates variations by adjusting tile sizes and dimensions.
-    
+
     The tiling process:
     1. Takes a starting tile configuration
     2. Generates new tiles by halving the first tile size
     3. Doubles the size of subsequent tiles to maintain total extent
     4. Recursively explores all valid tile combinations
-    
+
     Args:
         extents: Dictionary mapping dimension indices to their extents
         starting_tile: Initial tile configuration to build from
-        
+
     Returns:
         List of tile configurations, each represented as a list of
         (dim, tile_size, num_tiles) tuples
@@ -59,24 +59,24 @@ def gen_tiles(extents, starting_tile):
 
 def tiling_heuristic(dims, n):
     """Applies tiling heuristics to generate optimal tensor layouts.
-    
+
     This function explores different tiling strategies for tensor layouts
     by considering all possible dimension orderings and tile configurations.
     It generates layouts that are optimized for the given HE vector size.
-    
+
     The heuristic process:
     1. Generates all possible dimension orderings
     2. For each ordering, creates starting tile configurations
     3. Recursively generates tile variations
     4. Creates layouts with different tiling strategies
-    
+
     Args:
         dims: List of Dim objects representing tensor dimensions
         n: HE vector size for layout optimization
-        
+
     Returns:
         List of Layout objects representing different tiling strategies
-        
+
     Note:
         Currently restricted to 2-dimensional tensors for simplicity
     """
@@ -100,8 +100,7 @@ def tiling_heuristic(dims, n):
         tiles.append((dim_order[0], tile_extent, num_tiles))
         total_tile_extent = tile_extent
         for dim in dim_order[1:]:
-            next_tile_extent = round_to_ceiling_power_of_2(
-                n / total_tile_extent)
+            next_tile_extent = round_to_ceiling_power_of_2(n / total_tile_extent)
             num_next_tiles = round_to_ceiling_power_of_2(
                 extents[dim] / next_tile_extent
             )

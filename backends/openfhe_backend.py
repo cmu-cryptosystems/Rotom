@@ -1,18 +1,22 @@
-import time
-import random
-import numpy as np
-import shutil
 import os
 import os.path
 import pickle as pkl
+import random
+import shutil
+import time
+
+import numpy as np
 from openfhe import *
 
-
-from ir.he import HETerm, HEOp
-from lower.lower_util import total_ops
-from lower.circuit_opts.mask_opts import mask_identity_opt, zero_mask_identity_opt, zero_mask_opt
-from lower.circuit_opts.rot_opts import rot_zero_opt, join_rot
+from ir.he import HEOp, HETerm
 from lower.circuit_opts.associativity import mul_associativity
+from lower.circuit_opts.mask_opts import (
+    mask_identity_opt,
+    zero_mask_identity_opt,
+    zero_mask_opt,
+)
+from lower.circuit_opts.rot_opts import join_rot, rot_zero_opt
+from lower.lower_util import total_ops
 from util.layout_util import *
 
 
@@ -30,7 +34,9 @@ class CKKS:
         self.mock_inputs = args.mock
         self.serialize = args.serialize
         self.net = args.net
-        self.not_secure = getattr(args, 'not_secure', False)  # Flag to disable 128-bit security
+        self.not_secure = getattr(
+            args, "not_secure", False
+        )  # Flag to disable 128-bit security
         self.env = {}
         self.pt_env = {}
         self.layout_map = {}
@@ -54,7 +60,7 @@ class CKKS:
         return total_size
 
     def convert_size(self, size):
-        for unit in ['B', 'KB']:
+        for unit in ["B", "KB"]:
             if size < 1024:
                 return f"{size:.2f} {unit}"
             size /= 1024
@@ -99,7 +105,7 @@ class CKKS:
         parameters.SetMultiplicativeDepth(depth)
         parameters.SetScalingModSize(45)
         parameters.SetScalingTechnique(ScalingTechnique.FLEXIBLEAUTO)
-        
+
         # Set security level based on flag (inverted logic)
         if self.not_secure:
             parameters.SetSecurityLevel(HEStd_NotSet)
@@ -107,13 +113,12 @@ class CKKS:
         else:
             parameters.SetSecurityLevel(HEStd_128_classic)
             print("Using 128-bit security level")
-            
+
         parameters.SetRingDim(self.n * 2)
 
         self.cc = GenCryptoContext(parameters)
 
-        print(
-            f"CKKS scheme is using ring dimension {self.cc.GetRingDimension()}\n")
+        print(f"CKKS scheme is using ring dimension {self.cc.GetRingDimension()}\n")
 
         self.cc.Enable(PKESchemeFeature.PKE)
         self.cc.Enable(PKESchemeFeature.KEYSWITCH)
@@ -137,17 +142,13 @@ class CKKS:
             )
 
         # Serialize the relinearization key
-        if not self.cc.SerializeEvalMultKey(
-            "data/key-eval-mult.txt", serType
-        ):
+        if not self.cc.SerializeEvalMultKey("data/key-eval-mult.txt", serType):
             raise Exception(
                 'Error writing serialization of the eval mult keys to "key-eval-mult.txt"'
             )
 
         # Serialize the rotation evaluation keys
-        if not self.cc.SerializeEvalAutomorphismKey(
-            "data/key-eval-rot.txt", serType
-        ):
+        if not self.cc.SerializeEvalAutomorphismKey("data/key-eval-rot.txt", serType):
             raise Exception(
                 'Error writing serialization of the eval rotate keys to "key-eval-rot.txt"'
             )
@@ -166,15 +167,11 @@ class CKKS:
 
     def serialize_ct(self, term, ct):
         if not SerializeToFile(f"data/{term}.txt", ct, BINARY):
-            raise Exception(
-                f"Error writing serialization of {term}"
-            )
+            raise Exception(f"Error writing serialization of {term}")
 
     def serialize_result(self, i, ct):
         if not SerializeToFile(f"data/result_{i}.txt", ct, BINARY):
-            raise Exception(
-                f"Error writing serialization of {i}"
-            )
+            raise Exception(f"Error writing serialization of {i}")
 
     def eval_pack(self, term, encrypt=False, cache=False):
         layout = term.cs[0]
@@ -346,8 +343,7 @@ class CKKS:
                         if not ct_term.cs[0].secret:
                             assert ct_term.cs[0] in self.pt_env
                             self.pt_env[ct_term] = [
-                                self.pt_env[ct_term.cs[0]][(
-                                    i + ct_term.cs[1]) % self.n]
+                                self.pt_env[ct_term.cs[0]][(i + ct_term.cs[1]) % self.n]
                                 for i in range(len(self.pt_env[ct_term.cs[0]]))
                             ]
                     case HEOp.INDICES:
@@ -369,7 +365,13 @@ class CKKS:
         for ct in cts:
             for ct_term in ct.post_order():
                 match ct_term.op:
-                    case HEOp.PACK | HEOp.ROT | HEOp.INDICES | HEOp.ZERO_MASK | HEOp.RESCALE:
+                    case (
+                        HEOp.PACK
+                        | HEOp.ROT
+                        | HEOp.INDICES
+                        | HEOp.ZERO_MASK
+                        | HEOp.RESCALE
+                    ):
                         continue
                     case HEOp.ADD | HEOp.SUB | HEOp.MUL:
                         if not ct_term.cs[0].secret and ct_term.cs[0] not in self.env:
@@ -520,8 +522,7 @@ class CKKS:
 
         runtime, results = self.run_dagified_fhe_circuit(cts)
         decrypted = [self.decrypt_to_plaintext(result) for result in results]
-        expected_cts = apply_layout(
-            term.layout.term.eval(self.inputs), term.layout)
+        expected_cts = apply_layout(term.layout.term.eval(self.inputs), term.layout)
 
         for a, b in zip(expected_cts, decrypted):
             diff = np.array(a) - np.array(b)
@@ -529,7 +530,9 @@ class CKKS:
                 print(f"Expected: {a}")
                 print(f"Actual: {b}")
                 print(f"Max absolute difference: {np.max(np.abs(diff))}")
-            assert np.allclose(a, b, rtol=1e-2, atol=1e-2), f"Values not close enough. Max diff: {np.max(np.abs(diff))}"
+            assert np.allclose(
+                a, b, rtol=1e-2, atol=1e-2
+            ), f"Values not close enough. Max diff: {np.max(np.abs(diff))}"
         print("pass!")
         print()
 
@@ -570,10 +573,13 @@ class CKKS:
         for ct in cts:
             for ct_term in ct.post_order():
                 if ct_term.op == HEOp.ADD:
-                    if ct_term.secret and not ct_term.cs[0].secret and not ct_term.cs[1].secret:
+                    if (
+                        ct_term.secret
+                        and not ct_term.cs[0].secret
+                        and not ct_term.cs[1].secret
+                    ):
                         print("STILL BUGGED WTF")
                         exit(0)
-                
 
         runtime, results = self.run_dagified_fhe_circuit(cts)
         for i, result in enumerate(results):

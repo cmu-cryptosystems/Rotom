@@ -1,16 +1,16 @@
+from copy import deepcopy as copy
+
 from ir.dim import DimType
+from ir.he import HEOp, HETerm
 from ir.kernel import Kernel, KernelOp
-from ir.he import HETerm, HEOp
-from lower.lower_util import find_sum_dim, rotate_and_sum, bsgs
-from util.util import prod
+from lower.lower_util import bsgs, find_sum_dim, rotate_and_sum
 from util.layout_util import (
+    convert_layout_to_mask,
     get_ct_idxs_by_dim,
     get_cts_by_dim,
-    convert_layout_to_mask,
     get_segment,
 )
-
-from copy import deepcopy as copy
+from util.util import prod
 
 
 def lower_matmul(env, kernel):
@@ -35,7 +35,9 @@ def lower_matmul(env, kernel):
     slot_dims = copy(layout.slot_dims)
 
     # find summing dimension
-    sum_dim = max(dim.dim for dim in kernel.cs[0].layout.get_dims() if dim.dim is not None)
+    sum_dim = max(
+        dim.dim for dim in kernel.cs[0].layout.get_dims() if dim.dim is not None
+    )
     (ct_sum_dims, slot_sum_dims) = find_sum_dim(kernel.cs[0].layout, sum_dim)
 
     # sum together ciphertexts
@@ -134,10 +136,11 @@ def lower_bsgs_matmul(env, kernel):
     for ct_idx, bsgs_term in bsgs_terms.items():
         cts[ct_idx] = bsgs(bsgs_term, other_terms[ct_idx], dim_size, stride, True)
 
-    
     # find summation dimension:
     kernel_cs = [cs for cs in kernel.cs if isinstance(cs, Kernel)]
-    sum_dim = max(dim.dim for dim in kernel_cs[0].layout.get_dims() if dim.dim is not None)
+    sum_dim = max(
+        dim.dim for dim in kernel_cs[0].layout.get_dims() if dim.dim is not None
+    )
 
     if any(dim.dim == sum_dim for dim in replicated_kernel.layout.ct_dims):
         new_cts = {}
@@ -152,7 +155,6 @@ def lower_bsgs_matmul(env, kernel):
                     base = split[0]
                     for j in range(1, len(split)):
                         base = base + split[j]
-                    new_cts[i] = base 
+                    new_cts[i] = base
         return new_cts
     return cts
-

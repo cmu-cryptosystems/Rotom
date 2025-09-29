@@ -1,9 +1,10 @@
-from ..layout import Layout
+from frontends.tensor import TensorTerm
+
+from ..dim import Dim
 from ..kernel import Kernel, KernelOp
 from ..kernel_cost import KernelCost
-from ..dim import Dim
+from ..layout import Layout
 from ..roll import Roll
-from frontends.tensor import TensorTerm
 
 
 # Dimensions
@@ -403,7 +404,7 @@ def test_layout_from_string_edge_cases():
     # Test with extra whitespace
     layout = Layout.from_string("  [0:4:1]  ", 16)
     assert layout.layout_str() == "[G:4][0:4:1]"
-    
+
     # Test with empty roll operations (should be ignored)
     layout = Layout.from_string("roll(,) [0:4:1]", 16)
     assert layout.layout_str() == "[G:4][0:4:1]"
@@ -415,26 +416,21 @@ def test_layout_from_string_parsing_accuracy():
     # Test simple case
     layout_str = "[0:4:1][1:4:1]"
     parsed_layout = Layout.from_string(layout_str, 16)
-    manual_layout = Layout(None, [], [Dim.parse("[0:4:1]"), Dim.parse("[1:4:1]")], {}, 16, False)
-    
+    manual_layout = Layout(
+        None, [], [Dim.parse("[0:4:1]"), Dim.parse("[1:4:1]")], {}, 16, False
+    )
+
     assert parsed_layout.layout_str() == manual_layout.layout_str()
     assert parsed_layout.n == manual_layout.n
     assert parsed_layout.secret == manual_layout.secret
-    
+
     # Test with roll
     layout_str = "roll(0,1) [1:4:1][0:4:1]"
     parsed_layout = Layout.from_string(layout_str, 16)
     # The roll indices refer to positions in the dimension list
     dims = [Dim.parse("[1:4:1]"), Dim.parse("[0:4:1]")]
-    manual_layout = Layout(
-        None, 
-        [Roll(dims[0], dims[1])], 
-        dims, 
-        {}, 
-        16,
-        False
-    )
-    
+    manual_layout = Layout(None, [Roll(dims[0], dims[1])], dims, {}, 16, False)
+
     assert parsed_layout.layout_str() == manual_layout.layout_str()
     assert len(parsed_layout.rolls) == len(manual_layout.rolls)
     assert len(parsed_layout.dims) == len(manual_layout.dims)
@@ -448,7 +444,7 @@ def test_layout_from_string_invalid_input():
         assert False, "Should have raised an exception for invalid dimension"
     except Exception:
         pass  # Expected behavior
-    
+
     # Test with malformed roll strings (should handle gracefully)
     layout = Layout.from_string("roll(invalid) [0:4:1]", 16)
     assert layout.layout_str() == "[G:4][0:4:1]"
@@ -459,12 +455,12 @@ def test_layout_from_string_roundtrip():
     """Test that layout string generation and parsing are consistent."""
     test_cases = [
         "[0:4:1]",
-        "[0:4:1][1:4:1]", 
+        "[0:4:1][1:4:1]",
         "roll(0,1) [1:4:1][0:4:1]",
         "[R:4:1];[0:4:1][1:4:1]",
-        "roll(0,1) [R:4:1];[1:4:1][0:4:1]"
+        "roll(0,1) [R:4:1];[1:4:1][0:4:1]",
     ]
-    
+
     for layout_str in test_cases:
         # Create layout from string
         layout = Layout.from_string(layout_str, 16)

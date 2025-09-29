@@ -13,26 +13,26 @@ Key Concepts:
 - Path Analysis: Analyzing computation paths for optimization opportunities
 """
 
-from ir.roll import Roll
-from ir.layout import Layout
-from ir.kernel import Kernel, KernelOp
-from ir.dim import DimType
-
 from copy import deepcopy as copy
+
+from ir.dim import DimType
+from ir.kernel import Kernel, KernelOp
+from ir.layout import Layout
+from ir.roll import Roll
 from util.layout_util import match_dims
 
 
 def check_replication_on_child_path(kernel):
     """
     Check if there is a replication operation on the child path.
-    
+
     This function recursively traverses the kernel tree to determine
     if there is a replication operation along the path, which is
     important for roll propagation optimization.
-    
+
     Args:
         kernel: Kernel to check for replication operations
-        
+
     Returns:
         Boolean indicating if replication is found on the path
     """
@@ -52,13 +52,13 @@ def check_replication_on_child_path(kernel):
 def check_no_shared_rolls(kernel):
     """
     Check that no dimensions are rolled by multiple other dimensions.
-    
+
     This function ensures that each dimension is only rolled by one other
     dimension, which is a requirement for roll propagation optimization.
-    
+
     Args:
         kernel: Kernel to check for shared rolls
-        
+
     Returns:
         Boolean indicating if no shared rolls are found
     """
@@ -73,15 +73,15 @@ def check_no_shared_rolls(kernel):
 def roll_propogation(kernel):
     """
     Apply roll propagation optimization to move cheaper rolls above replication.
-    
+
     This function implements the core roll propagation optimization that
     moves roll operations to optimal positions in the computation graph.
     The goal is to move cheaper roll operations above more expensive
     replication operations to reduce overall cost.
-    
+
     Args:
         kernel: Kernel to apply roll propagation to
-        
+
     Returns:
         Optimized kernel with rolls moved to optimal positions
     """

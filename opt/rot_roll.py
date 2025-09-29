@@ -19,13 +19,13 @@ from ir.kernel import KernelOp
 def run_rot_roll(candidate):
     """
     Apply rotation roll optimization to convert rolls to rotations.
-    
+
     This optimization identifies roll operations that can be represented
     as simple rotations, reducing computation cost and improving efficiency.
-    
+
     Args:
         candidate: Kernel to apply rotation roll optimization to
-        
+
     Returns:
         Optimized kernel with rolls converted to rotations where applicable
     """
