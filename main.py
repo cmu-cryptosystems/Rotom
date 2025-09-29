@@ -28,6 +28,7 @@ from benchmarks.rotom_benchmarks.ttm import ttm
 from benchmarks.rotom_benchmarks.retrieval import retrieval
 from benchmarks.rotom_benchmarks.double_matmul.double_matmul_128_64 import double_matmul_128_64
 from benchmarks.rotom_benchmarks.double_matmul.double_matmul_256_128 import double_matmul_256_128
+from benchmarks.rotom_benchmarks.matmul.matmul_128_128 import matmul_128_128
 from benchmarks.rotom_benchmarks.logreg import logreg
 from benchmarks.rotom_benchmarks.convolution import convolution
 from benchmarks.rotom_benchmarks.convolution_32768 import convolution_32768
@@ -64,36 +65,17 @@ def run_benchmark_or_microbenchmark(args):
                 
         assert kernel
         assert inputs
-
-        print(
-            "picked kernel:",
-            kernel,
-            KernelCost(kernel, args.net).total_cost(),
-            KernelCost(kernel, args.net).comm_cost(),
-        )
-        print(KernelCost(kernel, args.net).total_operations())
-        print(kernel.layout.term)
-        print()
-        for k in kernel.post_order():
-            print(k)
-            print(k, KernelCost(k, args.net).op_cost())
-            print(KernelCost(k, args.net).ops())
-        print()
-
+        
         circuit_ir = Lower(kernel).run()
 
         runtime = 0
         if args.backend.lower() == "toy":
             results = Toy(circuit_ir, inputs, args).run()
+            check_results(kernel.term, inputs, kernel, results, runtime, args)
         elif args.backend.lower() == "ckks":
             runtime, results = CKKS(
                 circuit_ir, inputs, args).run()
-        elif args.backend.lower() == "heir":
-            # Note: HEIR backend not implemented yet
-            raise NotImplementedError("HEIR backend not implemented")
-        elif args.backend.lower() == "heco":
-            # Note: HECO backend not implemented yet
-            raise NotImplementedError("HECO backend not implemented")
+            check_results(kernel.term, inputs, kernel, results, runtime, args)
         else:
             raise NotImplementedError("unknown backend")
 
@@ -112,6 +94,8 @@ def run_benchmark_or_microbenchmark(args):
                 tensor_ir, inputs = ttm()
             case "retrieval":
                 tensor_ir, inputs = retrieval()
+            case "matmul":
+                tensor_ir, inputs = matmul_128_128()
             case "double_matmul_128_64":
                 tensor_ir, inputs = double_matmul_128_64()
             case "double_matmul_256_128":
@@ -130,6 +114,26 @@ def run_benchmark_or_microbenchmark(args):
         assert tensor_ir
         assert inputs
         assert n
+        
+        # Generate kernel from tensor_ir
+        kernel = LayoutAssignment(tensor_ir, args).run()
+    
+        # Lower to circuit IR
+        circuit_ir = Lower(kernel).run()
+        
+        # Run backend with result checking
+        runtime = 0
+        if args.backend.lower() == "toy":
+            results = Toy(circuit_ir, inputs, args).run()
+            check_results(tensor_ir, inputs, kernel, results, runtime, args)
+        elif args.backend.lower() == "ckks":
+            runtime, results = CKKS(circuit_ir, inputs, args).run()
+            check_results(tensor_ir, inputs, kernel, results, runtime, args)
+        else:
+            raise NotImplementedError("unknown backend")
+            
+        print("runtime:", runtime)
+        return
     else:
         args.benchmark = "main"
 
@@ -148,6 +152,37 @@ def run_benchmark_or_microbenchmark(args):
         inputs["c"] = np.array(
             [[i*4+j for j in range(2)] for i in range(4)]
         )
+        
+        # Generate kernel from tensor_ir
+        kernel = LayoutAssignment(tensor_ir, args).run()
+        
+        # Print kernel information
+        print("picked kernel:", kernel, KernelCost(kernel, args.net).total_cost(), KernelCost(kernel, args.net).comm_cost())
+        print(KernelCost(kernel, args.net).total_operations())
+        print(kernel.layout.term)
+        print()
+        for k in kernel.post_order():
+            print(k)
+            print(k, KernelCost(k, args.net).op_cost())
+            print(KernelCost(k, args.net).ops())
+        print()
+        
+        # Lower to circuit IR
+        circuit_ir = Lower(kernel).run()
+        
+        # Run backend with result checking
+        runtime = 0
+        if args.backend.lower() == "toy":
+            results = Toy(circuit_ir, inputs, args).run()
+            check_results(tensor_ir, inputs, kernel, results, runtime, args)
+        elif args.backend.lower() == "ckks":
+            runtime, results = CKKS(circuit_ir, inputs, args).run()
+            check_results(tensor_ir, inputs, kernel, results, runtime, args)
+        else:
+            raise NotImplementedError("unknown backend")
+            
+        print("runtime:", runtime)
+        return
 
 
 def main(args):
