@@ -12,38 +12,38 @@ Key functions:
 - gen_binop: Main function for generating binary operation layouts
 """
 
+from copy import deepcopy as copy
+
+from assignment.alignment import get_dim_alignment
+from assignment.gen.gen_compaction import find_compaction
 from frontends.tensor import TensorOp
 from ir.dim import Dim, DimType
+from ir.kernel import Kernel, KernelOp
 from ir.kernel_cost import KernelCost
 from ir.layout import Layout
-from ir.kernel import Kernel, KernelOp
 from ir.roll import Roll
-from assignment.gen.gen_compaction import find_compaction
-from assignment.alignment import get_dim_alignment
-from util.util import prod, split_dim, get_sum_dim
 from util.layout_util import (
-    dimension_merging,
-    merge_dims,
-    match_dims,
     align_dimension_extents,
+    dimension_merging,
     get_dim_map,
+    match_dims,
+    merge_dims,
 )
-
-from copy import deepcopy as copy
+from util.util import get_sum_dim, prod, split_dim
 
 
 def check_extent_alignment(alignment, a_dims, b_dims):
     """Checks if dimension extents are properly aligned between operands.
-    
+
     This function validates that the extents and strides of aligned dimensions
     match between two operands. This is crucial for ensuring that binary
     operations can be performed correctly in the HE domain.
-    
+
     Args:
         alignment: Set of (dim_a, dim_b) tuples representing dimension alignments
         a_dims: List of Dim objects from the first operand
         b_dims: List of Dim objects from the second operand
-        
+
     Returns:
         bool: True if all aligned dimensions have matching extents and strides
     """
@@ -163,13 +163,11 @@ def replicate_dimensions(a_kernel, b_kernel, shapes, alignment):
             if shape_len > 1 and dim.dim_type == DimType.EMPTY:
                 if dim.extent <= shape_len:
                     shape_len //= dim.extent
-                    new_dim = Dim(dim.dim, dim.extent,
-                                  replicated, DimType.FILL)
+                    new_dim = Dim(dim.dim, dim.extent, replicated, DimType.FILL)
                     new_dims.insert(0, new_dim)
                     replicated *= dim.extent
                 else:
-                    split_dim_1, split_dim_2 = split_dim(
-                        dim, dim.extent // shape_len)
+                    split_dim_1, split_dim_2 = split_dim(dim, dim.extent // shape_len)
                     shape_len //= dim.extent
                     split_dim_1.dim_type = DimType.EMPTY
                     split_dim_2.dim_type = DimType.FILL
@@ -287,8 +285,8 @@ def check_slot_dim_alignment(alignment, a_kernel, b_kernel):
         if (a_dim.dim, b_dim.dim) not in alignment:
             return False
 
-        a_extent = prod([dim.extent for dim in a_dims[a_start: a_next + 1]])
-        b_extent = prod([dim.extent for dim in b_dims[b_start: b_next + 1]])
+        a_extent = prod([dim.extent for dim in a_dims[a_start : a_next + 1]])
+        b_extent = prod([dim.extent for dim in b_dims[b_start : b_next + 1]])
         if a_extent == b_extent:
             a_next += 1
             b_next += 1
@@ -362,8 +360,8 @@ def check_dim_alignment(alignment, a_kernel, b_kernel):
         if (a_dim.dim, b_dim.dim) not in alignment:
             return False
 
-        a_extent = prod([dim.extent for dim in a_dims[a_start: a_next + 1]])
-        b_extent = prod([dim.extent for dim in b_dims[b_start: b_next + 1]])
+        a_extent = prod([dim.extent for dim in a_dims[a_start : a_next + 1]])
+        b_extent = prod([dim.extent for dim in b_dims[b_start : b_next + 1]])
         if a_extent == b_extent:
             a_next += 1
             b_next += 1
@@ -499,8 +497,7 @@ def match_public_kernel(alignment, a_kernel, b_kernel, left):
         new_rolls = []
         for roll_index in roll_indices:
             new_rolls.append(
-                Roll(aligned_a_dims[roll_index[0]],
-                     aligned_a_dims[roll_index[1]])
+                Roll(aligned_a_dims[roll_index[0]], aligned_a_dims[roll_index[1]])
             )
 
         aligned_a_layout = Layout(
@@ -530,8 +527,7 @@ def match_public_kernel(alignment, a_kernel, b_kernel, left):
         new_rolls = []
         for roll_index in roll_indices:
             new_rolls.append(
-                Roll(aligned_b_dims[roll_index[0]],
-                     aligned_b_dims[roll_index[1]])
+                Roll(aligned_b_dims[roll_index[0]], aligned_b_dims[roll_index[1]])
             )
         aligned_b_layout = Layout(
             b_kernel.layout.term,
@@ -579,8 +575,8 @@ def find_misaligned_dims(alignment, a_kernel, b_kernel):
         if b_dim.dim is not None and (a_dim.dim, b_dim.dim) not in alignment:
             misaligned_b_dims.append(b_dim)
 
-        a_extent = prod([dim.extent for dim in a_dims[a_start: a_next + 1]])
-        b_extent = prod([dim.extent for dim in b_dims[b_start: b_next + 1]])
+        a_extent = prod([dim.extent for dim in a_dims[a_start : a_next + 1]])
+        b_extent = prod([dim.extent for dim in b_dims[b_start : b_next + 1]])
         if a_extent == b_extent:
             a_next += 1
             b_next += 1
@@ -639,8 +635,7 @@ def roll_dim_alignment(term, alignment, a_kernel, b_kernel):
         return []
 
     # check if there are enough an empty dimensions to swap to in aligned dimensions
-    aligned_b_dims, aligned_a_dims = get_aligned_dimensions(
-        alignment, a_dims, b_dims)
+    aligned_b_dims, aligned_a_dims = get_aligned_dimensions(alignment, a_dims, b_dims)
     for a_dim in a_dims:
         if a_dim not in aligned_a_dims:
             return []
@@ -858,19 +853,20 @@ def roll_roll_alignment(term, a_kernel, b_kernel):
 def apply_roll_conversion(term, alignment, kernels):
     aligned_kernels = []
     dim_alignment = check_dim_alignment(alignment, kernels[0], kernels[1])
-    roll_alignment = check_roll_alignment(
-        term, alignment, kernels[0], kernels[1])
+    roll_alignment = check_roll_alignment(term, alignment, kernels[0], kernels[1])
     if dim_alignment and roll_alignment:
         aligned_kernels.append(kernels)
     elif dim_alignment and not roll_alignment:
-        aligned_kernels.append(roll_roll_alignment(
-            term, kernels[0], kernels[1]))
-    elif roll_alignment and not dim_alignment and not kernels[0].layout.rolls and not kernels[1].layout.rolls:
-        aligned_kernels += roll_dim_alignment(term,
-                                              alignment, kernels[0], kernels[1])
+        aligned_kernels.append(roll_roll_alignment(term, kernels[0], kernels[1]))
+    elif (
+        roll_alignment
+        and not dim_alignment
+        and not kernels[0].layout.rolls
+        and not kernels[1].layout.rolls
+    ):
+        aligned_kernels += roll_dim_alignment(term, alignment, kernels[0], kernels[1])
     elif roll_alignment and not dim_alignment:
-        aligned_kernels += roll_dim_alignment(term,
-                                              alignment, kernels[0], kernels[1])
+        aligned_kernels += roll_dim_alignment(term, alignment, kernels[0], kernels[1])
     return aligned_kernels
 
 
@@ -880,20 +876,16 @@ def roll_dimensions(term, alignment, kernels):
 
     aligned_kernels = []
     if not a_kernel.layout.secret:
-        aligned_kernels.append(match_public_kernel(
-            alignment, a_kernel, b_kernel, True))
+        aligned_kernels.append(match_public_kernel(alignment, a_kernel, b_kernel, True))
     elif not b_kernel.layout.secret:
         aligned_kernels.append(
             match_public_kernel(alignment, a_kernel, b_kernel, False)
         )
     else:
         # check if ct dimensions are matched
-        ct_dim_alignment = check_ct_dim_alignment(
-            alignment, a_kernel, b_kernel)
-        slot_dim_alignment = check_slot_dim_alignment(
-            alignment, a_kernel, b_kernel)
-        ct_roll_alignment = check_ct_roll_alignment(
-            alignment, a_kernel, b_kernel)
+        ct_dim_alignment = check_ct_dim_alignment(alignment, a_kernel, b_kernel)
+        slot_dim_alignment = check_slot_dim_alignment(alignment, a_kernel, b_kernel)
+        ct_roll_alignment = check_ct_roll_alignment(alignment, a_kernel, b_kernel)
 
         if ct_dim_alignment and slot_dim_alignment and ct_roll_alignment:
             a_rolls = {}
@@ -924,29 +916,24 @@ def roll_dimensions(term, alignment, kernels):
                     skip = False
                     for roll in kernels[0].layout.rolls:
                         if (
-                            roll.dim_to_roll not in kernels[0].layout.get_dims(
-                            )
+                            roll.dim_to_roll not in kernels[0].layout.get_dims()
                             or roll.dim_to_roll_by not in kernels[0].layout.get_dims()
                         ):
                             skip = True
                     for roll in kernels[1].layout.rolls:
                         if (
-                            roll.dim_to_roll not in kernels[1].layout.get_dims(
-                            )
+                            roll.dim_to_roll not in kernels[1].layout.get_dims()
                             or roll.dim_to_roll_by not in kernels[1].layout.get_dims()
                         ):
                             skip = True
                     if skip:
                         continue
-                    aligned_kernels += apply_roll_conversion(
-                        term, alignment, kernels)
+                    aligned_kernels += apply_roll_conversion(term, alignment, kernels)
             except:
-                aligned_kernels += apply_roll_conversion(
-                    term, alignment, kernels)
+                aligned_kernels += apply_roll_conversion(term, alignment, kernels)
         else:
             try:
-                aligned_kernels += apply_roll_conversion(
-                    term, alignment, kernels)
+                aligned_kernels += apply_roll_conversion(term, alignment, kernels)
             except:
                 aligned_kernels += []
     return aligned_kernels
@@ -988,8 +975,7 @@ def conv_dimensions(alignment, kernels):
 
     aligned_kernels = []
     if not a_kernel.layout.secret:
-        aligned_kernels.append(match_public_kernel(
-            alignment, a_kernel, b_kernel, True))
+        aligned_kernels.append(match_public_kernel(alignment, a_kernel, b_kernel, True))
     elif not b_kernel.layout.secret:
         aligned_kernels.append(
             match_public_kernel(alignment, a_kernel, b_kernel, False)
@@ -1159,8 +1145,7 @@ def apply_sum_roll(term, kernel):
         elif slot_dim_to_roll.extent <= ct_dim_to_roll.extent:
             split_extent_1 = slot_dim_to_roll.extent
             split_extent_2 = ct_dim_to_roll.extent // slot_dim_to_roll.extent
-            split_dim = Dim(ct_dim_to_roll.dim, split_extent_1,
-                            ct_dim_to_roll.stride)
+            split_dim = Dim(ct_dim_to_roll.dim, split_extent_1, ct_dim_to_roll.stride)
             split_dim_rep = Dim(
                 ct_dim_to_roll.dim,
                 split_extent_2,
@@ -1171,7 +1156,7 @@ def apply_sum_roll(term, kernel):
             new_ct_dims = (
                 layout.ct_dims[:empty_ct_dim_index]
                 + [split_dim, split_dim_rep]
-                + layout.ct_dims[empty_ct_dim_index + 1:]
+                + layout.ct_dims[empty_ct_dim_index + 1 :]
             )
             new_slot_dims = layout.slot_dims
         else:
@@ -1197,7 +1182,7 @@ def apply_sum_roll(term, kernel):
             new_slot_dims = (
                 layout.slot_dims[:slot_dim_index]
                 + [split_dim, split_dim_rep]
-                + layout.slot_dims[slot_dim_index + 1:]
+                + layout.slot_dims[slot_dim_index + 1 :]
             )
 
         new_dims = new_ct_dims + new_slot_dims
@@ -1215,8 +1200,7 @@ def apply_sum_roll(term, kernel):
         )
 
         # update existing rolls
-        roll_indices = [roll.roll_index(layout.get_dims())
-                        for roll in layout.rolls]
+        roll_indices = [roll.roll_index(layout.get_dims()) for roll in layout.rolls]
         updated_rolls = []
         for roll, index in zip(layout.rolls, roll_indices):
             updated_rolls.append(Roll(roll.dim_to_roll, new_dims[index[1]]))
@@ -1259,8 +1243,7 @@ def output_layout(term, alignment, a_kernel, b_kernel):
                     output_dims.append(a_dim)
                 elif a_dim.dim is None and b_dim_index is not None:
                     output_dims.append(
-                        Dim(b_dim_index, a_dim.extent,
-                            a_dim.stride, a_dim.dim_type)
+                        Dim(b_dim_index, a_dim.extent, a_dim.stride, a_dim.dim_type)
                     )
                 elif a_dim.dim is None and b_dim_index is None:
                     output_dims.append(a_dim)
@@ -1304,8 +1287,7 @@ def output_layout(term, alignment, a_kernel, b_kernel):
                     layout_op = KernelOp.SUB
                 case TensorOp.MUL:
                     layout_op = KernelOp.MUL
-            output_kernel = Kernel(
-                layout_op, [a_kernel, b_kernel], output_layout)
+            output_kernel = Kernel(layout_op, [a_kernel, b_kernel], output_layout)
             return output_kernel
         case TensorOp.MATMUL:
             a_layout = a_kernel.layout
@@ -1344,8 +1326,7 @@ def output_layout(term, alignment, a_kernel, b_kernel):
                         )
 
             # remove any rolls on the summation dimension
-            a_rolls = [
-                roll for roll in a_layout.rolls if roll.dim_to_roll.dim != 1]
+            a_rolls = [roll for roll in a_layout.rolls if roll.dim_to_roll.dim != 1]
             b_rolls = [
                 roll for roll in b_kernel.layout.rolls if roll.dim_to_roll.dim != 0
             ]
@@ -1353,17 +1334,14 @@ def output_layout(term, alignment, a_kernel, b_kernel):
             # update rolls with new output dimensions
             roll_indices = []
             for roll in a_rolls:
-                roll_indices.append(roll.roll_index(
-                    a_kernel.layout.get_dims()))
+                roll_indices.append(roll.roll_index(a_kernel.layout.get_dims()))
             for roll in b_rolls:
-                roll_indices.append(roll.roll_index(
-                    b_kernel.layout.get_dims()))
+                roll_indices.append(roll.roll_index(b_kernel.layout.get_dims()))
 
             new_rolls = []
             for roll_index in roll_indices:
                 new_rolls.append(
-                    Roll(output_dims[roll_index[0]],
-                         output_dims[roll_index[1]])
+                    Roll(output_dims[roll_index[0]], output_dims[roll_index[1]])
                 )
 
             output_layout = dimension_merging(
@@ -1376,8 +1354,7 @@ def output_layout(term, alignment, a_kernel, b_kernel):
                     a_kernel.layout.secret or b_kernel.layout.secret,
                 )
             )
-            output_kernel = Kernel(
-                KernelOp.MATMUL, [a_kernel, b_kernel], output_layout)
+            output_kernel = Kernel(KernelOp.MATMUL, [a_kernel, b_kernel], output_layout)
             return output_kernel
         case _:
             raise NotImplementedError(term.op)

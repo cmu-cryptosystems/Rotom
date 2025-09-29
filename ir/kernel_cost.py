@@ -3,37 +3,40 @@ Kernel cost modeling for HE operations.
 
 This module provides cost modeling for kernel operations in Rotom,
 estimating the computational and communication costs of different operations
-based on operation types and network settings. Having a fast cost model is 
+based on operation types and network settings. Having a fast cost model is
 crucial for layout assignment.
 
 Each operation is deterministically lowered into a set of fixed HE operations,
-based on the input and output layouts in the Kernel. This allows Rotom to 
+based on the input and output layouts in the Kernel. This allows Rotom to
 find the cost of a kernel without materializing the entire kernel.
 """
 
 import math
+
 from ir.dim import DimType
 from ir.kernel import KernelOp
-from util.util import prod, get_slot_dims
+from util.util import get_slot_dims, prod
+
 from .layout_utils import dimension_merging
 
 
 class KernelCost:
     """
     Cost modeling for kernel operations in HE computations.
-    
+
     This class provides cost estimation for various kernel operations
     based on operation characteristics. It helps
     the compiler select optimal layouts and operation sequences by
     estimating the computational and communication costs.
-    
+
     Attributes:
         kernel: The kernel operation to model costs for
-        network: Network type ("lan" or "wan") for cost modeling 
+        network: Network type ("lan" or "wan") for cost modeling
     """
+
     def __init__(self, kernel, network):
         """Initialize kernel cost model.
-        
+
         Args:
             kernel: The kernel operation to model costs for
             network: Network type ("lan" or "wan") for cost modeling
@@ -43,7 +46,7 @@ class KernelCost:
 
     def cost_model(self):
         """Get the cost model for operations based on network type.
-        
+
         Returns:
             dict: Dictionary mapping operation types to their costs in milliseconds
         """
@@ -73,10 +76,10 @@ class KernelCost:
 
     def nops(self, ops):
         """No cost operations (layout transformations).
-        
+
         Args:
             ops: Dictionary of operation counts
-            
+
         Returns:
             dict: Unchanged operation counts (no cost for layout ops)
         """
@@ -84,10 +87,10 @@ class KernelCost:
 
     def tensor_ops(self, ops):
         """No cost for tensor operations.
-        
+
         Args:
             ops: Dictionary of operation counts
-            
+
         Returns:
             dict: Unchanged operation counts (no cost for tensor ops)
         """
@@ -107,7 +110,7 @@ class KernelCost:
 
         Args:
             ops: Dictionary of operation counts
-            
+
         Returns:
             dict: Updated operation counts including replication costs
         """
@@ -170,10 +173,10 @@ class KernelCost:
 
     def basic_arith_ops(self, ops):
         """Calculate basic arithmetic operations based on number of ciphertexts.
-        
+
         Args:
             ops: Dictionary of operation counts
-            
+
         Returns:
             dict: Updated operation counts with addition operations
         """
@@ -182,10 +185,10 @@ class KernelCost:
 
     def mul_arith_ops(self, ops):
         """Calculate multiplication operations based on number of ciphertexts.
-        
+
         Args:
             ops: Dictionary of operation counts
-            
+
         Returns:
             dict: Updated operation counts with multiplication operations
         """
@@ -194,10 +197,10 @@ class KernelCost:
 
     def sum_ops(self, ops):
         """Calculate sum operations along a dimension.
-        
+
         Args:
             ops: Dictionary of operation counts
-            
+
         Returns:
             dict: Updated operation counts with sum operations
         """
@@ -214,10 +217,10 @@ class KernelCost:
 
     def product_ops(self, ops):
         """Calculate product operations along a dimension.
-        
+
         Args:
             ops: Dictionary of operation counts
-            
+
         Returns:
             dict: Updated operation counts with product operations
         """
@@ -239,12 +242,12 @@ class KernelCost:
         2. A summation across ct_dims, if applicable
         3. A summation across slot_dims, if applicable
         4. A masking cost to remove garbage values, if applicable
-        
+
         Args:
             ops: Dictionary of operation counts
             layout: The layout for the matrix operation
             sum_dim: The dimension to sum along
-            
+
         Returns:
             dict: Updated operation counts with matrix multiplication costs
         """
@@ -281,10 +284,10 @@ class KernelCost:
 
     def bsgs_matmul_ops(self, ops):
         """Calculate BSGS (Baby-Step Giant-Step) matrix multiplication operations.
-        
+
         Args:
             ops: Dictionary of operation counts
-            
+
         Returns:
             dict: Updated operation counts with BSGS matrix multiplication costs
         """
@@ -312,10 +315,10 @@ class KernelCost:
 
     def strassen_ops(self, ops):
         """Calculate Strassen matrix multiplication operations.
-        
+
         Args:
             ops: Dictionary of operation counts
-            
+
         Returns:
             dict: Updated operation counts with Strassen matrix multiplication costs
         """
@@ -344,10 +347,10 @@ class KernelCost:
 
     def conv2d_ops(self, ops):
         """Calculate 2D convolution operations.
-        
+
         Args:
             ops: Dictionary of operation counts
-            
+
         Returns:
             dict: Updated operation counts with convolution costs
         """
@@ -414,10 +417,10 @@ class KernelCost:
 
     def split_roll_ops(self, ops):
         """Calculate split roll operations.
-        
+
         Args:
             ops: Dictionary of operation counts
-            
+
         Returns:
             dict: Updated operation counts with split roll costs
         """
@@ -439,10 +442,10 @@ class KernelCost:
 
     def bsgs_roll_ops(self, ops):
         """Calculate BSGS (Baby-Step Giant-Step) roll operations.
-        
+
         Args:
             ops: Dictionary of operation counts
-            
+
         Returns:
             dict: Updated operation counts with BSGS roll costs
         """
@@ -465,10 +468,10 @@ class KernelCost:
 
     def rot_roll_ops(self, ops):
         """Calculate rotation roll operations.
-        
+
         Args:
             ops: Dictionary of operation counts
-            
+
         Returns:
             dict: Updated operation counts with rotation roll costs
         """
@@ -478,10 +481,10 @@ class KernelCost:
 
     def shift_ops(self, ops):
         """Calculate shift operations.
-        
+
         Args:
             ops: Dictionary of operation counts
-            
+
         Returns:
             dict: Updated operation counts with shift costs
         """
@@ -505,13 +508,13 @@ class KernelCost:
 
     def poly_ops(self, ops):
         """Calculate polynomial evaluation operations.
-        
+
         HACK: add additional costs based on the number of ciphertexts
         (pseudo bootstrap cost)
-        
+
         Args:
             ops: Dictionary of operation counts
-            
+
         Returns:
             dict: Updated operation counts with polynomial evaluation costs
         """
@@ -523,10 +526,10 @@ class KernelCost:
 
     def conversion_ops(self, ops):
         """Calculate conversion operations (assume conversions are very expensive).
-        
+
         Args:
             ops: Dictionary of operation counts
-            
+
         Returns:
             dict: Updated operation counts with conversion costs
         """
@@ -558,14 +561,14 @@ class KernelCost:
 
     def toeplitz_conv2d_ops(self, ops):
         """Calculate Toeplitz convolution operations.
-        
+
         The cost of a Toeplitz conv2d is a matrix-vector multiplication with
         BSGS enabled. The dimension size is the length of the input
         tensor and the length of the output dimensions.
-        
+
         Args:
             ops: Dictionary of operation counts
-            
+
         Returns:
             dict: Updated operation counts with Toeplitz convolution costs
         """
@@ -585,7 +588,7 @@ class KernelCost:
 
     def ops(self):
         """Calculate the number of operations required for a given layout operation.
-        
+
         Returns:
             dict: Dictionary mapping operation types to their counts
         """
@@ -662,7 +665,7 @@ class KernelCost:
 
     def comm_cost(self):
         """Calculate communication cost for the kernel.
-        
+
         Returns:
             float: Communication cost in milliseconds
         """
@@ -675,7 +678,7 @@ class KernelCost:
 
     def real_comm_cost(self):
         """Calculate real communication cost for the kernel.
-        
+
         Returns:
             float: Real communication cost in milliseconds
         """
@@ -690,7 +693,7 @@ class KernelCost:
 
     def op_cost(self):
         """Return the operation cost of a kernel.
-        
+
         Returns:
             float: Total operation cost in milliseconds
         """
@@ -703,7 +706,7 @@ class KernelCost:
 
     def total_operations(self):
         """Return the number of operations for a kernel and its children.
-        
+
         Returns:
             dict: Dictionary mapping operation types to their total counts
         """
@@ -720,7 +723,7 @@ class KernelCost:
 
     def total_cost(self):
         """Return the total cost for a kernel and its children.
-        
+
         Returns:
             float: Total cost including operation and communication costs
         """
@@ -733,7 +736,7 @@ class KernelCost:
 
     def depth(self):
         """Return the multiplicative depth of a kernel.
-        
+
         Returns:
             int: The multiplicative depth of the kernel
         """

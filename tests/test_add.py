@@ -1,12 +1,12 @@
 import numpy as np
 
+from assignment.assignment import LayoutAssignment
+from backends.toy import Toy
 from frontends.tensor import TensorTerm
 from ir.dim import *
-from assignment.assignment import LayoutAssignment
 from lower.lower import Lower
-from backends.toy import Toy
-from util.layout_util import apply_layout
 from tests.test_util import get_default_args
+from util.layout_util import apply_layout
 
 
 def add(inputs):
@@ -24,8 +24,7 @@ def test_add_ct_pt_1():
     # create inputs
     size = 4
     inputs = {}
-    inputs["a"] = np.array([[i * size + j for j in range(size)]
-                           for i in range(size)])
+    inputs["a"] = np.array([[i * size + j for j in range(size)] for i in range(size)])
     inputs["b"] = np.array(list(range(size)))
 
     # generate test case
@@ -50,8 +49,7 @@ def test_add_ct_pt_2():
     # create inputs
     size = 4
     inputs = {}
-    inputs["a"] = np.array([[i * size + j for j in range(size)]
-                           for i in range(size)])
+    inputs["a"] = np.array([[i * size + j for j in range(size)] for i in range(size)])
     inputs["b"] = np.array(list(range(size)))
 
     # generate test case

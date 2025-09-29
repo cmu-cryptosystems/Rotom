@@ -11,27 +11,28 @@ Key functions:
 - find_compaction: Finds optimal compaction strategies for layouts
 """
 
-from ir.roll import Roll
-from ir.dim import Dim, DimType
-from ir.layout import Layout
-from ir.kernel import Kernel, KernelOp
 from copy import deepcopy as copy
-from util.util import get_dim_map_by_dim, next_non_empty_dim, split_dim
+
+from ir.dim import Dim, DimType
+from ir.kernel import Kernel, KernelOp
+from ir.layout import Layout
 from ir.layout_utils import dimension_merging
+from ir.roll import Roll
+from util.util import get_dim_map_by_dim, next_non_empty_dim, split_dim
 
 
 def compact_ct_dim(ct_dim, slot_dims):
     """Compacts a ciphertext dimension within slot dimensions.
-    
+
     This function optimizes the layout by compacting ciphertext dimensions
     with slot dimensions to reduce memory usage and improve performance.
     It applies heuristics to keep related dimensions together during
     compaction.
-    
+
     Args:
         ct_dim: Ciphertext dimension to compact
         slot_dims: List of slot dimensions to compact with
-        
+
     Returns:
         tuple: (new_ct_dims, new_slot_dims) representing the compacted layout
     """
@@ -57,11 +58,9 @@ def compact_ct_dim(ct_dim, slot_dims):
                 # then find where to compact ct_dim
                 if i - 1 in slot_dim_map:
                     new_slot_dims.append(ct_dim.copy())
-                    new_slot_dims.append(
-                        Dim.parse(f"G:{slot_dim.extent // ct_extent}"))
+                    new_slot_dims.append(Dim.parse(f"G:{slot_dim.extent // ct_extent}"))
                 elif i + 1 in slot_dim_map:
-                    new_slot_dims.append(
-                        Dim.parse(f"G:{slot_dim.extent // ct_extent}"))
+                    new_slot_dims.append(Dim.parse(f"G:{slot_dim.extent // ct_extent}"))
                     new_slot_dims.append(ct_dim.copy())
             elif slot_dim.extent == ct_extent:
                 new_slot_dims.append(ct_dim.copy())
@@ -82,10 +81,9 @@ def naive_compaction(ct_dims, slot_dims):
     all_new_dims = []
     for i, ct_dim in enumerate(ct_dims):
         new_ct_dims, new_slot_dims = compact_ct_dim(ct_dim, slot_dims)
-        new_ct_dims = ct_dims[:i] + new_ct_dims + ct_dims[i + 1:]
+        new_ct_dims = ct_dims[:i] + new_ct_dims + ct_dims[i + 1 :]
         if check_empty_slot_dim(new_slot_dims):
-            recursive = naive_compaction(
-                copy(new_ct_dims), copy(new_slot_dims))
+            recursive = naive_compaction(copy(new_ct_dims), copy(new_slot_dims))
             all_new_dims += recursive
         else:
             all_new_dims.append((new_ct_dims, new_slot_dims))
@@ -134,11 +132,9 @@ def compaction_heuristic(ct_dims, slot_dims):
             # compact slot dimension with ct_dim
             if slot_dim.extent > ct_dim.extent:
                 split_slot_1, split_slot_2 = split_dim(slot_dim, ct_dim.extent)
-                new_ct_dim = Dim(
-                    ct_dim.dim, split_slot_1.extent, ct_dim.stride)
+                new_ct_dim = Dim(ct_dim.dim, split_slot_1.extent, ct_dim.stride)
                 remaining_slot_dims.remove(slot_dim)
-                next_remaining_slot_dim = next_non_empty_dim(
-                    remaining_slot_dims[1:])
+                next_remaining_slot_dim = next_non_empty_dim(remaining_slot_dims[1:])
                 if (
                     next_remaining_slot_dim
                     and next_remaining_slot_dim.dim == next_dim_index
@@ -240,8 +236,7 @@ def find_compaction(kernel):
                 raise NotImplementedError("other types of rolls")
 
             compacted_layout = dimension_merging(
-                Layout(layout.term, [new_roll],
-                       new_dims, layout.n, layout.secret)
+                Layout(layout.term, [new_roll], new_dims, layout.n, layout.secret)
             )
             return Kernel(KernelOp.COMPACT, [kernel], compacted_layout)
     else:

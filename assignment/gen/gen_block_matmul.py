@@ -12,36 +12,37 @@ Key functions:
 - gen_block_matmul: Main function for generating block matrix multiplication layouts
 """
 
+from copy import deepcopy as copy
+
+from assignment.alignment import get_dim_alignment
+from assignment.gen.gen_compaction import find_compaction
 from frontends.tensor import TensorOp
 from ir.dim import Dim, DimType
+from ir.kernel import Kernel, KernelOp
 from ir.kernel_cost import KernelCost
 from ir.layout import Layout
-from ir.kernel import Kernel, KernelOp
 from ir.roll import Roll
-from assignment.gen.gen_compaction import find_compaction
-from assignment.alignment import get_dim_alignment
-from util.util import prod, split_dim, get_sum_dim
 from util.layout_util import (
-    dimension_merging,
-    merge_dims,
-    match_dims,
     align_dimension_extents,
+    dimension_merging,
     get_dim_map,
+    match_dims,
+    merge_dims,
 )
+from util.util import get_sum_dim, prod, split_dim
 
-from copy import deepcopy as copy
 
 def check_dim_len_eq(a_dims, b_dims):
     """Checks if the total dimension lengths are equal between operands.
-    
+
     This function validates that the product of all FILL dimensions in both
     operands are equal, which is required for block matrix multiplication
     operations to be valid.
-    
+
     Args:
         a_dims: List of Dim objects from the first operand
         b_dims: List of Dim objects from the second operand
-        
+
     Returns:
         bool: True if the total dimension lengths are equal
     """
@@ -53,22 +54,23 @@ def check_dim_len_eq(a_dims, b_dims):
     )
     return a_dim_len == b_dim_len
 
+
 def check_dim_alignment(alignment, a_kernel, b_kernel):
     """Checks dimension alignment for block matrix multiplication kernels.
-    
+
     This function validates that the dimensions of two kernels are properly
     aligned for block matrix multiplication operations. It ensures that
     the dimension lengths are equal and that the alignment constraints
     are satisfied.
-    
+
     Args:
         alignment: Set of (dim_a, dim_b) tuples representing dimension alignments
         a_kernel: First kernel to check alignment for
         b_kernel: Second kernel to check alignment for
-        
+
     Returns:
         bool: True if the kernels are properly aligned for block operations
-        
+
     Raises:
         AssertionError: If dimension lengths are not equal
     """
@@ -172,7 +174,6 @@ def check_alignment(term, alignment, a_kernel, b_kernel):
     return check_dim_alignment(alignment, a_kernel, b_kernel) and check_perm_alignment(
         term, alignment, a_kernel, b_kernel
     )
-
 
 
 def conv_dimensions(alignment, kernels):
@@ -347,7 +348,6 @@ def match_public_kernel(alignment, a_kernel, b_kernel, left):
             aligned_b_layout,
         )
         return (a_kernel, aligned_b_kernel)
-
 
 
 def roll_perm_alignment(term, a_kernel, b_kernel):
@@ -610,6 +610,7 @@ def roll_dim_alignment(term, alignment, a_kernel, b_kernel):
         aligned_kernels.append((rolled_a_kernel, b_kernel))
     return aligned_kernels
 
+
 def apply_roll_conversion(term, alignment, kernels):
     aligned_kernels = []
     dim_alignment = check_dim_alignment(alignment, kernels[0], kernels[1])
@@ -620,7 +621,9 @@ def apply_roll_conversion(term, alignment, kernels):
         aligned_kernels.append(roll_perm_alignment(term, kernels[0], kernels[1]))
     elif perm_alignment and not dim_alignment:
         if not kernels[0].layout.rolls and not kernels[1].layout.rolls:
-            aligned_kernels += roll_dim_alignment(term, alignment, kernels[0], kernels[1])
+            aligned_kernels += roll_dim_alignment(
+                term, alignment, kernels[0], kernels[1]
+            )
     return aligned_kernels
 
 
@@ -778,6 +781,7 @@ def apply_sum_roll(term, kernel):
             )
             return Kernel(KernelOp.ROLL, [new_roll, kernel], new_layout)
 
+
 def apply_sum_rolls(term, replicated_kernels):
     # if the roll_flag is set, apply rolls to move summation dimensions the vector dimensions
     rolled = []
@@ -795,6 +799,7 @@ def apply_sum_rolls(term, replicated_kernels):
             rolled.append(tuple([rolled_a_kernel, kernels[1]]))
     return rolled
 
+
 def match_layout(term, kernels, alignment, roll_flag):
     # find dimension alignment
     if check_alignment(term, alignment, kernels[0], kernels[1]):
@@ -805,7 +810,7 @@ def match_layout(term, kernels, alignment, roll_flag):
         # swapping dimensions can be done using either converions
         # or by applying a roll with an empty dimension
         matched_layouts = []
-        
+
         # if not kernels[0].layout.rolls and not kernels[1].layout.rolls:
         #     # align dimensions using conversions
         #     matched_layouts += conv_dimensions(alignment, kernels)
@@ -828,9 +833,9 @@ def match_layout(term, kernels, alignment, roll_flag):
         return matched
 
 
-
 def get_fill_len(dims):
     return int(prod([dim.extent for dim in dims if dim.dim_type == DimType.FILL]))
+
 
 def match_kernel_dims(a_kernel, b_kernel):
     if len(a_kernel) < len(b_kernel):
@@ -919,7 +924,6 @@ def replicate_dimensions(kernel, fill_len):
         )
     )
     return Kernel(KernelOp.REPLICATE, [kernel], layout)
-   
 
 
 def output_layout(term, alignment, a_kernel, b_kernel):
@@ -965,7 +969,7 @@ def output_layout(term, alignment, a_kernel, b_kernel):
                 new_rolls.append(
                     Roll(output_dims[roll_index[0]], output_dims[roll_index[1]])
                 )
-            
+
             output_layout = dimension_merging(
                 Layout(
                     term,
@@ -981,8 +985,9 @@ def output_layout(term, alignment, a_kernel, b_kernel):
         case _:
             raise NotImplementedError(term.op)
 
+
 def gen_block_matmul(term, cs_kernels):
-    alignment = [(2,1), (1,None), (None,2), (0,0)]
+    alignment = [(2, 1), (1, None), (None, 2), (0, 0)]
     replicated_kernels = []
     for a in cs_kernels[0]:
         for b in cs_kernels[1]:
@@ -991,83 +996,167 @@ def gen_block_matmul(term, cs_kernels):
             b_cs_placeholder = Kernel(KernelOp.CS, [1], b.layout)
             a_fill_len = 128
             b_fill_len = 128
-            if str(term) == "(TensorOp.BLOCK_MATMUL (TensorOp.BLOCK_MATMUL (TensorOp.PERMUTE (TensorOp.RESHAPE (+ (@ h wq) bq) 1 {1: 12, 2: 64}) {0: 1, 1: 0, 2: 2}) (TensorOp.PERMUTE (TensorOp.RESHAPE (+ (@ h wk) bk) 1 {1: 12, 2: 64}) {0: 2, 1: 0, 2: 1})) (TensorOp.PERMUTE (TensorOp.RESHAPE (+ (@ h wv) bv) 1 {1: 12, 2: 64}) {0: 1, 1: 0, 2: 2}))":
+            if (
+                str(term)
+                == "(TensorOp.BLOCK_MATMUL (TensorOp.BLOCK_MATMUL (TensorOp.PERMUTE (TensorOp.RESHAPE (+ (@ h wq) bq) 1 {1: 12, 2: 64}) {0: 1, 1: 0, 2: 2}) (TensorOp.PERMUTE (TensorOp.RESHAPE (+ (@ h wk) bk) 1 {1: 12, 2: 64}) {0: 2, 1: 0, 2: 1})) (TensorOp.PERMUTE (TensorOp.RESHAPE (+ (@ h wv) bv) 1 {1: 12, 2: 64}) {0: 1, 1: 0, 2: 2}))"
+            ):
                 a_fill_len = 64
                 b_fill_len = 128
 
             replicated_kernels.append(
                 (
-                    replicate_dimensions(
-                        a_cs_placeholder, a_fill_len
-                    ), 
-                    replicate_dimensions(
-                        b_cs_placeholder, b_fill_len
-                    )
+                    replicate_dimensions(a_cs_placeholder, a_fill_len),
+                    replicate_dimensions(b_cs_placeholder, b_fill_len),
                 )
             )
 
-    # apply sum rolls 
+    # apply sum rolls
     replicated_kernels += apply_sum_rolls(term, replicated_kernels)
 
     output_kernels = set()
-    for a,b in replicated_kernels:
-        if str(a) == "KernelOp.ROLL: roll(0,4) [2:64:1][2:64][0:4:4];[0:4:1][64:1][1:128:1]" and str(b) == "KernelOp.ROLL: roll(0,4) [1:64:1][2:64][0:4:4];[0:4:1][64:1][2:128:1]":
-            # change a 
-            # roll a 
-            dims = copy(a.layout.dims[:len(a.layout.dims)-1] + [Dim(1,2,64), Dim(1,64,1)])
+    for a, b in replicated_kernels:
+        if (
+            str(a)
+            == "KernelOp.ROLL: roll(0,4) [2:64:1][2:64][0:4:4];[0:4:1][64:1][1:128:1]"
+            and str(b)
+            == "KernelOp.ROLL: roll(0,4) [1:64:1][2:64][0:4:4];[0:4:1][64:1][2:128:1]"
+        ):
+            # change a
+            # roll a
+            dims = copy(
+                a.layout.dims[: len(a.layout.dims) - 1] + [Dim(1, 2, 64), Dim(1, 64, 1)]
+            )
             dims[4], dims[6] = dims[6], dims[4]
             new_roll = Roll(dims[4], dims[6])
-            roll_layout = Layout(a.layout.term, [Roll(dims[0], dims[4]), new_roll], dims, a.layout.offset, a.layout.n, a.layout.secret)
+            roll_layout = Layout(
+                a.layout.term,
+                [Roll(dims[0], dims[4]), new_roll],
+                dims,
+                a.layout.offset,
+                a.layout.n,
+                a.layout.secret,
+            )
             roll_kernel = Kernel(KernelOp.ROLL, [new_roll, a], roll_layout)
 
             # split last dimension
-            replicate_a = Layout(a.layout.term, roll_layout.rolls, [Dim(None,2,1)] + copy(dims), a.layout.offset, a.layout.n, a.layout.secret)
+            replicate_a = Layout(
+                a.layout.term,
+                roll_layout.rolls,
+                [Dim(None, 2, 1)] + copy(dims),
+                a.layout.offset,
+                a.layout.n,
+                a.layout.secret,
+            )
             replicate_a_kernel = Kernel(KernelOp.REPLICATE, [roll_kernel], replicate_a)
 
-            # convert a 
+            # convert a
             dims = copy(replicate_a_kernel.layout.get_dims())
             dims[0], dims[6] = dims[6], dims[0]
-            converted_layout = Layout(a.layout.term, roll_layout.rolls, dims, a.layout.offset, a.layout.n, a.layout.secret)
-            conversion = Kernel(KernelOp.CONVERSION, [tuple(copy(replicate_a_kernel.layout.get_dims())), tuple(dims), replicate_a_kernel], converted_layout)
+            converted_layout = Layout(
+                a.layout.term,
+                roll_layout.rolls,
+                dims,
+                a.layout.offset,
+                a.layout.n,
+                a.layout.secret,
+            )
+            conversion = Kernel(
+                KernelOp.CONVERSION,
+                [
+                    tuple(copy(replicate_a_kernel.layout.get_dims())),
+                    tuple(dims),
+                    replicate_a_kernel,
+                ],
+                converted_layout,
+            )
 
             # replicate b
-            replicate_b = Layout(b.layout.term, b.layout.rolls, [Dim(None,2,1)] + b.layout.dims[:len(b.layout.dims)-1] + [Dim(2,2,64), Dim(2,64,1)], b.layout.offset, b.layout.n, b.layout.secret)
+            replicate_b = Layout(
+                b.layout.term,
+                b.layout.rolls,
+                [Dim(None, 2, 1)]
+                + b.layout.dims[: len(b.layout.dims) - 1]
+                + [Dim(2, 2, 64), Dim(2, 64, 1)],
+                b.layout.offset,
+                b.layout.n,
+                b.layout.secret,
+            )
             replicate_b_kernel = Kernel(KernelOp.REPLICATE, [b], replicate_b)
             output_kernel = output_layout(
                 term, alignment, conversion, replicate_b_kernel
-            )        
+            )
             output_kernels.add(output_kernel)
 
             # roll b
-            dims = copy(b.layout.dims[:len(b.layout.dims)-1] + [Dim(2,2,64), Dim(2,64,1)])
+            dims = copy(
+                b.layout.dims[: len(b.layout.dims) - 1] + [Dim(2, 2, 64), Dim(2, 64, 1)]
+            )
             dims[4], dims[6] = dims[6], dims[4]
             new_roll = Roll(dims[4], dims[6])
-            roll_layout = Layout(b.layout.term, [Roll(dims[0], dims[4]), new_roll], dims, b.layout.offset, b.layout.n, b.layout.secret)
+            roll_layout = Layout(
+                b.layout.term,
+                [Roll(dims[0], dims[4]), new_roll],
+                dims,
+                b.layout.offset,
+                b.layout.n,
+                b.layout.secret,
+            )
             roll_kernel = Kernel(KernelOp.ROLL, [new_roll, b], roll_layout)
-    
+
             # split last dimension
-            replicate_b = Layout(b.layout.term, roll_layout.rolls, [Dim(None,2,1)] + copy(dims), b.layout.offset, b.layout.n, b.layout.secret)
+            replicate_b = Layout(
+                b.layout.term,
+                roll_layout.rolls,
+                [Dim(None, 2, 1)] + copy(dims),
+                b.layout.offset,
+                b.layout.n,
+                b.layout.secret,
+            )
             replicate_b_kernel = Kernel(KernelOp.REPLICATE, [roll_kernel], replicate_a)
 
-            # convert a 
+            # convert a
             dims = copy(replicate_b_kernel.layout.get_dims())
             dims[0], dims[6] = dims[6], dims[0]
-            converted_layout = Layout(b.layout.term, roll_layout.rolls, dims, b.layout.offset, b.layout.n, b.layout.secret)
-            conversion = Kernel(KernelOp.CONVERSION, [tuple(copy(replicate_b_kernel.layout.get_dims())), tuple(dims), replicate_b_kernel], converted_layout)
+            converted_layout = Layout(
+                b.layout.term,
+                roll_layout.rolls,
+                dims,
+                b.layout.offset,
+                b.layout.n,
+                b.layout.secret,
+            )
+            conversion = Kernel(
+                KernelOp.CONVERSION,
+                [
+                    tuple(copy(replicate_b_kernel.layout.get_dims())),
+                    tuple(dims),
+                    replicate_b_kernel,
+                ],
+                converted_layout,
+            )
 
             # replicate a
-            replicate_a = Layout(a.layout.term, a.layout.rolls, [Dim(None,2,1)] + a.layout.dims[:len(a.layout.dims)-1] + [Dim(1,2,64), Dim(1,64,1)], a.layout.offset, a.layout.n, a.layout.secret)
+            replicate_a = Layout(
+                a.layout.term,
+                a.layout.rolls,
+                [Dim(None, 2, 1)]
+                + a.layout.dims[: len(a.layout.dims) - 1]
+                + [Dim(1, 2, 64), Dim(1, 64, 1)],
+                a.layout.offset,
+                a.layout.n,
+                a.layout.secret,
+            )
             replicate_a_kernel = Kernel(KernelOp.REPLICATE, [a], replicate_a)
             output_kernel = output_layout(
                 term, alignment, replicate_a_kernel, conversion
-            )        
+            )
             output_kernels.add(output_kernel)
             # return output_kernels
 
     for kernels in replicated_kernels:
         # add conversions or rolls to align layouts
         try:
-            matched_layouts = match_layout(term, kernels, alignment, True)      
+            matched_layouts = match_layout(term, kernels, alignment, True)
             for matched_a_kernel, matched_b_kernel in matched_layouts:
                 print(matched_a_kernel)
                 print(matched_b_kernel)
@@ -1088,14 +1177,21 @@ def gen_block_matmul(term, cs_kernels):
                 # compaction:
                 if not output_kernel.layout.rolls:
                     compacted_kernel = find_compaction(output_kernel)
-                    output_kernels.add(compacted_kernel)     
+                    output_kernels.add(compacted_kernel)
                 output_kernels.add(output_kernel)
         except:
             continue
-    
-    if str(term) == "(TensorOp.BLOCK_MATMUL (TensorOp.BLOCK_MATMUL (TensorOp.PERMUTE (TensorOp.RESHAPE (+ (@ h wq) bq) 1 {1: 12, 2: 64}) {0: 1, 1: 0, 2: 2}) (TensorOp.PERMUTE (TensorOp.RESHAPE (+ (@ h wk) bk) 1 {1: 12, 2: 64}) {0: 2, 1: 0, 2: 1})) (TensorOp.PERMUTE (TensorOp.RESHAPE (+ (@ h wv) bv) 1 {1: 12, 2: 64}) {0: 1, 1: 0, 2: 2}))":
-        output_kernels = set([output_kernel for output_kernel in output_kernels if output_kernel.op == KernelOp.COMPACT])
+
+    if (
+        str(term)
+        == "(TensorOp.BLOCK_MATMUL (TensorOp.BLOCK_MATMUL (TensorOp.PERMUTE (TensorOp.RESHAPE (+ (@ h wq) bq) 1 {1: 12, 2: 64}) {0: 1, 1: 0, 2: 2}) (TensorOp.PERMUTE (TensorOp.RESHAPE (+ (@ h wk) bk) 1 {1: 12, 2: 64}) {0: 2, 1: 0, 2: 1})) (TensorOp.PERMUTE (TensorOp.RESHAPE (+ (@ h wv) bv) 1 {1: 12, 2: 64}) {0: 1, 1: 0, 2: 2}))"
+    ):
+        output_kernels = set(
+            [
+                output_kernel
+                for output_kernel in output_kernels
+                if output_kernel.op == KernelOp.COMPACT
+            ]
+        )
 
     return output_kernels
-            
-    

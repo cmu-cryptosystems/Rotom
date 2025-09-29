@@ -1,13 +1,20 @@
-""" 
+"""
 Lowering should account for layout and dimensions at each step
 """
 
 from ir.kernel import KernelOp
+from lower.circuit_opts.mask_opts import (
+    mask_identity_opt,
+    zero_mask_identity_opt,
+    zero_mask_opt,
+)
+from lower.circuit_opts.rot_opts import rot_zero_opt
 from lower.lower_add import lower_add
 from lower.lower_combine import lower_combine
 from lower.lower_compact import lower_compact
-from lower.lower_conversion import lower_conversion
 from lower.lower_conv2d import lower_conv2d
+from lower.lower_conversion import lower_conversion
+from lower.lower_cs_pack import lower_cs_pack
 from lower.lower_index import lower_index
 from lower.lower_matmul import lower_bsgs_matmul, lower_matmul
 from lower.lower_mul import lower_mul
@@ -26,11 +33,6 @@ from lower.lower_sub import lower_sub
 from lower.lower_sum import lower_sum
 from lower.lower_tensor import lower_tensor
 from lower.lower_transpose import lower_transpose
-from lower.lower_cs_pack import lower_cs_pack
-
-
-from lower.circuit_opts.mask_opts import zero_mask_opt, mask_identity_opt, zero_mask_identity_opt
-from lower.circuit_opts.rot_opts import rot_zero_opt
 
 
 class Lower:

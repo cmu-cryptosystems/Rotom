@@ -19,7 +19,7 @@ from frontends.tensor import TensorOp
 class Secret:
     """Secret class for tracking which tensors are encrypted vs plaintext.
 
-    This class maintains a mapping of which tensors in the computation graph are secret 
+    This class maintains a mapping of which tensors in the computation graph are secret
     (encrypted) vs public (plaintext). It traverses the graph and determines the secrecy
     of each tensor based on the operation type and secrecy of input tensors.
 
@@ -45,7 +45,7 @@ class Secret:
                 return term.cs[2]
             case TensorOp.CONST:
                 return False
-            case(
+            case (
                 TensorOp.TRANSPOSE
                 | TensorOp.SUM
                 | TensorOp.PRODUCT
@@ -55,7 +55,7 @@ class Secret:
                 | TensorOp.INDEX
             ):
                 return secrets[0]
-            case(
+            case (
                 TensorOp.ADD
                 | TensorOp.SUB
                 | TensorOp.MUL
@@ -82,7 +82,7 @@ class Secret:
             case TensorOp.TENSOR:
                 kernel_secret = self.get_secret(term, [])
                 self.secret[term] = kernel_secret
-            case(
+            case (
                 TensorOp.ADD
                 | TensorOp.SUB
                 | TensorOp.MUL
@@ -97,7 +97,7 @@ class Secret:
                 assert not self.secret[term.cs[1]]
                 kernel_secret = self.secret[term.cs[0]]
                 self.secret[term] = kernel_secret
-            case(
+            case (
                 TensorOp.TRANSPOSE
                 | TensorOp.SUM
                 | TensorOp.RESHAPE
@@ -113,4 +113,3 @@ class Secret:
     def run(self):
         for term in self.comp.post_order():
             self.get_term_secret(term)
-        

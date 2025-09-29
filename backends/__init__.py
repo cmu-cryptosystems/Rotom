@@ -10,7 +10,7 @@ Each backend implements a common interface for executing FHE circuits
 with different underlying homomorphic encryption libraries.
 """
 
-from .toy import Toy
 from .openfhe_backend import CKKS
+from .toy import Toy
 
-__all__ = ['Toy', 'CKKS', 'HEIR']
+__all__ = ["Toy", "CKKS", "HEIR"]

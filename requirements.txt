@@ -18,3 +18,13 @@ six==1.17.0
 tomli==2.2.1
 tqdm==4.67.1
 typing_extensions==4.15.0
+
+# CI/CD and Development Tools
+flake8>=7.3.0
+black>=25.9.0
+isort>=6.0.1
+mypy>=1.18.2
+bandit>=1.8.6
+safety>=3.6.2
+pytest-cov>=7.0.0
+coverage>=7.10.6

@@ -1,6 +1,6 @@
-from ir.he import HETerm, HEOp
-from util.layout_util import layout_to_ct_indices
 from ir.analysis.shape import Shape
+from ir.he import HEOp, HETerm
+from util.layout_util import layout_to_ct_indices
 
 
 def lower_cs_pack(kernel):
@@ -15,11 +15,13 @@ def lower_cs_pack(kernel):
             if not all(a < b for a, b in zip(offset, shape)):
                 cts[i] = HETerm(HEOp.ZERO_MASK, [], False)
             else:
-                cts[i] = HETerm(HEOp.CS_PACK, [kernel.cs[0],
-                                               layout], layout.secret, f"{i} {kernel}")
+                cts[i] = HETerm(
+                    HEOp.CS_PACK, [kernel.cs[0], layout], layout.secret, f"{i} {kernel}"
+                )
         return cts
 
     else:
-        term = HETerm(HEOp.CS_PACK, [
-            kernel.cs[0], layout], layout.secret, f"0 {kernel}")
+        term = HETerm(
+            HEOp.CS_PACK, [kernel.cs[0], layout], layout.secret, f"0 {kernel}"
+        )
         return {0: term}

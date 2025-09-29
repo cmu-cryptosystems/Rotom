@@ -6,30 +6,31 @@ This module provides the frontend interface for defining tensor computations in 
 Plaintext Example:
     >>> import numpy as np
     >>> from frontends.tensor import TensorTerm
-    >>> 
+    >>>
     >>> # Create tensor terms
     >>> a = TensorTerm.Tensor("a", [64, 64], True)  # 64x64 ciphertext matrix
     >>> b = TensorTerm.Tensor("b", [64], False)     # 64-element plaintext vector
-    >>> 
+    >>>
     >>> # Create computation
     >>> c = a @ b  # Matrix-vector multiplication
-    >>> 
+    >>>
     >>> # Evaluate with inputs
     >>> inputs = {"a": np.random.rand(64, 64), "b": np.random.rand(64)}
     >>> result = c.eval(inputs)
 """
 
-from enum import Enum
-import numpy as np
 import math
+from enum import Enum
+
+import numpy as np
 
 
 class TensorOp(Enum):
     """Supported tensor operations.
-    
+
     This enum defines all the tensor operations supported by the frontend,
     including basic arithmetic, matrix operations, and neural network operations.
-    
+
     Attributes:
         TENSOR: Input tensor placeholder
         CONST: Constant value
@@ -69,7 +70,7 @@ class TensorTerm:
     """A term in a tensor computation.
 
     This class implements tensor operations and expressions, supporting basic arithmetic,
-    matrix operations, and shape manipulations. TensorTerms can be composed to build 
+    matrix operations, and shape manipulations. TensorTerms can be composed to build
     complex programs for machine learning workloads.
 
     All operations return new TensorTerm instances that can be further composed.
@@ -82,12 +83,12 @@ class TensorTerm:
         >>> # Create tensor terms
         >>> a = TensorTerm.Tensor("a", [64, 64], secret=True)
         >>> b = TensorTerm.Tensor("b", [64], secret=False)
-        >>> 
+        >>>
         >>> # Create operations using operators
         >>> c = a @ b  # Matrix multiplication
         >>> d = a + b  # Element-wise addition
         >>> e = a.T    # Transpose
-        >>> 
+        >>>
         >>> # Create operations using methods
         >>> f = a.sum(0)  # Sum along dimension 0
         >>> g = a.reshape(0, [32, 128])  # Reshape
@@ -95,7 +96,7 @@ class TensorTerm:
 
     def __init__(self, op, cs):
         """Initialize a tensor term.
-        
+
         Args:
             op (TensorOp): The operation this term represents
             cs (list): List of child terms or arguments for this operation
@@ -105,7 +106,7 @@ class TensorTerm:
 
     def __hash__(self):
         """Compute hash of the tensor term for use in sets and dictionaries.
-        
+
         Returns:
             int: Hash value based on string representation
         """
@@ -113,10 +114,10 @@ class TensorTerm:
 
     def __eq__(self, other):
         """Check equality of two tensor terms.
-        
+
         Args:
             other: Another tensor term to compare with
-            
+
         Returns:
             bool: True if terms are equal, False otherwise
         """
@@ -124,7 +125,7 @@ class TensorTerm:
 
     def __repr__(self):
         """String representation of the tensor term.
-        
+
         Returns:
             str: Human-readable representation of the composed tensor program
         """
@@ -149,15 +150,15 @@ class TensorTerm:
     @staticmethod
     def Tensor(name, shape, secret):
         """Create a tensor placeholder term.
-        
+
         Args:
             name (str): Variable name for the tensor
             shape (list): List of dimension sizes
             secret (bool): Whether the tensor is encrypted (True) or plaintext (False)
-            
+
         Returns:
             TensorTerm: A tensor placeholder term
-            
+
         Example:
             >>> a = TensorTerm.Tensor("a", [64, 64], True)  # 64x64 ciphertext matrix
             >>> b = TensorTerm.Tensor("b", [64], False)     # 64-element plaintext vector
@@ -167,13 +168,13 @@ class TensorTerm:
     @staticmethod
     def const(value):
         """Create a public constant tensor term.
-        
+
         Args:
             value: The constant value
-            
+
         Returns:
             TensorTerm: A constant tensor term
-            
+
         Example:
             >>> c = TensorTerm.const(42)  # Constant value 42
         """
@@ -181,13 +182,13 @@ class TensorTerm:
 
     def __add__(self, other):
         """Element-wise addition operator.
-        
+
         Args:
             other (TensorTerm): The tensor to add
-            
+
         Returns:
             TensorTerm: A new tensor term representing the addition
-            
+
         Example:
             >>> c = a + b  # Element-wise addition
         """
@@ -195,13 +196,13 @@ class TensorTerm:
 
     def __sub__(self, other):
         """Element-wise subtraction operator.
-        
+
         Args:
             other (TensorTerm): The tensor to subtract
-            
+
         Returns:
             TensorTerm: A new tensor term representing the subtraction
-            
+
         Example:
             >>> c = a - b  # Element-wise subtraction
         """
@@ -209,13 +210,13 @@ class TensorTerm:
 
     def __mul__(self, other):
         """Element-wise multiplication operator.
-        
+
         Args:
             other (TensorTerm): The tensor to multiply
-            
+
         Returns:
             TensorTerm: A new tensor term representing the multiplication
-            
+
         Example:
             >>> c = a * b  # Element-wise multiplication
         """
@@ -223,13 +224,13 @@ class TensorTerm:
 
     def sum(self, dim_idx):
         """Sum along a specific dimension.
-        
+
         Args:
             dim_idx (int): The dimension index to sum along
-            
+
         Returns:
             TensorTerm: A new tensor term representing the sum
-            
+
         Example:
             >>> c = a.sum(0)  # Sum along dimension 0
         """
@@ -237,13 +238,13 @@ class TensorTerm:
 
     def product(self, dim_idx):
         """Product along a specific dimension.
-        
+
         Args:
             dim_idx (int): The dimension index to compute product along
-            
+
         Returns:
             TensorTerm: A new tensor term representing the product
-            
+
         Example:
             >>> c = a.product(0)  # Product along dimension 0
         """
@@ -251,13 +252,13 @@ class TensorTerm:
 
     def matmul(self, other):
         """Matrix multiplication method.
-        
+
         Args:
             other (TensorTerm): The tensor to multiply with
-            
+
         Returns:
             TensorTerm: A new tensor term representing the matrix multiplication
-            
+
         Example:
             >>> c = a.matmul(b)  # Matrix multiplication
         """
@@ -265,13 +266,13 @@ class TensorTerm:
 
     def __matmul__(self, other):
         """Matrix multiplication operator (@).
-        
+
         Args:
             other (TensorTerm): The tensor to multiply with
-            
+
         Returns:
             TensorTerm: A new tensor term representing the matrix multiplication
-            
+
         Example:
             >>> c = a @ b  # Matrix multiplication using @ operator
         """
@@ -279,13 +280,13 @@ class TensorTerm:
 
     def block_matmul(self, other):
         """Block matrix multiplication.
-        
+
         Args:
             other (TensorTerm): The tensor to multiply with
-            
+
         Returns:
             TensorTerm: A new tensor term representing the block matrix multiplication
-            
+
         Example:
             >>> c = a.block_matmul(b)  # Block matrix multiplication
         """
@@ -293,10 +294,10 @@ class TensorTerm:
 
     def transpose(self):
         """Transpose the tensor.
-        
+
         Returns:
             TensorTerm: A new tensor term representing the transpose
-            
+
         Example:
             >>> b = a.transpose()  # Transpose of a
         """
@@ -304,13 +305,13 @@ class TensorTerm:
 
     def Poly(self):
         """Apply polynomial approximation.
-        
+
         Returns:
             TensorTerm: A new tensor term representing polynomial approximation
-            
+
         Example:
             >>> b = a.Poly()  # Polynomial approximation of a
-        
+
         Note:
             This is a placeholder, as polynomial approximation is not supported yet.
             This will be replaced by a proper polynomial approximation implementation.
@@ -319,14 +320,14 @@ class TensorTerm:
 
     def reshape(self, dim, shape):
         """Reshape the tensor.
-        
+
         Args:
             dim (int): The dimension to reshape
             shape (dict): Dictionary mapping dimension indices to new sizes
-            
+
         Returns:
             TensorTerm: A new tensor term representing the reshape
-            
+
         Example:
             >>> b = a.reshape(0, {0: 32, 1: 128})  # Reshape dimension 0
         """
@@ -334,13 +335,13 @@ class TensorTerm:
 
     def permute(self, dim_map):
         """Permute tensor dimensions.
-        
+
         Args:
             dim_map (dict): Dictionary mapping old dimension indices to new ones
-            
+
         Returns:
             TensorTerm: A new tensor term representing the permutation
-            
+
         Example:
             >>> b = a.permute({0: 1, 1: 0})  # Swap dimensions 0 and 1
         """
@@ -348,13 +349,13 @@ class TensorTerm:
 
     def __getitem__(self, item):
         """Index the tensor.
-        
+
         Args:
             item: The index or slice to apply
-            
+
         Returns:
             TensorTerm: A new tensor term representing the indexing
-            
+
         Example:
             >>> b = a[0]  # Index first element
         """
@@ -363,10 +364,10 @@ class TensorTerm:
     @property
     def T(self):
         """Transpose property.
-        
+
         Returns:
             TensorTerm: A new tensor term representing the transpose
-            
+
         Example:
             >>> b = a.T  # Transpose of a
         """
@@ -375,16 +376,16 @@ class TensorTerm:
     @staticmethod
     def conv2d(a, b, stride, padding):
         """Create a 2D convolution operation.
-        
+
         Args:
             a (TensorTerm): Input tensor
             b (TensorTerm): Filter tensor
             stride (int): Stride of the convolution
             padding (str): Padding mode ("valid" or "same")
-            
+
         Returns:
             TensorTerm: A new tensor term representing the convolution
-            
+
         Example:
             >>> c = TensorTerm.conv2d(input, filter, 1, "same")
         """
@@ -392,16 +393,16 @@ class TensorTerm:
 
     def round_to_ceiling_power_of_2(self, n):
         """Round a number up to the next power of 2.
-        
+
         Args:
             n (int): The number to round up
-            
+
         Returns:
             int: The smallest power of 2 greater than or equal to n
-            
+
         Raises:
             ValueError: If n is not positive
-            
+
         Example:
             >>> round_to_ceiling_power_of_2(5)  # Returns 8
             >>> round_to_ceiling_power_of_2(8)  # Returns 8
@@ -412,10 +413,10 @@ class TensorTerm:
 
     def helper_post_order(self, seen):
         """Helper routine for post-order traversal.
-        
+
         Args:
             seen (set): Set of already visited nodes
-            
+
         Returns:
             tuple: (list of nodes in post-order, updated seen set)
         """
@@ -438,10 +439,10 @@ class TensorTerm:
 
     def post_order(self):
         """Perform post-order traversal of the tensor computation DAG.
-        
+
         Returns:
             list: List of tensor terms in post-order (children before parents)
-            
+
         Example:
             >>> # For computation: c = a @ b
             >>> traversal = c.post_order()  # Returns [a, b, c]
@@ -452,10 +453,10 @@ class TensorTerm:
 
     def root(self):
         """Return the root node of the tensor computation DAG.
-        
+
         Returns:
             TensorTerm: The root node (final result) of the computation
-            
+
         Example:
             >>> # For computation: c = a @ b
             >>> root = c.root()  # Returns c
@@ -464,16 +465,16 @@ class TensorTerm:
 
     def eval_conv2d(self, input_tensor, filter_tensor, stride, padding):
         """Evaluate a 2D convolution operation.
-        
+
         Args:
             input_tensor (numpy.ndarray): Input tensor with shape [C, H, W]
             filter_tensor (numpy.ndarray): Filter tensor with shape [C_out, C_in, H_f, W_f]
             stride (int): Stride of the convolution
             padding (str): Padding mode ("valid" or "same")
-            
+
         Returns:
             numpy.ndarray: Output tensor after convolution
-            
+
         Note:
             This is a reference implementation for testing purposes.
             The actual HE implementation will be generated by the backend.
@@ -492,20 +493,16 @@ class TensorTerm:
             pass
         elif padding == "same":
             pad_top = math.floor(
-                (stride * (output_shape[1] - 1) -
-                 input_shape[1] + filter_shape[2]) / 2
+                (stride * (output_shape[1] - 1) - input_shape[1] + filter_shape[2]) / 2
             )
             pad_bot = math.ceil(
-                (stride * (output_shape[1] - 1) -
-                 input_shape[1] + filter_shape[2]) / 2
+                (stride * (output_shape[1] - 1) - input_shape[1] + filter_shape[2]) / 2
             )
             pad_left = math.floor(
-                (stride * (output_shape[2] - 1) -
-                 input_shape[2] + filter_shape[3]) / 2
+                (stride * (output_shape[2] - 1) - input_shape[2] + filter_shape[3]) / 2
             )
             pad_right = math.ceil(
-                (stride * (output_shape[2] - 1) -
-                 input_shape[2] + filter_shape[3]) / 2
+                (stride * (output_shape[2] - 1) - input_shape[2] + filter_shape[3]) / 2
             )
 
             padded_input_tensor = []
@@ -546,26 +543,25 @@ class TensorTerm:
 
     def eval_helper(self, env, inputs):
         """Helper method for evaluating tensor terms.
-        
+
         This method handles the evaluation of individual tensor operations
         during the computation process. It's called by the main eval method
         for each term in post-order.
-        
+
         Args:
             env (dict): Environment mapping terms to their computed values
             inputs (dict): Dictionary mapping input tensor names to numpy arrays
-            
+
         Returns:
             numpy.ndarray: The computed value for this term
-            
+
         Raises:
             NotImplementedError: If the operation is not implemented
         """
         match self.op:
             case TensorOp.TENSOR:
                 shape = inputs[self.cs[0]].shape
-                rounded_shape = [
-                    self.round_to_ceiling_power_of_2(s) for s in shape]
+                rounded_shape = [self.round_to_ceiling_power_of_2(s) for s in shape]
                 padding = [0] * len(shape)
                 for i, (a, b) in enumerate(zip(shape, rounded_shape)):
                     padding[i] = b - a
@@ -635,13 +631,13 @@ class TensorTerm:
 
         Returns:
             numpy.ndarray: The result of evaluating the full tensor computation
-            
+
         Example:
             >>> import numpy as np
             >>> a = TensorTerm.Tensor("a", [64, 64], True)
             >>> b = TensorTerm.Tensor("b", [64], False)
             >>> c = a @ b
-            >>> 
+            >>>
             >>> inputs = {"a": np.random.rand(64, 64), "b": np.random.rand(64)}
             >>> result = c.eval(inputs)
         """
@@ -649,4 +645,3 @@ class TensorTerm:
         for term in self.post_order():
             env[term] = term.eval_helper(env, inputs)
         return env[term]
-        

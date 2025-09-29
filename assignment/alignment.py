@@ -15,25 +15,25 @@ from frontends.tensor import TensorOp
 
 def get_dim_alignment(term, shapes):
     """Determines dimension alignment for tensor operations.
-    
+
     This function analyzes a tensor operation and its input shapes to determine
     how dimensions should be aligned between operands. The alignment is crucial
     for ensuring that operations can be performed correctly in the HE domain.
-    
+
     For different operation types:
     - Element-wise ops (ADD, SUB, MUL): Aligns corresponding dimensions
     - Matrix multiplication: Aligns contraction dimensions and batch dimensions
     - Block matrix multiplication: Aligns block dimensions
-    
+
     Args:
         term: TensorTerm representing the operation
         shapes: List of input tensor shapes
-        
+
     Returns:
         Set of tuples (dim_a, dim_b) representing dimension alignments.
         None values indicate dimensions that don't have a corresponding
         dimension in the other operand.
-        
+
     Raises:
         NotImplementedError: If the operation type alignment is not implemented
     """
