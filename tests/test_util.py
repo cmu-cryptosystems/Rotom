@@ -13,5 +13,6 @@ def get_default_args():
     parser.mock = False
     parser.fuzz = False
     parser.fuzz_result = False
+    parser.not_secure = False
     parser.fn = ""
     return parser

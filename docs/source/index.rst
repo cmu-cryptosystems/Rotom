@@ -132,6 +132,7 @@ Rotom's flags:
    python main.py --mock                         # Enable mock inputs for testing
    python main.py --fuzz                         # Enable fuzzing
    python main.py --fuzz_result                  # Enable result fuzzing
+   python main.py --not-secure                   # Disable 128-bit security
 
 .. toctree::
    :maxdepth: 2

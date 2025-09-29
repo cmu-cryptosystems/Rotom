@@ -1,11 +1,23 @@
 from ir.kernel_cost import KernelCost
 from util.layout_util import apply_layout
+import numpy as np
 
 
 def check_results(tensor_ir, inputs, kernel, results, runtime, args):
     """Check results of the benchmark"""
     expected_cts = apply_layout(tensor_ir.eval(inputs), kernel.layout)
-    if args.benchmark == "main" and expected_cts != results:
+    
+    # Check if values are close instead of exact equality
+    all_close = True
+    max_diff = 0.0
+    
+    for expected, result in zip(expected_cts, results):
+        if not np.allclose(expected, result, rtol=1e-2, atol=1e-2):
+            all_close = False
+            diff = np.array(expected) - np.array(result)
+            max_diff = max(max_diff, np.max(np.abs(diff)))
+    
+    if args.benchmark == "main" and not all_close:
         print("expected:")
         for expected in expected_cts:
             print(expected)
@@ -26,5 +38,5 @@ def check_results(tensor_ir, inputs, kernel, results, runtime, args):
         print("runtime:", runtime + KernelCost(kernel, args.net).real_comm_cost())
         print(kernel.layout)
 
-    assert expected_cts == results
+    assert all_close, f"Values not close enough. Max diff: {max_diff}"
     print("passed!")

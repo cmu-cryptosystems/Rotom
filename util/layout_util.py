@@ -540,7 +540,7 @@ def apply_layout(pt_tensor, layout):
                     ct.append(0)
                 else:
                     try:
-                        ct.append(int(pt_tensor[index[0]]))
+                        ct.append(pt_tensor[index[0]])
                     except IndexError:
                         ct.append(0)
             elif len(index) == 2:
@@ -548,7 +548,7 @@ def apply_layout(pt_tensor, layout):
                     ct.append(0)
                 else:
                     try:
-                        ct.append(int(pt_tensor[index[0]][index[1]]))
+                        ct.append(pt_tensor[index[0]][index[1]])
                     except:
                         ct.append(0)
             elif len(index) == 3:
@@ -556,7 +556,7 @@ def apply_layout(pt_tensor, layout):
                     ct.append(0)
                 else:
                     try:
-                        ct.append(int(pt_tensor[index[0]][index[1]][index[2]]))
+                        ct.append(pt_tensor[index[0]][index[1]][index[2]])
                     except IndexError:
                         ct.append(0)
             elif len(index) == 4:
@@ -570,8 +570,8 @@ def apply_layout(pt_tensor, layout):
                 else:
                     try:
                         ct.append(
-                            int(pt_tensor[index[0]][index[1]]
-                                [index[2]][index[3]])
+                            pt_tensor[index[0]][index[1]]
+                                [index[2]][index[3]]
                         )
                     except IndexError:
                         ct.append(0)

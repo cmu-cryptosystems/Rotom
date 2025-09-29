@@ -210,6 +210,8 @@ if __name__ == "__main__":
     parser.add_argument("--fuzz", action=BooleanOptionalAction, default=False)
     parser.add_argument(
         "--fuzz_result", action=BooleanOptionalAction, default=False)
+    parser.add_argument("--not-secure", action=BooleanOptionalAction, default=False,
+                       help="Disable 128-bit security level for OpenFHE backend")
     parser.add_argument("--fn", type=str, default="fn")
     args = parser.parse_args()
 

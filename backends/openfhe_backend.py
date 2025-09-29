@@ -30,6 +30,7 @@ class CKKS:
         self.mock_inputs = args.mock
         self.serialize = args.serialize
         self.net = args.net
+        self.not_secure = getattr(args, 'not_secure', False)  # Flag to disable 128-bit security
         self.env = {}
         self.pt_env = {}
         self.layout_map = {}
@@ -98,7 +99,15 @@ class CKKS:
         parameters.SetMultiplicativeDepth(depth)
         parameters.SetScalingModSize(45)
         parameters.SetScalingTechnique(ScalingTechnique.FLEXIBLEAUTO)
-        parameters.SetSecurityLevel(HEStd_NotSet)
+        
+        # Set security level based on flag (inverted logic)
+        if self.not_secure:
+            parameters.SetSecurityLevel(HEStd_NotSet)
+            print("Using default security level (not guaranteed)")
+        else:
+            parameters.SetSecurityLevel(HEStd_128_classic)
+            print("Using 128-bit security level")
+            
         parameters.SetRingDim(self.n * 2)
 
         self.cc = GenCryptoContext(parameters)
@@ -454,7 +463,7 @@ class CKKS:
 
     def decrypt_to_plaintext(self, ct):
         pt = self.decrypt(ct)
-        decrypted = [round(d.real) for d in pt.GetCKKSPackedValue()]
+        decrypted = [d.real for d in pt.GetCKKSPackedValue()]
         return decrypted
 
     def find_depth_rescale(self, ct):
@@ -515,9 +524,12 @@ class CKKS:
             term.layout.term.eval(self.inputs), term.layout)
 
         for a, b in zip(expected_cts, decrypted):
-            if a != b:
-                print(np.array(a) - np.array(b))
-            assert a == b
+            diff = np.array(a) - np.array(b)
+            if not np.allclose(a, b, rtol=1e-2, atol=1e-2):
+                print(f"Expected: {a}")
+                print(f"Actual: {b}")
+                print(f"Max absolute difference: {np.max(np.abs(diff))}")
+            assert np.allclose(a, b, rtol=1e-2, atol=1e-2), f"Values not close enough. Max diff: {np.max(np.abs(diff))}"
         print("pass!")
         print()
 
