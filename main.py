@@ -7,7 +7,7 @@ from assignment.assignment import LayoutAssignment
 from backends.openfhe_backend import CKKS
 from backends.toy import Toy
 
-# Import microbenchmark functions
+# Import benchmarks
 from benchmarks.microbenchmarks.conversion import conversion
 from benchmarks.microbenchmarks.roll import roll
 from benchmarks.microbenchmarks.rot_roll import rot_roll
@@ -19,15 +19,16 @@ from benchmarks.microbenchmarks.ttm_micro_32 import ttm_micro_32
 from benchmarks.rotom_benchmarks.bert_attention import bert_attention
 from benchmarks.rotom_benchmarks.convolution import convolution
 from benchmarks.rotom_benchmarks.convolution_32768 import convolution_32768
+from benchmarks.rotom_benchmarks.distance import distance
 from benchmarks.rotom_benchmarks.double_matmul.double_matmul_128_64 import (
     double_matmul_128_64,
 )
 from benchmarks.rotom_benchmarks.double_matmul.double_matmul_256_128 import (
     double_matmul_256_128,
 )
-
-# Import benchmark functions
 from benchmarks.rotom_benchmarks.matmul.matmul_128_128 import matmul_128_128
+
+# Import Rotom
 from frontends.tensor import TensorTerm
 from ir.dim import *
 from ir.kernel_cost import KernelCost
@@ -85,6 +86,8 @@ def run_benchmark_or_microbenchmark(args):
         n = args.n
 
         match args.benchmark:
+            case "distance":
+                tensor_ir, inputs = distance()
             case "matmul":
                 tensor_ir, inputs = matmul_128_128()
             case "double_matmul_128_64":

@@ -116,6 +116,12 @@ class Shape:
                 for k, v in term.cs[1].items():
                     permuted_shape[v] = a_shape[k]
                 return permuted_shape
+            case TensorOp.SUM | TensorOp.PRODUCT:
+                a_shape = copy(self.padded_shapes[term.cs[0]])
+                dim_idx = term.cs[1]
+                # Remove the dimension being reduced over
+                result_shape = a_shape[:dim_idx] + a_shape[dim_idx + 1 :]
+                return result_shape
             case _:
                 raise NotImplementedError(term.op)
 
@@ -230,6 +236,13 @@ class Shape:
                 assert a_shape[0] == b_shape[0]
                 assert a_shape[2] == b_shape[1]
                 return [a_shape[0], a_shape[1], b_shape[2]]
+            case TensorOp.SUM | TensorOp.PRODUCT:
+                a = term.cs[0]
+                a_shape = copy(self.get_shape(a))
+                dim_idx = term.cs[1]
+                # Remove the dimension being reduced over
+                result_shape = a_shape[:dim_idx] + a_shape[dim_idx + 1 :]
+                return result_shape
             case _:
                 raise NotImplementedError(term.op)
 
