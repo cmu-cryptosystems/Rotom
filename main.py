@@ -88,26 +88,21 @@ def run_benchmark_or_microbenchmark(args):
         n = args.n
 
         match args.benchmark:
-            case "distance":
-                tensor_ir, inputs = distance()
-            case "ttm":
-                tensor_ir, inputs = ttm()
-            case "retrieval":
-                tensor_ir, inputs = retrieval()
             case "matmul":
                 tensor_ir, inputs = matmul_128_128()
             case "double_matmul_128_64":
                 tensor_ir, inputs = double_matmul_128_64()
             case "double_matmul_256_128":
                 tensor_ir, inputs = double_matmul_256_128()
-            case "logreg":
-                tensor_ir, inputs = logreg()
             case "convolution":
-                tensor_ir, inputs = convolution()
+                tensor_ir, inputs, n = convolution()
+                args.n = n
             case "convolution_32768":
-                tensor_ir, inputs = convolution_32768()
+                tensor_ir, inputs, n = convolution_32768()
+                args.n = n
             case "bert_attention":
-                tensor_ir, inputs = bert_attention()
+                tensor_ir, inputs, n = bert_attention()
+                args.n = n
             case _:
                 raise NotImplementedError("unknown benchmark")
 
@@ -117,6 +112,12 @@ def run_benchmark_or_microbenchmark(args):
         
         # Generate kernel from tensor_ir
         kernel = LayoutAssignment(tensor_ir, args).run()
+
+        # Output found kernel
+        print("found kernel:")
+        for k in kernel.post_order():
+            print(k)
+        print()
     
         # Lower to circuit IR
         circuit_ir = Lower(kernel).run()

@@ -28,15 +28,15 @@ class Shape:
             case TensorOp.TENSOR:
                 return [round_to_ceiling_power_of_2(s) for s in term.cs[1]]
             case TensorOp.ADD | TensorOp.SUB | TensorOp.MUL:
-                a_shape = self.padded_shapes[term.cs[0]]
-                b_shape = self.padded_shapes[term.cs[1]]
+                a_shape = copy(self.padded_shapes[term.cs[0]])
+                b_shape = copy(self.padded_shapes[term.cs[1]])
                 if len(a_shape) > len(b_shape):
                     return a_shape
                 else:
                     return b_shape
             case TensorOp.MATMUL:
-                a_shape = self.padded_shapes[term.cs[0]]
-                b_shape = self.padded_shapes[term.cs[1]]
+                a_shape = copy(self.padded_shapes[term.cs[0]])
+                b_shape = copy(self.padded_shapes[term.cs[1]])
 
                 # Result shape: all dims of A except last + all dims of B except second-to-last
                 if len(a_shape) == 0 or len(b_shape) == 0:
@@ -58,18 +58,17 @@ class Shape:
                 else:
                     # ND × ND: standard batched matmul
                     assert a_shape[-1] == b_shape[-2]
-                    c_shape = list(a_shape[:-1]) + list(b_shape[:-2]) + [b_shape[-1]]
-                
+                    c_shape = list(a_shape[:-1]) + list(b_shape[:-2]) + [b_shape[-1]]    
                 return c_shape
             case TensorOp.BLOCK_MATMUL:
-                a_shape = self.padded_shapes[term.cs[0]]
-                b_shape = self.padded_shapes[term.cs[1]]
+                a_shape = copy(self.padded_shapes[term.cs[0]])
+                b_shape = copy(self.padded_shapes[term.cs[1]])
                 assert len(a_shape) == 3 and len(b_shape) == 3
                 assert a_shape[0] == b_shape[0]
                 assert a_shape[2] == b_shape[1]
                 return [a_shape[0], a_shape[1], b_shape[2]]
             case TensorOp.TRANSPOSE:
-                a_shape = self.padded_shapes[term.cs[0]]
+                a_shape = copy(self.padded_shapes[term.cs[0]])
                 assert len(a_shape) == 2
                 a_shape[0], a_shape[1] = a_shape[1], a_shape[0]
                 return a_shape
@@ -78,8 +77,8 @@ class Shape:
                 del a_shape[term.cs[1]]
                 return a_shape + [round_to_ceiling_power_of_2(s) for s in term.cs[2].values()]
             case TensorOp.CONV2D:
-                a_shape = self.padded_shapes[term.cs[0]]
-                b_shape = self.padded_shapes[term.cs[1]]
+                a_shape = copy(self.padded_shapes[term.cs[0]])
+                b_shape = copy(self.padded_shapes[term.cs[1]])
 
                 c_i = a_shape[0]
                 h_i = a_shape[1]
@@ -104,10 +103,10 @@ class Shape:
                 c_shape = [c_o, h_o, w_o]
                 return c_shape
             case TensorOp.INDEX:
-                a_shape = self.padded_shapes[term.cs[0]]
+                a_shape = copy(self.padded_shapes[term.cs[0]])
                 return a_shape[1:]
             case TensorOp.PERMUTE:
-                a_shape = self.padded_shapes[term.cs[0]]
+                a_shape = copy(self.padded_shapes[term.cs[0]])
                 permuted_shape = [0] * len(a_shape)
                 for k, v in term.cs[1].items():
                     permuted_shape[v] = a_shape[k]
@@ -119,11 +118,11 @@ class Shape:
         match term.op:
             case TensorOp.TENSOR:
                 return term.cs[1]
-            case TensorOp.ADD:
+            case TensorOp.ADD | TensorOp.MUL | TensorOp.SUB:
                 a = term.cs[0]
                 b = term.cs[1]
-                a_shape = self.get_shape(a)
-                b_shape = self.get_shape(b)
+                a_shape = copy(self.get_shape(a))
+                b_shape = copy(self.get_shape(b))
                 if len(a_shape) > len(b_shape):
                     return a_shape
                 else:
@@ -131,8 +130,8 @@ class Shape:
             case TensorOp.MATMUL:
                 a = term.cs[0]
                 b = term.cs[1]
-                a_shape = self.get_shape(a)
-                b_shape = self.get_shape(b)
+                a_shape = copy(self.get_shape(a))
+                b_shape = copy(self.get_shape(b))
 
                 # Result shape: all dims of A except last + all dims of B except second-to-last
                 if len(a_shape) == 0 or len(b_shape) == 0:
@@ -159,14 +158,14 @@ class Shape:
                 return c_shape
             case TensorOp.TRANSPOSE:
                 a = term.cs[0]
-                a_shape = self.get_shape(a)
+                a_shape = copy(self.get_shape(a))
                 assert len(a_shape) == 2
                 return [a_shape[1], a_shape[0]]
             case TensorOp.CONV2D:
                 a = term.cs[0]
                 b = term.cs[1]
-                a_shape = self.get_shape(a)
-                b_shape = self.get_shape(b)
+                a_shape = copy(self.get_shape(a))
+                b_shape = copy(self.get_shape(b))
 
                 c_i = a_shape[0]
                 h_i = a_shape[1]
@@ -192,11 +191,11 @@ class Shape:
                 return c_shape
             case TensorOp.INDEX:
                 a = term.cs[0]
-                a_shape = self.get_shape(a)
+                a_shape = copy(self.get_shape(a))
                 return a_shape[1:]
             case TensorOp.RESHAPE:
                 a = term.cs[0]
-                a_shape = self.get_shape(a)
+                a_shape = copy(self.get_shape(a))
                 shape_map = {}
                 for i, shape in enumerate(a_shape):
                     shape_map[i] = shape
@@ -209,7 +208,7 @@ class Shape:
                 return new_shape
             case TensorOp.PERMUTE:
                 a = term.cs[0]
-                a_shape = self.get_shape(a)
+                a_shape = copy(self.get_shape(a))
                 shape_map = {}
                 for i, shape in enumerate(a_shape):
                     shape_map[i] = shape
@@ -220,8 +219,8 @@ class Shape:
             case TensorOp.BLOCK_MATMUL:
                 a = term.cs[0]
                 b = term.cs[1]
-                a_shape = self.get_shape(a)
-                b_shape = self.get_shape(b)
+                a_shape = copy(self.get_shape(a))
+                b_shape = copy(self.get_shape(b))
                 assert len(a_shape) == 3 and len(b_shape) == 3
                 assert a_shape[0] == b_shape[0]
                 assert a_shape[2] == b_shape[1]

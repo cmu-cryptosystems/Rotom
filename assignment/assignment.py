@@ -153,6 +153,7 @@ class LayoutAssignment:
                 raise NotImplementedError(term.op)
             case _:
                 raise NotImplementedError(term.op)
+        assert kernels
         return kernels
 
     def run(self):
@@ -514,17 +515,20 @@ class LayoutAssignment:
                 if dim.dim is not None:
                     kernel_shape_map[dim.dim] *= dim.extent
             
-            # flatten kernel_shape
+            # flatten kernel_shape - handle out-of-order dimensions
             kernel_shape = []
-            for i in range(max(kernel_shape_map.keys())+1):
-                if i not in kernel_shape_map:
-                    kernel_shape.append(1)
-                else:
-                    kernel_shape.append(kernel_shape_map[i])
+            max_dim = max(kernel_shape_map.keys()) if kernel_shape_map else -1
             
-            for i, k in enumerate(kernel_shape):
-                if k != shape[i]:
-                    raise ValueError(f"kernel shape {kernel_shape} does not match expected shape {shape}")
+            # Build shape list handling gaps in dimension indices
+            for i in range(max_dim + 1):
+                if i in kernel_shape_map:
+                    kernel_shape.append(kernel_shape_map[i])
+                else:
+                    kernel_shape.append(1)
+            
+            for i, (k, s) in enumerate(zip(kernel_shape, shape)):
+                if k != s:
+                    raise ValueError(f"kernel shape {kernel_shape} does not match expected shape {shape} at dimension {i}: {k} != {s}")
             new_kernels.append(kernel)
         assert new_kernels
         return new_kernels

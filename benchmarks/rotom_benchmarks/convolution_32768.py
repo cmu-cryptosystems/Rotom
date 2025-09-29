@@ -28,4 +28,4 @@ def convolution_32768():
     tensor_ir = run_convolution(
         dim_size, input_channels, 1, 1, f_size, f_size, 1, padding
     )
-    return tensor_ir, inputs
+    return tensor_ir, inputs, 32768 
