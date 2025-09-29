@@ -7,7 +7,7 @@ from assignment.assignment import LayoutAssignment
 from backends.openfhe_backend import CKKS
 from backends.toy import Toy
 
-# Import microbenchmark functions
+# Import benchmarks
 from benchmarks.microbenchmarks.conversion import conversion
 from benchmarks.microbenchmarks.roll import roll
 from benchmarks.microbenchmarks.rot_roll import rot_roll
@@ -26,9 +26,9 @@ from benchmarks.rotom_benchmarks.double_matmul.double_matmul_128_64 import (
 from benchmarks.rotom_benchmarks.double_matmul.double_matmul_256_128 import (
     double_matmul_256_128,
 )
-
-# Import benchmark functions
 from benchmarks.rotom_benchmarks.matmul.matmul_128_128 import matmul_128_128
+
+# Import Rotom 
 from frontends.tensor import TensorTerm
 from ir.dim import *
 from ir.kernel_cost import KernelCost
