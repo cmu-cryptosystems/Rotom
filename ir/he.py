@@ -2,8 +2,8 @@
 Homomorphic Encryption intermediate representation in Rotom.
 
 The HE IR is used to represent homomorphic encryption operations and terms
-in the Rotom intermediate representation. Rotom's layout IR is lowered to 
-the HE IR for execution on various HE backends. 
+in the Rotom intermediate representation. Rotom's layout IR is lowered to
+the HE IR for execution on various HE backends.
 
 Key Components:
 
@@ -21,7 +21,7 @@ from .layout_utils import dimension_merging
 class HEOp(Enum):
     """
     Enumeration of homomorphic encryption operations.
-    
+
     Defines all the HE operations supported by Rotom,
     including basic arithmetic, rotation, packing, and masking operations.
     These operations form the building blocks for more complex tensor
@@ -33,7 +33,7 @@ class HEOp(Enum):
         PACK: Pack tensor data into HE vector
         INDICES: Index operations
         ADD: Homomorphic addition
-        SUB: Homomorphic subtraction  
+        SUB: Homomorphic subtraction
         MUL: Homomorphic multiplication
         ROT: Rotation operation
         MASK: Masking operation
@@ -41,6 +41,7 @@ class HEOp(Enum):
         RESCALE: Rescaling operation (WIP)
         ZERO_MASK: Zero masking
     """
+
     CS = "CS"
     CS_PACK = "CS_PACK"
     PACK = "PACK"
@@ -58,12 +59,12 @@ class HEOp(Enum):
 class HETerm:
     """
     Represents a homomorphic encryption term in the IR.
-    
+
     A HETerm encapsulates a single HE operation with its operands,
     metadata, and secret status. It forms the basic building block
     of the HE computation graph and supports HE operations like addition,
     multiplication, and rotation.
-    
+
     Attributes:
         op: The HE operation type (from HEOp enum)
         cs: List of child terms (operands)
@@ -71,17 +72,17 @@ class HETerm:
         metadata: Additional metadata string for the operation
         hash: Computed hash for term identity and comparison
     """
-    
+
     def __init__(self, op, cs, secret, metadata=""):
         """
         Create a homomorphic encryption term.
-        
+
         Args:
             op: The HE operation type
             cs: List of child terms (operands)
             secret: Whether this term contains secret data
             metadata: Additional metadata string
-            
+
         Raises:
             ValueError: If cs is a tuple instead of a list
             AssertionError: If secret is not a boolean
@@ -104,7 +105,7 @@ class HETerm:
 
     def ops(self):
         """Count the number of HE operations in this term.
-        
+
         Returns:
             dict: Dictionary mapping operation types to their counts
         """
@@ -120,7 +121,7 @@ class HETerm:
 
     def __hash__(self):
         """Compute hash of the HE term.
-        
+
         Returns:
             int: Hash value for the term
         """
@@ -128,10 +129,10 @@ class HETerm:
 
     def __eq__(self, other):
         """Check equality of two HE terms.
-        
+
         Args:
             other: Another HE term to compare with
-            
+
         Returns:
             bool: True if terms are equal, False otherwise
         """
@@ -139,10 +140,10 @@ class HETerm:
 
     def __add__(self, other):
         """Homomorphic addition operator.
-        
+
         Args:
             other: The HE term to add
-            
+
         Returns:
             HETerm: A new HE term representing the addition
         """
@@ -150,10 +151,10 @@ class HETerm:
 
     def __sub__(self, other):
         """Homomorphic subtraction operator.
-        
+
         Args:
             other: The HE term to subtract
-            
+
         Returns:
             HETerm: A new HE term representing the subtraction
         """
@@ -161,10 +162,10 @@ class HETerm:
 
     def __mul__(self, other):
         """Homomorphic multiplication operator.
-        
+
         Args:
             other: The HE term to multiply
-            
+
         Returns:
             HETerm: A new HE term representing the multiplication
         """
@@ -172,10 +173,10 @@ class HETerm:
 
     def __lshift__(self, other):
         """Homomorphic rotation operator.
-        
+
         Args:
             other: The rotation amount
-            
+
         Returns:
             HETerm: A new HE term representing the rotation
         """
@@ -183,11 +184,11 @@ class HETerm:
 
     def pack(layout, metadata):
         """Create a pack operation term.
-        
+
         Args:
             layout: The layout to pack
             metadata: Additional metadata for the operation
-            
+
         Returns:
             HETerm: A new HE term representing the pack operation
         """
@@ -195,10 +196,10 @@ class HETerm:
 
     def mask(mask):
         """Create a mask operation term.
-        
+
         Args:
             mask: The mask to apply
-            
+
         Returns:
             HETerm: A new HE term representing the mask operation
         """
@@ -206,10 +207,10 @@ class HETerm:
 
     def format_metadata(self, instr_str):
         """Format instruction string with metadata.
-        
+
         Args:
             instr_str: The instruction string to format
-            
+
         Returns:
             str: Formatted instruction string with metadata comment
         """
@@ -219,11 +220,11 @@ class HETerm:
 
     def instrs(self, env={}, kernel_env={}):
         """Generate instruction strings for HE operations.
-        
+
         Args:
             env: Environment mapping terms to indices
             kernel_env: Kernel environment for layout operations
-            
+
         Returns:
             tuple: (list of instruction strings, updated environment)
         """
@@ -240,11 +241,13 @@ class HETerm:
                             layout_term = dimension_merging(he_term.cs[1])
                             assert layout_term in kernel_env
                             instruction_strs.append(
-                                f"{idx} {term.secret}: {kernel_env[layout_term][he_term.cs[0]]}")
+                                f"{idx} {term.secret}: {kernel_env[layout_term][he_term.cs[0]]}"
+                            )
                         case HEOp.PACK:
                             instruction_strs.append(
                                 he_term.format_metadata(
-                                    f"{idx} {he_term.secret}: pack ({he_term.cs[0].layout_str()})")
+                                    f"{idx} {he_term.secret}: pack ({he_term.cs[0].layout_str()})"
+                                )
                             )
                         case _:
                             pass
@@ -252,13 +255,15 @@ class HETerm:
                 case HEOp.PACK:
                     instruction_strs.append(
                         term.format_metadata(
-                            f"{idx} {term.secret}: pack ({term.cs[0].layout_str()})")
+                            f"{idx} {term.secret}: pack ({term.cs[0].layout_str()})"
+                        )
                     )
                 case HEOp.CS_PACK:
                     layout_term = dimension_merging(term.cs[1])
                     assert layout_term in kernel_env
                     instruction_strs.append(
-                        f"{idx} {term.secret}: {kernel_env[layout_term][term.cs[0]]}")
+                        f"{idx} {term.secret}: {kernel_env[layout_term][term.cs[0]]}"
+                    )
 
                     # instruction_strs.append(
                     #     term.format_metadata(
@@ -266,40 +271,34 @@ class HETerm:
                     # )
                 case HEOp.MASK:
                     instruction_strs.append(
-                        term.format_metadata(
-                            f"{idx} {term.secret}: mask {term.cs[0]}")
+                        term.format_metadata(f"{idx} {term.secret}: mask {term.cs[0]}")
                     )
                 case HEOp.ZERO_MASK:
                     instruction_strs.append(
-                        term.format_metadata(
-                            f"{idx} {term.secret}: zero mask")
+                        term.format_metadata(f"{idx} {term.secret}: zero mask")
                     )
                 case HEOp.ADD:
                     a = env[term.cs[0]]
                     b = env[term.cs[1]]
-                    instruction_strs.append(
-                        f"{idx} {term.secret}: (+ {a} {b})")
+                    instruction_strs.append(f"{idx} {term.secret}: (+ {a} {b})")
                     # instruction_strs.append(term.format_metadata(
                     #     f"{idx} {term.secret}: (+ {a} {b})"))
                 case HEOp.SUB:
                     a = env[term.cs[0]]
                     b = env[term.cs[1]]
-                    instruction_strs.append(
-                        f"{idx} {term.secret}: (- {a} {b})")
+                    instruction_strs.append(f"{idx} {term.secret}: (- {a} {b})")
                     # instruction_strs.append(term.format_metadata(
                     #     f"{idx} {term.secret}: (- {a} {b})"))
                 case HEOp.MUL:
                     a = env[term.cs[0]]
                     b = env[term.cs[1]]
-                    instruction_strs.append(
-                        f"{idx} {term.secret}: (* {a} {b})")
+                    instruction_strs.append(f"{idx} {term.secret}: (* {a} {b})")
                     # instruction_strs.append(term.format_metadata(
                     #     f"{idx} {term.secret}: (* {a} {b})"))
                 case HEOp.ROT:
                     a = env[term.cs[0]]
                     b = str(term.cs[1])
-                    instruction_strs.append(
-                        f"{idx} {term.secret}: (<< {a} {b})")
+                    instruction_strs.append(f"{idx} {term.secret}: (<< {a} {b})")
                     # instruction_strs.append(term.format_metadata(
                     #     f"{idx} {term.secret}: (<< {a} {b})"))
                 case HEOp.POLY:
@@ -316,7 +315,7 @@ class HETerm:
 
     def __repr__(self):
         """String representation of the HE term.
-        
+
         Returns:
             str: Human-readable representation of the term
         """
@@ -330,10 +329,10 @@ class HETerm:
 
     def helper_post_order(self, seen):
         """Helper method for post-order traversal.
-        
+
         Args:
             seen: Set of already visited nodes
-            
+
         Returns:
             list: List of nodes in post-order
         """
@@ -357,7 +356,7 @@ class HETerm:
 
     def post_order(self):
         """Perform post-order traversal of the HE computation DAG.
-        
+
         Returns:
             list: List of HE terms in post-order (children before parents)
         """

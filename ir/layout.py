@@ -2,8 +2,8 @@
 
 import re
 
-from ir.roll import Roll
 from ir.dim import Dim, DimType
+from ir.roll import Roll
 from util.util import prod
 
 
@@ -11,12 +11,12 @@ class Layout:
     """Layout class for packing tensor elements into HE vectors.
 
     The Layout class defines how tensor elements are packed into HE vectors.
-    It handles dimensions, rolls, and offsets. 
+    It handles dimensions, rolls, and offsets.
 
     Attributes:
         term: The tensor term this layout is associated with
         rolls: List of Roll permutations applied to the layout
-        dims: List of Dim objects defining the dimensions and their order in the layout 
+        dims: List of Dim objects defining the dimensions and their order in the layout
         offset: Dictionary mapping dimensions to slot offsets
         n: Number of slots in the HE vector
         secret: Boolean indicating if this is a ciphertext (True) or plaintext (False)
@@ -67,8 +67,7 @@ class Layout:
             elif dim.extent > n:
                 assert dim.extent % n == 0
                 slot_split_dim = Dim(dim.dim, n, dim_type=dim.dim_type)
-                ct_split_dim = Dim(dim.dim, dim.extent // n,
-                                   n, dim_type=dim.dim_type)
+                ct_split_dim = Dim(dim.dim, dim.extent // n, n, dim_type=dim.dim_type)
                 self.slot_dims.insert(0, slot_split_dim)
                 self.ct_dims.insert(0, ct_split_dim)
                 n //= dim.extent
@@ -85,8 +84,8 @@ class Layout:
         # assert no duplicate dimensions are added
         seen_dims = set()
         for dim in self.ct_dims + self.slot_dims:
-                # assert dim not in seen_dims
-                seen_dims.add(dim)
+            # assert dim not in seen_dims
+            seen_dims.add(dim)
 
         # assert no duplicate strides are added
         seen_strides = {}
@@ -108,8 +107,7 @@ class Layout:
         matches = re.findall(pattern, layout_str)
 
         # Extract only the full matches
-        parsed = [match[0] if isinstance(
-            match, tuple) else match for match in matches]
+        parsed = [match[0] if isinstance(match, tuple) else match for match in matches]
 
         rolls = []
         dims = []
@@ -189,15 +187,15 @@ class Layout:
     def from_string(layout_str, n, secret=False):
         """
         Create a Layout object from a layout string.
-        
+
         Args:
             layout_str: String representation of the layout (e.g., "roll(0,1) [1:4:1][0:4:1]")
             n: Number of slots in the HE vector
             secret: Whether this is ciphertext (True) or plaintext (False)
-            
+
         Returns:
             Layout: The created layout object
-            
+
         Examples:
             >>> layout = Layout.from_string("[0:4:1][1:4:1]", 16)
             >>> layout = Layout.from_string("roll(0,1) [1:4:1][0:4:1]", 16)
@@ -206,38 +204,38 @@ class Layout:
         # Parse rolls from the layout string
         rolls = []
         dims_str = layout_str
-        
+
         # Extract roll operations
-        roll_pattern = r'roll\(([^,)]+),([^)]+)\)'
+        roll_pattern = r"roll\(([^,)]+),([^)]+)\)"
         roll_matches = re.findall(roll_pattern, layout_str)
-        
+
         # Remove roll operations from the dimension string
-        dims_str = re.sub(r'roll\([^)]+\)\s*', '', layout_str).strip()
-        
+        dims_str = re.sub(r"roll\([^)]+\)\s*", "", layout_str).strip()
+
         # Parse dimensions
         dims = []
-        
+
         # Handle ciphertext dimensions (prefixed with [R: or ;)
         ct_dims_str = ""
         if ";" in dims_str:
             parts = dims_str.split(";")
             ct_dims_str = parts[0].strip()
             dims_str = parts[1].strip()
-        
+
         # Parse ciphertext dimensions
         if ct_dims_str:
-            ct_dim_matches = re.findall(r'\[([^\]]+)\]', ct_dims_str)
+            ct_dim_matches = re.findall(r"\[([^\]]+)\]", ct_dims_str)
             for match in ct_dim_matches:
                 if match.startswith("R:"):
                     # Handle replication dimension
                     extent = int(match.split(":")[1])
                     dims.append(Dim(None, extent, 1, DimType.FILL))
-        
+
         # Parse slot dimensions
-        slot_dim_matches = re.findall(r'\[([^\]]+)\]', dims_str)
+        slot_dim_matches = re.findall(r"\[([^\]]+)\]", dims_str)
         for match in slot_dim_matches:
             dims.append(Dim.parse(f"[{match}]"))
-        
+
         # Note: Roll parsing is deferred because we need the dimensions first
         # We'll store the roll indices and create the rolls after parsing dimensions
         roll_indices = []
@@ -245,11 +243,11 @@ class Layout:
             from_idx = int(from_str)
             to_idx = int(to_str)
             roll_indices.append((from_idx, to_idx))
-        
+
         # Create roll objects using the parsed dimensions
         for from_idx, to_idx in roll_indices:
             if from_idx < len(dims) and to_idx < len(dims):
                 rolls.append(Roll(dims[from_idx], dims[to_idx]))
-        
+
         # Create and return the layout
         return Layout(None, rolls, dims, {}, n, secret)

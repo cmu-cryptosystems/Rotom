@@ -1,6 +1,8 @@
-from frontends.tensor import TensorTerm
-import numpy as np
 import random
+
+import numpy as np
+
+from frontends.tensor import TensorTerm
 
 
 def run_convolution(input_size, input_channel, f_out, f_in, f_h, f_w, stride, padding):
@@ -28,4 +30,4 @@ def convolution_32768():
     tensor_ir = run_convolution(
         dim_size, input_channels, 1, 1, f_size, f_size, 1, padding
     )
-    return tensor_ir, inputs, 32768 
+    return tensor_ir, inputs, 32768

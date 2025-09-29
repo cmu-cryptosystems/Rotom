@@ -1,7 +1,7 @@
 import os
-import pandas as pd
 from argparse import ArgumentParser
 
+import pandas as pd
 
 
 def walk_files_recursively(directory):
@@ -108,9 +108,11 @@ def parse_data_to_dictionary(data_lines):
             for part in parts:
                 enum_part, value = part.split(": ")
                 # Extract just the operation name from the enum
-                op_name = enum_part.split("'")[1].split("'")[0].split(".")[-1]  # Get the string between quotes
+                op_name = (
+                    enum_part.split("'")[1].split("'")[0].split(".")[-1]
+                )  # Get the string between quotes
                 result[op_name] = int(value)
-    
+
         # Parse simple key-value lines (compile time, comm cost, etc.)
         elif ": " in line:
             key, value = line.split(": ")
@@ -132,7 +134,6 @@ if __name__ == "__main__":
     parser.add_argument("--fn")
     args = parser.parse_args()
 
-    
     directory_path = f"./logs/{args.sys}"  # Current directory
     paths = walk_files_recursively(directory_path)
 
@@ -147,19 +148,23 @@ if __name__ == "__main__":
 
         if "SUB" in result:
             result["ADD"] += result["SUB"]
-            del result["SUB"]        
+            del result["SUB"]
 
         results.append(result)
 
-    pd.set_option('display.max_columns', None)
+    pd.set_option("display.max_columns", None)
     df = pd.DataFrame(results)
     print(df)
     print()
     if args.sys == "rotom":
-        filtered_df = df[df["fn"].str.startswith(args.fn)].sort_values("run")[["fn", "run", "runtime", "compile time", "data size", "depth"]]
+        filtered_df = df[df["fn"].str.startswith(args.fn)].sort_values("run")[
+            ["fn", "run", "runtime", "compile time", "data size", "depth"]
+        ]
     else:
-        filtered_df = df[df["fn"].str.startswith(args.fn)].sort_values("run")[["fn", "run", "runtime", "data size", "depth"]]
-    
+        filtered_df = df[df["fn"].str.startswith(args.fn)].sort_values("run")[
+            ["fn", "run", "runtime", "data size", "depth"]
+        ]
+
     print(filtered_df)
     data = float(list(filtered_df["data size"])[0].split(" ")[0]) * 8
     lan_time = data * 1e-4
@@ -169,4 +174,3 @@ if __name__ == "__main__":
     print("runtime:", filtered_df["runtime"].mean())
     print("lan runtime:", filtered_df["runtime"].mean() + lan_time)
     print("wan runtime:", filtered_df["runtime"].mean() + wan_time)
-

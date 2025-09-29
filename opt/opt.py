@@ -9,29 +9,30 @@ in sequence to transform kernels into more efficient forms.
 
 from copy import deepcopy as copy
 
+from opt.bsgs_matmul import run_bsgs_matmul
+from opt.ct_roll_bsgs import run_ct_roll_bsgs
 from opt.roll_propagation import run_roll_propogation
 from opt.roll_reordering import run_roll_reordering
 from opt.rot_roll import run_rot_roll
-from opt.ct_roll_bsgs import run_ct_roll_bsgs
-from opt.bsgs_matmul import run_bsgs_matmul
 
 
 class Optimizer:
     """
     Main optimizer for applying optimization passes to FHE kernels.
-    
+
     The Optimizer class coordinates the application of various optimization
     passes to improve the efficiency of homomorphic encryption computations.
     It applies passes in sequence, with each pass potentially generating
     multiple optimized versions of the input kernels.
-    
+
     Attributes:
         roll_flag: Boolean flag indicating whether roll optimizations should be applied
     """
+
     def __init__(self, roll_flag):
         """
         Initialize the optimizer.
-        
+
         Args:
             roll_flag: Boolean indicating whether to apply roll optimizations
         """
@@ -40,17 +41,17 @@ class Optimizer:
     def run(self, kernels):
         """
         Apply optimization passes to a set of kernels.
-        
+
         This method applies a sequence of optimization passes to improve
         the efficiency of the input kernels. The optimization sequence
         includes roll propagation, roll reordering, and rotation optimizations.
-        
+
         Args:
             kernels: Set of kernels to optimize
-            
+
         Returns:
             Set of optimized kernels
-            
+
         Note:
             Currently includes commented-out BSGS optimizations that may
             be enabled in future versions.

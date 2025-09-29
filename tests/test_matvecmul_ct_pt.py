@@ -1,12 +1,12 @@
 import numpy as np
 
+from assignment.assignment import LayoutAssignment
+from backends.toy import Toy
 from frontends.tensor import TensorTerm
 from ir.dim import *
-from assignment.assignment import LayoutAssignment
 from lower.lower import Lower
-from backends.toy import Toy
-from util.layout_util import apply_layout
 from tests.test_util import get_default_args
+from util.layout_util import apply_layout
 
 
 ## Test matrix multiply with one secret input and one public input
@@ -48,7 +48,7 @@ def test_matvecmul_ct_pt_2():
     # create args
     args = get_default_args()
     args.n = 4096
-    args.rolls = True   
+    args.rolls = True
 
     # create inputs
     size = 64

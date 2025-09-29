@@ -13,9 +13,11 @@ Key Concepts:
 - Dimension compatibility: Ensuring compatible shapes for operations
 """
 
-from frontends.tensor import TensorOp
-from util.util import round_to_ceiling_power_of_2, prod
 from copy import deepcopy as copy
+
+from frontends.tensor import TensorOp
+from util.util import prod, round_to_ceiling_power_of_2
+
 
 class Shape:
     def __init__(self, comp):
@@ -41,7 +43,7 @@ class Shape:
                 # Result shape: all dims of A except last + all dims of B except second-to-last
                 if len(a_shape) == 0 or len(b_shape) == 0:
                     raise ValueError("Cannot perform matmul on scalar tensors")
-                
+
                 # For 1D tensors, treat as row vector (1, n) or column vector (n, 1)
                 if len(a_shape) == 1 and len(b_shape) == 1:
                     # Vector dot product - result is scalar, but we represent as 1D with size 1
@@ -58,7 +60,8 @@ class Shape:
                 else:
                     # ND × ND: standard batched matmul
                     assert a_shape[-1] == b_shape[-2]
-                    c_shape = list(a_shape[:-1]) + list(b_shape[:-2]) + [b_shape[-1]]    
+                    c_shape = list(a_shape[:-1]) + list(b_shape[:-2]) + [b_shape[-1]]
+
                 return c_shape
             case TensorOp.BLOCK_MATMUL:
                 a_shape = copy(self.padded_shapes[term.cs[0]])
@@ -75,7 +78,9 @@ class Shape:
             case TensorOp.RESHAPE:
                 a_shape = copy(self.padded_shapes[term.cs[0]])
                 del a_shape[term.cs[1]]
-                return a_shape + [round_to_ceiling_power_of_2(s) for s in term.cs[2].values()]
+                return a_shape + [
+                    round_to_ceiling_power_of_2(s) for s in term.cs[2].values()
+                ]
             case TensorOp.CONV2D:
                 a_shape = copy(self.padded_shapes[term.cs[0]])
                 b_shape = copy(self.padded_shapes[term.cs[1]])
@@ -136,7 +141,7 @@ class Shape:
                 # Result shape: all dims of A except last + all dims of B except second-to-last
                 if len(a_shape) == 0 or len(b_shape) == 0:
                     raise ValueError("Cannot perform matmul on scalar tensors")
-                
+
                 # For 1D tensors, treat as row vector (1, n) or column vector (n, 1)
                 if len(a_shape) == 1 and len(b_shape) == 1:
                     # Vector dot product - result is scalar, but we represent as 1D with size 1
@@ -154,7 +159,7 @@ class Shape:
                     # ND × ND: standard batched matmul
                     assert a_shape[-1] == b_shape[-2]
                     c_shape = list(a_shape[:-1]) + list(b_shape[:-2]) + [b_shape[-1]]
-                
+
                 return c_shape
             case TensorOp.TRANSPOSE:
                 a = term.cs[0]

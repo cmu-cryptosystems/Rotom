@@ -10,34 +10,35 @@ Key classes:
 - Writer: Main class for writing circuit metadata and implementations
 """
 
-from lower.lower import Lower
 from ir.kernel import KernelOp
+from lower.lower import Lower
 
 
 class Writer:
     """Writer class for outputting FHE circuit representations.
-    
+
     This class provides methods to write FHE circuits and kernels to files
     in a structured format. It handles the conversion from high-level kernel
     representations to lower-level FHE terms and outputs them with metadata.
-    
+
     The writer can output:
     - Circuit metadata files with kernel information
     - Circuit implementation files with FHE terms
     - Structured output for debugging and analysis
-    
+
     Args:
         fn: Filename prefix for output files
     """
+
     def __init__(self, fn):
         self.fn = fn
 
     def write_metadata(self, f, kernel):
         """Writes kernel metadata to a file.
-        
+
         This method writes metadata about a kernel including the tensor term
         and all operations in the kernel in post-order traversal.
-        
+
         Args:
             f: File handle to write to
             kernel: Kernel to write metadata for
@@ -52,11 +53,11 @@ class Writer:
 
     def write_to_file(self, term, kernel_dag):
         """Writes a complete circuit to files.
-        
+
         This method writes both metadata and implementation files for a
         kernel DAG representing a complete circuit. It creates separate
         files for metadata and the actual circuit implementation.
-        
+
         Args:
             term: Root tensor term of the circuit
             kernel_dag: KernelDag representing the complete circuit

@@ -10,29 +10,28 @@ Key functions:
 - gen_reshape: Main function for generating reshape operation layouts
 """
 
+from copy import deepcopy as copy
+
 from ir.dim import DimType
-from ir.layout import Layout
 from ir.kernel import Kernel, KernelOp
+from ir.layout import Layout
 from ir.layout_utils import dimension_merging
 from util.layout_util import get_extent_dims
-from util.util import round_to_ceiling_power_of_2, prod
-
-
-from copy import deepcopy as copy
+from util.util import prod, round_to_ceiling_power_of_2
 
 
 def gen_reshape(term, cs_kernels):
     """Generates layouts for reshape operations.
-    
+
     This function creates kernel layouts for reshape operations that change
     the shape of tensors while preserving the total number of elements.
     The reshape operation applies a new dimension mapping based on the
     specified shape changes.
-    
+
     Args:
         term: TensorTerm representing the reshape operation
         cs_kernels: List of input kernels to generate reshape layouts for
-        
+
     Returns:
         Set of Kernel objects representing reshape operation layouts
     """

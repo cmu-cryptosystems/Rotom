@@ -1,10 +1,12 @@
+import random
+
+import numpy as np
+
 from frontends.tensor import TensorTerm
 from ir.dim import Dim
-from ir.roll import Roll
-from ir.layout import Layout
 from ir.kernel import Kernel, KernelOp
-import numpy as np
-import random
+from ir.layout import Layout
+from ir.roll import Roll
 
 
 def rot_roll(n, size):

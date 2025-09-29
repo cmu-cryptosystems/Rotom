@@ -1,10 +1,10 @@
+from copy import deepcopy as copy
+
 from ir.dim import DimType
-from ir.he import HETerm, HEOp
+from ir.he import HEOp, HETerm
 from lower.lower_util import rotate_and_sum
 from util.layout_util import get_cts_by_dim, get_dim_indices, get_segments, mul_vec
 from util.util import get_mask_from_segment
-
-from copy import deepcopy as copy
 
 
 def lower_conversion(env, kernel):

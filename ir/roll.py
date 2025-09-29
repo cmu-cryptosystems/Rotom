@@ -20,12 +20,12 @@ from .dim import Dim
 class Roll:
     """
     Represents a roll operation between two tensor dimensions.
-    
+
     A roll operation performs modular addition between the indices of
     two dimensions, effectively rotating data between dimension positions.
     This is crucial for optimizing tensor operations in homomorphic
     encryption where rotation operations are expensive.
-    
+
     Attributes:
         dim_to_roll: The dimension being rolled (result dimension)
         dim_to_roll_by: The dimension used for rolling (additive dimension)

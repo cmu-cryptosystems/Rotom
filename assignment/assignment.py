@@ -1,7 +1,7 @@
 """Layout assignment module for optimizing tensor layouts in HE computations.
 
 This module handles assigning optimal layouts to tensors in HE computation graphs.
-It includes the core LayoutAssignment class which analyzes computation graphs and 
+It includes the core LayoutAssignment class which analyzes computation graphs and
 determines efficient tensor layouts to minimize HE operation costs.
 
 Key features:
@@ -16,30 +16,34 @@ The module works closely with the kernel IR to generate optimized HE circuits
 while maintaining correctness of the computation graph semantics.
 """
 
+from copy import deepcopy as copy
+
 # import frontend terms
 from re import L
-from frontends.tensor import TensorOp, TensorTerm
 
-# import ir components
-from ir.dim import DimType
-from ir.layout import Layout
-from ir.kernel import Kernel, KernelOp, KernelDag
-from ir.kernel_cost import KernelCost
-from ir.roll import Roll
+from assignment.gen.gen_binop import gen_binop
+from assignment.gen.gen_block_matmul import gen_block_matmul
+from assignment.gen.gen_conv2d import gen_conv2d
+from assignment.gen.gen_index import gen_index
+from assignment.gen.gen_permute import gen_permute
+from assignment.gen.gen_reshape import gen_reshape
+from assignment.gen.gen_strassens import gen_strassens
+from assignment.gen.gen_sum import gen_sum
+from assignment.gen.gen_tensor import gen_tensor
+from assignment.gen.gen_transpose import gen_transpose
+from frontends.tensor import TensorOp, TensorTerm
 
 # import layout assignment components
 from ir.analysis.secret import Secret
 from ir.analysis.shape import Shape
-from assignment.gen.gen_tensor import gen_tensor
-from assignment.gen.gen_binop import gen_binop
-from assignment.gen.gen_block_matmul import gen_block_matmul
-from assignment.gen.gen_sum import gen_sum
-from assignment.gen.gen_transpose import gen_transpose
-from assignment.gen.gen_conv2d import gen_conv2d
-from assignment.gen.gen_reshape import gen_reshape
-from assignment.gen.gen_permute import gen_permute
-from assignment.gen.gen_index import gen_index
-from assignment.gen.gen_strassens import gen_strassens
+
+# import ir components
+from ir.dim import DimType
+from ir.kernel import Kernel, KernelDag, KernelOp
+from ir.kernel_cost import KernelCost
+from ir.layout import Layout
+from ir.layout_utils import dimension_merging
+from ir.roll import Roll
 
 # import optimization components
 from opt.opt import Optimizer
@@ -49,10 +53,6 @@ from util.fuzz import Fuzz
 
 # import utility components
 from util.kernel_util import get_cs_op_kernels
-from ir.layout_utils import dimension_merging
-
-
-from copy import deepcopy as copy
 
 
 class LayoutAssignment:
@@ -79,20 +79,24 @@ class LayoutAssignment:
 
     def __init__(self, comp, args=None):
         self.comp = comp
-        
+
         # Set default values inline
-        self.n = args.n if args and hasattr(args, 'n') else 4096
+        self.n = args.n if args and hasattr(args, "n") else 4096
         self.kernels = {}
         self.kernel_costs = {}
         self.candidates = {}
-        self.roll_flag = args.rolls if args and hasattr(args, 'rolls') else False
-        self.network = args.net if args and hasattr(args, 'net') else "lan"
-        self.strassens = args.strassens if args and hasattr(args, 'strassens') else False
-        self.backend = args.backend if args and hasattr(args, 'backend') else "toy"
-        self.fuzz = args.fuzz if args and hasattr(args, 'fuzz') else False
-        self.fuzz_result = args.fuzz_result if args and hasattr(args, 'fuzz_result') else False
+        self.roll_flag = args.rolls if args and hasattr(args, "rolls") else False
+        self.network = args.net if args and hasattr(args, "net") else "lan"
+        self.strassens = (
+            args.strassens if args and hasattr(args, "strassens") else False
+        )
+        self.backend = args.backend if args and hasattr(args, "backend") else "toy"
+        self.fuzz = args.fuzz if args and hasattr(args, "fuzz") else False
+        self.fuzz_result = (
+            args.fuzz_result if args and hasattr(args, "fuzz_result") else False
+        )
         self.fuzzer = Fuzz(self.n)
-        self.fn = args.fn if args and hasattr(args, 'fn') else "default"
+        self.fn = args.fn if args and hasattr(args, "fn") else "default"
 
         self.secret = Secret(self.comp)
         self.shape = Shape(self.comp)
@@ -100,8 +104,8 @@ class LayoutAssignment:
     def generate_candidate_kernels(self, term):
         """Generates candidate kernels for a given tensor term.
 
-        For each tensor term in the computation graph, this method generates possible kernels 
-        that could be used to implement the operation. The specific kernels generated depend on 
+        For each tensor term in the computation graph, this method generates possible kernels
+        that could be used to implement the operation. The specific kernels generated depend on
         the operation type (e.g. tensor, matmul, add, etc) and optimization flags.
 
         Args:
@@ -168,11 +172,11 @@ class LayoutAssignment:
         The pass handles different operations like:
         - Tensor creation
         - Binary operations (add, mul, matmul etc)
-        - Unary operations (sum, transpose etc) 
+        - Unary operations (sum, transpose etc)
         - Special operations (conv2d, reshape, permute)
 
         For each operation, it generates kernel layouts that are compatible with the input layouts
-        while minimizing the cost of FHE operations. The pass tracks metrics like number of 
+        while minimizing the cost of FHE operations. The pass tracks metrics like number of
         candidate layouts generated.
 
         For example, in Matrix-Vector Multiplication, if the inputs are (M: [1:4];[0:4], and V: [0:4]),
@@ -211,20 +215,20 @@ class LayoutAssignment:
 
     def canonicalize_kernels(self, kernels):
         """Canonicalizes kernel layouts by sorting ciphertext dimensions.
-        
+
         This method ensures consistent ordering of ciphertext dimensions in kernel layouts
         by sorting them based on dimension index and stride. This helps with layout
         comparison and optimization by ensuring equivalent layouts have the same representation.
-        
+
         The canonicalization process:
         1. Identifies kernels with multiple ciphertext dimensions
         2. Separates repeated and non-repeated ciphertext dimensions
         3. Sorts non-repeated dimensions by (dim, stride) tuple
         4. Creates new kernels with reordered dimensions if needed
-        
+
         Args:
             kernels: List of Kernel objects to canonicalize
-            
+
         Returns:
             List of canonicalized Kernel objects with consistent dimension ordering
         """
@@ -233,8 +237,7 @@ class LayoutAssignment:
         for kernel in kernels:
             if kernel.layout.num_ct() > 1 and len(kernel.layout.ct_dims) > 1:
                 ct_dims = kernel.layout.ct_dims
-                repeated_cts = [
-                    ct_dim for ct_dim in ct_dims if ct_dim.dim is None]
+                repeated_cts = [ct_dim for ct_dim in ct_dims if ct_dim.dim is None]
                 non_repeated_cts = [
                     ct_dim for ct_dim in ct_dims if ct_dim.dim is not None
                 ]
@@ -242,8 +245,7 @@ class LayoutAssignment:
                     non_repeated_cts, key=lambda x: (x.dim, x.stride)
                 )
                 aligned_dims = (
-                    repeated_cts + non_repeated_cts +
-                    copy(kernel.layout.slot_dims)
+                    repeated_cts + non_repeated_cts + copy(kernel.layout.slot_dims)
                 )
                 if ct_dims != kernel.layout.ct_dims:
                     new_layout = Layout(
@@ -270,14 +272,14 @@ class LayoutAssignment:
 
     def get_last_kernels(self, kernel_dags):
         """Extracts the final kernel from each kernel DAG.
-        
+
         This method takes a collection of kernel DAGs and returns the terminal
         kernel from each DAG. This is used to get the output kernels from
         child tensor terms for use in generating new kernels.
-        
+
         Args:
             kernel_dags: Collection of KernelDag objects
-            
+
         Returns:
             List of Kernel objects representing the final kernels from each DAG
         """
@@ -288,14 +290,14 @@ class LayoutAssignment:
 
     def get_cs_shapes(self, term):
         """Gets the padded shapes of child tensor terms.
-        
+
         This method extracts the padded shapes of all child tensor terms
         from a given tensor term. Padded shapes are used for layout generation
         to ensure compatibility with HE vector sizes.
-        
+
         Args:
             term: TensorTerm to get child shapes for
-            
+
         Returns:
             List of shape tuples for child tensor terms
         """
@@ -307,15 +309,15 @@ class LayoutAssignment:
 
     def get_unpadded_cs_shapes(self, term):
         """Gets the original (unpadded) shapes of child tensor terms.
-        
+
         This method extracts the original shapes of all child tensor terms
         from a given tensor term, without any padding applied. This is used
         for operations that need the actual data dimensions rather than
         HE-compatible padded dimensions.
-        
+
         Args:
             term: TensorTerm to get child shapes for
-            
+
         Returns:
             List of original shape tuples for child tensor terms
         """
@@ -327,26 +329,26 @@ class LayoutAssignment:
 
     def get_cs_kernels(self, term):
         """Gets the child kernels for a tensor term based on its operation type.
-        
+
         This method retrieves the appropriate child kernels for a tensor term
         based on its operation type. For binary operations, it returns kernels
         from both operands; for unary operations, it returns kernels from the
         single operand. The kernels are sorted by cost to prioritize cheaper
         options during layout generation.
-        
+
         Args:
             term: TensorTerm to get child kernels for
-            
+
         Returns:
             List of kernel lists for each child operand
-            
+
         Raises:
             NotImplementedError: If the operation type is not supported
         """
         match term.op:
             case TensorOp.TENSOR:
                 return []
-            case(
+            case (
                 TensorOp.ADD
                 | TensorOp.SUB
                 | TensorOp.MUL
@@ -359,12 +361,20 @@ class LayoutAssignment:
 
                 # sort by cost
                 a = sorted(
-                    a, key=lambda x: self.kernel_costs[term.cs[0]][dimension_merging(x.layout)])
+                    a,
+                    key=lambda x: self.kernel_costs[term.cs[0]][
+                        dimension_merging(x.layout)
+                    ],
+                )
                 b = sorted(
-                    b, key=lambda x: self.kernel_costs[term.cs[1]][dimension_merging(x.layout)])
+                    b,
+                    key=lambda x: self.kernel_costs[term.cs[1]][
+                        dimension_merging(x.layout)
+                    ],
+                )
 
                 return [a, b]
-            case(
+            case (
                 TensorOp.TRANSPOSE
                 | TensorOp.POLY
                 | TensorOp.SUM
@@ -378,14 +388,14 @@ class LayoutAssignment:
 
     def get_cs_ops(self, kernel):
         """Extracts all CS (ciphertext slot) operations from a kernel.
-        
+
         This method traverses a kernel in post-order and collects all
         operations that are of type CS (ciphertext slot operations).
         These operations represent the input/output layouts of the kernel.
-        
+
         Args:
             kernel: Kernel to extract CS operations from
-            
+
         Returns:
             List of CS operation nodes from the kernel
         """
@@ -397,18 +407,18 @@ class LayoutAssignment:
 
     def add_equivalent_kernels(self, kernels):
         """Adds equivalent kernels by swapping roll dimensions.
-        
+
         This method generates equivalent kernel layouts by swapping the dimensions
         involved in roll operations. This is useful for exploring different but
         functionally equivalent layout options during optimization.
-        
+
         The method identifies kernels with exactly one roll operation where the
         roll_by dimension is empty (FILL type), then creates equivalent kernels
         by swapping the roll dimensions.
-        
+
         Args:
             kernels: List of Kernel objects to generate equivalents for
-            
+
         Returns:
             Set of Kernel objects including original and equivalent kernels
         """
@@ -492,8 +502,8 @@ class LayoutAssignment:
     def shape_check(self, shape, kernels):
         """Checks if the kernel layouts match the expected shape of the tensor.
 
-        This method filters kernels based on whether their layout dimensions match the 
-        expected shape of the tensor term. It compares the flattened shape of each kernel's 
+        This method filters kernels based on whether their layout dimensions match the
+        expected shape of the tensor term. It compares the flattened shape of each kernel's
         layout against the target shape.
 
         Args:
@@ -504,7 +514,7 @@ class LayoutAssignment:
             List of Kernel objects whose layouts match the expected shape
         """
 
-        assert kernels 
+        assert kernels
 
         new_kernels = []
         for kernel in kernels:
@@ -514,21 +524,20 @@ class LayoutAssignment:
                     kernel_shape_map[dim.dim] = 1
                 if dim.dim is not None:
                     kernel_shape_map[dim.dim] *= dim.extent
-            
-            # flatten kernel_shape - handle out-of-order dimensions
+
+            # flatten kernel_shape
             kernel_shape = []
-            max_dim = max(kernel_shape_map.keys()) if kernel_shape_map else -1
-            
-            # Build shape list handling gaps in dimension indices
-            for i in range(max_dim + 1):
-                if i in kernel_shape_map:
-                    kernel_shape.append(kernel_shape_map[i])
-                else:
+            for i in range(max(kernel_shape_map.keys()) + 1):
+                if i not in kernel_shape_map:
                     kernel_shape.append(1)
-            
-            for i, (k, s) in enumerate(zip(kernel_shape, shape)):
-                if k != s:
-                    raise ValueError(f"kernel shape {kernel_shape} does not match expected shape {shape} at dimension {i}: {k} != {s}")
+                else:
+                    kernel_shape.append(kernel_shape_map[i])
+
+            for i, k in enumerate(kernel_shape):
+                if k != shape[i]:
+                    raise ValueError(
+                        f"kernel shape {kernel_shape} does not match expected shape {shape}"
+                    )
             new_kernels.append(kernel)
         assert new_kernels
         return new_kernels
@@ -549,19 +558,21 @@ class LayoutAssignment:
                     ]
                 else:
                     cost = KernelCost(cs_kernel, self.network).total_cost()
-                    self.kernel_costs[cs_term][dimension_merging(
-                        cs_kernel.layout)] = cost
+                    self.kernel_costs[cs_term][
+                        dimension_merging(cs_kernel.layout)
+                    ] = cost
                     cs_costs += cost
 
             cs_kernel_list = []
             for cs_kernel in cs_kernels:
-                cs_kernel_list.append(self.kernels[cs_kernel.layout.term][
-                    dimension_merging(cs_kernel.layout)
-                ])
+                cs_kernel_list.append(
+                    self.kernels[cs_kernel.layout.term][
+                        dimension_merging(cs_kernel.layout)
+                    ]
+                )
 
             # get total kernel cost
-            kernel_cost = KernelCost(
-                kernel, self.network).total_cost() + cs_costs
+            kernel_cost = KernelCost(kernel, self.network).total_cost() + cs_costs
             kernel_layout = dimension_merging(kernel.layout)
 
             # initialize
@@ -571,26 +582,22 @@ class LayoutAssignment:
 
             # optimize
             if kernel_layout not in self.kernels[term]:
-                self.kernels[term][kernel_layout] = KernelDag(
-                    kernel, cs_kernel_list)
+                self.kernels[term][kernel_layout] = KernelDag(kernel, cs_kernel_list)
                 self.kernel_costs[term][kernel_layout] = kernel_cost
             elif kernel_cost < self.kernel_costs[term][kernel_layout]:
-                self.kernels[term][kernel_layout] = KernelDag(
-                    kernel, cs_kernel_list)
+                self.kernels[term][kernel_layout] = KernelDag(kernel, cs_kernel_list)
                 self.kernel_costs[term][kernel_layout] = kernel_cost
 
     def search(self, term):
         # find kernel with min_cost
         kernel_dags = list(self.kernels[term].values())
-        min_cost = KernelCost(kernel_dags[0].kernel,
-                                   self.network).total_cost()
+        min_cost = KernelCost(kernel_dags[0].kernel, self.network).total_cost()
         min_kernels = kernel_dags[0]
 
         for kernel_dag in kernel_dags[1:]:
             cost = 0
             for kernel_dag_term in kernel_dag.post_order():
-                cost += KernelCost(kernel_dag_term.kernel,
-                                   self.network).total_cost()
+                cost += KernelCost(kernel_dag_term.kernel, self.network).total_cost()
             if not min_cost:
                 min_cost = cost
                 min_kernels = kernel_dag
@@ -609,9 +616,9 @@ class LayoutAssignment:
     def combine_kernels(self, kernel_dag):
         """Combines kernels in a kernel DAG by connecting input kernels to output kernels.
 
-        This function takes a kernel DAG and creates a mapping between kernel layouts and their 
-        corresponding kernel objects. For each kernel in the DAG, it processes its child kernels 
-        (CS kernels) and updates their references to point to the actual kernel objects rather 
+        This function takes a kernel DAG and creates a mapping between kernel layouts and their
+        corresponding kernel objects. For each kernel in the DAG, it processes its child kernels
+        (CS kernels) and updates their references to point to the actual kernel objects rather
         than just layout references.
 
         Args:
