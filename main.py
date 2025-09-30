@@ -33,6 +33,7 @@ from frontends.tensor import TensorTerm
 from ir.dim import *
 from ir.kernel_cost import KernelCost
 from ir.layout import *
+from lower.circuit_serializer import serialize_circuit
 from lower.lower import Lower
 from util.checker import check_results
 
@@ -66,6 +67,15 @@ def run_benchmark_or_microbenchmark(args):
         assert inputs
 
         circuit_ir = Lower(kernel).run()
+
+        # Serialize circuit if requested
+        if args.serialize:
+            circuit_name = f"{args.microbenchmark}_{args.n}"
+            output_dir = f"output/{circuit_name}"
+            file_paths = serialize_circuit(circuit_ir, output_dir, circuit_name)
+            print(
+                f"Serialized circuit to {len(file_paths)} instruction files in {output_dir}/"
+            )
 
         runtime = 0
         if args.backend.lower() == "toy":
@@ -121,6 +131,15 @@ def run_benchmark_or_microbenchmark(args):
         # Lower to circuit IR
         circuit_ir = Lower(kernel).run()
 
+        # Serialize circuit if requested
+        if args.serialize:
+            circuit_name = f"{args.benchmark}_{args.n}"
+            output_dir = f"output/{circuit_name}"
+            file_paths = serialize_circuit(circuit_ir, output_dir, circuit_name)
+            print(
+                f"Serialized circuit to {len(file_paths)} instruction files in {output_dir}/"
+            )
+
         # Run backend with result checking
         runtime = 0
         if args.backend.lower() == "toy":
@@ -169,6 +188,15 @@ def run_benchmark_or_microbenchmark(args):
         # Lower to circuit IR
         circuit_ir = Lower(kernel).run()
 
+        # Serialize circuit if requested
+        if args.serialize:
+            circuit_name = f"main_matmul_{args.n}"
+            output_dir = f"output/{circuit_name}"
+            file_paths = serialize_circuit(circuit_ir, output_dir, circuit_name)
+            print(
+                f"Serialized circuit to {len(file_paths)} instruction files in {output_dir}/"
+            )
+
         # Run backend with result checking
         runtime = 0
         if args.backend.lower() == "toy":
@@ -216,6 +244,15 @@ def main(args):
     # lower to circuit ir
     circuit_ir = Lower(kernel).run()
 
+    # Serialize circuit if requested
+    if args.serialize:
+        circuit_name = f"main_64x64_matmul_{args.n}"
+        output_dir = f"output/{circuit_name}"
+        file_paths = serialize_circuit(circuit_ir, output_dir, circuit_name)
+        print(
+            f"Serialized circuit to {len(file_paths)} instruction files in {output_dir}/"
+        )
+
     # run backend
     runtime = 0
     if args.backend.lower() == "toy":
@@ -239,7 +276,12 @@ if __name__ == "__main__":
     parser.add_argument("--strassens", action=BooleanOptionalAction, default=False)
     parser.add_argument("--net", default="lan")
     parser.add_argument("--cache", action=BooleanOptionalAction, default=False)
-    parser.add_argument("--serialize", action=BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--serialize",
+        action=BooleanOptionalAction,
+        default=False,
+        help="Serialize circuit IR to modular instruction files",
+    )
     parser.add_argument("--mock", action=BooleanOptionalAction, default=False)
     parser.add_argument("--fuzz", action=BooleanOptionalAction, default=False)
     parser.add_argument("--fuzz_result", action=BooleanOptionalAction, default=False)
