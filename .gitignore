@@ -7,6 +7,9 @@ data
 heir/
 heir*
 
+# Generated circuit output files
+output/
+
 # Documentation generated files
 docs/html/
 docs/doctrees/
