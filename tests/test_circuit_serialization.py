@@ -19,273 +19,217 @@ from lower.circuit_serializer import serialize_circuit
 from lower.lower import Lower
 
 
-def test_matmul_serialization():
-    """Test serialization of a matrix-vector multiplication circuit."""
+class TestCircuitSerialization:
+    """Test circuit serialization and deserialization operations."""
+    
+    def test_matmul_serialization(self):
+        """Test serialization of a matrix-vector multiplication circuit."""
 
-    print("=" * 70)
-    print("Test: Matrix-Vector Multiplication Circuit Serialization")
-    print("=" * 70)
+        print("=" * 70)
+        print("Test: Matrix-Vector Multiplication Circuit Serialization")
+        print("=" * 70)
 
-    # Setup
-    output_dir = "output/test_circuits"
-    circuit_name = "matmul_test"
+        # Setup
+        output_dir = "output/test_circuits"
+        circuit_name = "matmul_test"
 
-    # Clean up any existing output
-    if os.path.exists(output_dir):
-        shutil.rmtree(output_dir)
+        # Clean up any existing output
+        if os.path.exists(output_dir):
+            shutil.rmtree(output_dir)
 
-    # 1. Create tensor computation
-    print("\n1. Creating tensor computation...")
-    a = TensorTerm.Tensor("a", [8, 8], True)  # 8x8 secret matrix
-    b = TensorTerm.Tensor("b", [8], False)  # 8-element plaintext vector
-    tensor_ir = a @ b
-    print(f"   Tensor IR: {tensor_ir}")
+        # 1. Create tensor computation
+        print("\n1. Creating tensor computation...")
+        a = TensorTerm.Tensor("a", [8, 8], True)  # 8x8 secret matrix
+        b = TensorTerm.Tensor("b", [8], False)  # 8-element plaintext vector
+        tensor_ir = a @ b
+        print(f"   Tensor IR: {tensor_ir}")
 
-    # Create test inputs
-    inputs = {
-        "a": np.array([[i * 8 + j for j in range(8)] for i in range(8)], dtype=float),
-        "b": np.array([i for i in range(8)], dtype=float),
-    }
+        # Create test inputs
+        inputs = {
+            "a": np.array([[i * 8 + j for j in range(8)] for i in range(8)], dtype=float),
+            "b": np.array([i for i in range(8)], dtype=float),
+        }
 
-    # 2. Run layout assignment
-    print("\n2. Running layout assignment...")
-    args = Namespace(
-        n=4096,
-        rolls=True,
-        backend="toy",
-        net="lan",
-        cache=False,
-        mock=False,
-        serialize=False,
-    )
-
-    kernel = LayoutAssignment(tensor_ir, args).run()
-    print(f"   Generated {len(list(kernel.post_order()))} kernel operations")
-
-    # 3. Lower to circuit IR
-    print("\n3. Lowering to HE circuit...")
-    circuit_ir = Lower(kernel).run()
-    print(f"   Circuit contains {len(circuit_ir)} kernel terms")
-
-    # 4. Execute original circuit
-    print("\n4. Executing original circuit...")
-    original_results = Toy(circuit_ir, inputs, args).run()
-    # Toy backend returns a list of results
-    result = (
-        original_results[0] if isinstance(original_results, list) else original_results
-    )
-    print(
-        f"   Original result (first 8 elements): {result[:8] if hasattr(result, '__getitem__') else result}"
-    )
-
-    # 5. Serialize circuit
-    print(f"\n5. Serializing circuit to {output_dir}...")
-    file_paths = serialize_circuit(circuit_ir, output_dir, circuit_name)
-    print(f"   Created {len(file_paths)} files:")
-    for key, path in file_paths.items():
-        file_size = os.path.getsize(path)
-        print(f"     - {key}: {os.path.basename(path)} ({file_size} bytes)")
-
-    # 6. Load circuit back
-    print(f"\n6. Loading circuit from {output_dir}...")
-    loaded_data = load_circuit(output_dir, circuit_name)
-    print(f"   Loaded manifest with {len(loaded_data['manifest']['kernels'])} kernels")
-    print(f"   Total instructions loaded: {len(loaded_data['instructions'])}")
-
-    # 7. Verify loaded circuit structure
-    print("\n7. Verifying circuit structure...")
-    for kernel_data in loaded_data["kernels"]:
-        meta = kernel_data["metadata"]
-        print(f"   Kernel {meta['kernel_idx']}: {meta['operation']}")
-        print(f"     - Layout: {meta['layout']}")
-        print(f"     - Ciphertexts: {meta['num_ciphertexts']}")
-        print(f"     - Instructions: {len(meta['instructions'])}")
-        print(f"     - Outputs: {meta['outputs']}")
-
-    # 8. Verify instruction correctness by re-executing
-    print("\n8. Re-executing with original circuit IR...")
-    reexec_results = Toy(circuit_ir, inputs, args).run()
-
-    # 9. Compare results
-    print("\n9. Comparing results...")
-    orig_result = (
-        original_results[0] if isinstance(original_results, list) else original_results
-    )
-    reexec_result = (
-        reexec_results[0] if isinstance(reexec_results, list) else reexec_results
-    )
-
-    match = np.allclose(orig_result, reexec_result, rtol=1e-5)
-    print(f"   Results match: {match}")
-
-    if match:
-        print("   ✓ Circuit serialization test PASSED")
-    else:
-        print("   ✗ Circuit serialization test FAILED")
-        print(
-            f"   Max difference: {np.max(np.abs(np.array(orig_result) - np.array(reexec_result)))}"
+        # 2. Run layout assignment
+        print("\n2. Running layout assignment...")
+        args = Namespace(
+            n=4096,
+            rolls=True,
+            backend="toy",
+            net="lan",
+            cache=False,
+            mock=False,
+            serialize=False,
         )
 
-    # 10. Verify we can parse instruction semantics
-    print("\n10. Verifying instruction parsing...")
-    execution_order = sorted(loaded_data["instructions"].keys())
-    print(
-        f"   Execution order: {execution_order[:10]}..."
-        if len(execution_order) > 10
-        else f"   Execution order: {execution_order}"
-    )
+        kernel = LayoutAssignment(tensor_ir, args).run()
+        print(f"   Generated {len(list(kernel.post_order()))} kernel operations")
 
-    # Count operation types
-    op_counts = {}
-    for idx, (is_secret, op, operands) in loaded_data["instructions"].items():
-        op_counts[op] = op_counts.get(op, 0) + 1
+        # 3. Lower to circuit IR
+        print("\n3. Lowering to HE circuit...")
+        circuit_ir = Lower(kernel).run()
+        print(f"   Circuit contains {len(circuit_ir)} kernel terms")
 
-    print(f"   Operation counts:")
-    for op, count in sorted(op_counts.items()):
-        print(f"     - {op}: {count}")
+        # 4. Execute original circuit
+        print("\n4. Executing original circuit...")
+        original_results = Toy(circuit_ir, inputs, args).run()
+        # Toy backend returns a list of results
+        result = (
+            original_results[0] if isinstance(original_results, list) else original_results
+        )
+        print(
+            f"   Original result (first 8 elements): {result[:8] if hasattr(result, '__getitem__') else result}"
+        )
 
-    print("\n" + "=" * 70)
-    print("Test completed successfully!")
-    print("=" * 70)
+        # 5. Serialize circuit
+        print(f"\n5. Serializing circuit to {output_dir}...")
+        file_paths = serialize_circuit(circuit_ir, output_dir, circuit_name)
+        print(f"   Created {len(file_paths)} files:")
+        for key, path in file_paths.items():
+            file_size = os.path.getsize(path)
+            print(f"     - {key}: {os.path.basename(path)} ({file_size} bytes)")
 
-    # Use assert instead of return for pytest compliance
-    assert (
-        match
-    ), f"Results do not match. Max difference: {np.max(np.abs(np.array(orig_result) - np.array(reexec_result)))}"
+        # 6. Load circuit back
+        print(f"\n6. Loading circuit from {output_dir}...")
+        loaded_data = load_circuit(output_dir, circuit_name)
+        print(f"   Loaded manifest with {len(loaded_data['manifest']['kernels'])} kernels")
+        print(f"   Total instructions loaded: {len(loaded_data['instructions'])}")
 
+        # 7. Verify loaded circuit structure
+        print("\n7. Verifying circuit structure...")
+        for kernel_data in loaded_data["kernels"]:
+            meta = kernel_data["metadata"]
+            print(f"   Kernel {meta['kernel_idx']}: {meta['operation']}")
+            print(f"     - Layout: {meta['layout']}")
+            print(f"     - Ciphertexts: {meta['num_ciphertexts']}")
+            print(f"     - Instructions: {len(meta['instructions'])}")
+            print(f"     - Outputs: {meta['outputs']}")
 
-def test_multiple_operations():
-    """Test serialization with multiple tensor operations."""
+        # 8. Verify instruction correctness by re-executing
+        print("\n8. Re-executing with original circuit IR...")
+        reexec_results = Toy(circuit_ir, inputs, args).run()
 
-    print("\n" + "=" * 70)
-    print("Test: Multiple Operations Circuit Serialization")
-    print("=" * 70)
+        # 9. Compare results
+        print("\n9. Comparing results...")
+        orig_result = (
+            original_results[0] if isinstance(original_results, list) else original_results
+        )
+        reexec_result = (
+            reexec_results[0] if isinstance(reexec_results, list) else reexec_results
+        )
 
-    # Setup
-    output_dir = "output/test_multi_circuits"
-    circuit_name = "multi_op_test"
+        match = np.allclose(orig_result, reexec_result, rtol=1e-5)
+        print(f"   Results match: {match}")
 
-    # Clean up
-    if os.path.exists(output_dir):
-        shutil.rmtree(output_dir)
+        if match:
+            print("   ✓ Circuit serialization test PASSED")
+        else:
+            print("   ✗ Circuit serialization test FAILED")
+            print(
+                f"   Max difference: {np.max(np.abs(np.array(orig_result) - np.array(reexec_result)))}"
+            )
 
-    # Create tensor computation with multiple operations
-    print("\n1. Creating multi-operation tensor computation...")
-    a = TensorTerm.Tensor("a", [4, 4], True)
-    b = TensorTerm.Tensor("b", [4, 4], False)
-    c = TensorTerm.Tensor("c", [4], False)
+        # 10. Verify we can parse instruction semantics
+        print("\n10. Verifying instruction parsing...")
+        execution_order = sorted(loaded_data["instructions"].keys())
+        print(
+            f"   Execution order: {execution_order[:10]}..."
+            if len(execution_order) > 10
+            else f"   Execution order: {execution_order}"
+        )
 
-    # (a + b) @ c
-    tensor_ir = (a + b) @ c
-    print(f"   Tensor IR: {tensor_ir}")
+        # Count operation types
+        op_counts = {}
+        for idx, (is_secret, op, operands) in loaded_data["instructions"].items():
+            op_counts[op] = op_counts.get(op, 0) + 1
 
-    inputs = {
-        "a": np.array([[i * 4 + j for j in range(4)] for i in range(4)], dtype=float),
-        "b": np.array([[1.0] * 4 for _ in range(4)], dtype=float),
-        "c": np.array([1.0, 2.0, 3.0, 4.0], dtype=float),
-    }
+        print(f"   Operation counts:")
+        for op, count in sorted(op_counts.items()):
+            print(f"     - {op}: {count}")
 
-    # Layout assignment and lowering
-    args = Namespace(
-        n=4096,
-        rolls=True,
-        backend="toy",
-        net="lan",
-        cache=False,
-        mock=False,
-        serialize=False,
-    )
+        print("\n" + "=" * 70)
+        print("Test completed successfully!")
+        print("=" * 70)
 
-    print("\n2. Running layout assignment and lowering...")
-    kernel = LayoutAssignment(tensor_ir, args).run()
-    circuit_ir = Lower(kernel).run()
+        # Use assert instead of return for pytest compliance
+        assert (
+            match
+        ), f"Results do not match. Max difference: {np.max(np.abs(np.array(orig_result) - np.array(reexec_result)))}"
 
-    # Execute and serialize
-    print("\n3. Executing and serializing...")
-    original_results = Toy(circuit_ir, inputs, args).run()
-    file_paths = serialize_circuit(circuit_ir, output_dir, circuit_name)
+    def test_multiple_operations(self):
+        """Test serialization with multiple tensor operations."""
 
-    result = (
-        original_results[0] if isinstance(original_results, list) else original_results
-    )
-    print(f"   Created {len(file_paths)} files")
-    print(
-        f"   Original result: {result[:4] if hasattr(result, '__getitem__') else result}"
-    )
+        print("\n" + "=" * 70)
+        print("Test: Multiple Operations Circuit Serialization")
+        print("=" * 70)
 
-    # Load and verify
-    print("\n4. Loading and verifying...")
-    loaded_data = load_circuit(output_dir, circuit_name)
-    print(f"   Loaded {len(loaded_data['kernels'])} kernels")
+        # Setup
+        output_dir = "output/test_multi_circuits"
+        circuit_name = "multi_op_test"
 
-    # Display kernel information
-    print("\n5. Kernel details:")
-    for kernel_data in loaded_data["kernels"]:
-        meta = kernel_data["metadata"]
-        print(f"   Kernel {meta['kernel_idx']}: {meta['operation']}")
-        print(f"     Dependencies: {meta['dependencies']}")
-        print(f"     Outputs: {meta['outputs']}")
+        # Clean up
+        if os.path.exists(output_dir):
+            shutil.rmtree(output_dir)
 
-    print("\n" + "=" * 70)
-    print("Multi-operation test completed!")
-    print("=" * 70)
+        # Create tensor computation with multiple operations
+        print("\n1. Creating multi-operation tensor computation...")
+        a = TensorTerm.Tensor("a", [4, 4], True)
+        b = TensorTerm.Tensor("b", [4, 4], False)
+        c = TensorTerm.Tensor("c", [4], False)
 
-    # Test passes if we reach here without exceptions
+        # (a + b) @ c
+        tensor_ir = (a + b) @ c
+        print(f"   Tensor IR: {tensor_ir}")
 
+        inputs = {
+            "a": np.array([[i * 4 + j for j in range(4)] for i in range(4)], dtype=float),
+            "b": np.array([[1.0] * 4 for _ in range(4)], dtype=float),
+            "c": np.array([1.0, 2.0, 3.0, 4.0], dtype=float),
+        }
 
-def run_all_tests():
-    """Run all serialization tests."""
+        # Layout assignment and lowering
+        args = Namespace(
+            n=4096,
+            rolls=True,
+            backend="toy",
+            net="lan",
+            cache=False,
+            mock=False,
+            serialize=False,
+        )
 
-    print("\n" + "█" * 70)
-    print("  HE CIRCUIT SERIALIZATION TEST SUITE")
-    print("█" * 70)
+        print("\n2. Running layout assignment and lowering...")
+        kernel = LayoutAssignment(tensor_ir, args).run()
+        circuit_ir = Lower(kernel).run()
 
-    results = []
+        # Execute and serialize
+        print("\n3. Executing and serializing...")
+        original_results = Toy(circuit_ir, inputs, args).run()
+        file_paths = serialize_circuit(circuit_ir, output_dir, circuit_name)
 
-    # Test 1: Basic matmul
-    try:
-        result1 = test_matmul_serialization()
-        results.append(("Matrix-Vector Multiplication", result1))
-    except Exception as e:
-        print(f"\n✗ Test failed with error: {e}")
-        import traceback
+        result = (
+            original_results[0] if isinstance(original_results, list) else original_results
+        )
+        print(f"   Created {len(file_paths)} files")
+        print(
+            f"   Original result: {result[:4] if hasattr(result, '__getitem__') else result}"
+        )
 
-        traceback.print_exc()
-        results.append(("Matrix-Vector Multiplication", False))
+        # Load and verify
+        print("\n4. Loading and verifying...")
+        loaded_data = load_circuit(output_dir, circuit_name)
+        print(f"   Loaded {len(loaded_data['kernels'])} kernels")
 
-    # Test 2: Multiple operations
-    try:
-        result2 = test_multiple_operations()
-        results.append(("Multiple Operations", result2))
-    except Exception as e:
-        print(f"\n✗ Test failed with error: {e}")
-        import traceback
+        # Display kernel information
+        print("\n5. Kernel details:")
+        for kernel_data in loaded_data["kernels"]:
+            meta = kernel_data["metadata"]
+            print(f"   Kernel {meta['kernel_idx']}: {meta['operation']}")
+            print(f"     Dependencies: {meta['dependencies']}")
+            print(f"     Outputs: {meta['outputs']}")
 
-        traceback.print_exc()
-        results.append(("Multiple Operations", False))
+        print("\n" + "=" * 70)
+        print("Multi-operation test completed!")
+        print("=" * 70)
 
-    # Summary
-    print("\n" + "=" * 70)
-    print("TEST SUMMARY")
-    print("=" * 70)
-
-    for test_name, passed in results:
-        status = "✓ PASSED" if passed else "✗ FAILED"
-        print(f"  {status}: {test_name}")
-
-    all_passed = all(result for _, result in results)
-    print("\n" + ("=" * 70))
-
-    if all_passed:
-        print("  ALL TESTS PASSED ✓")
-    else:
-        print("  SOME TESTS FAILED ✗")
-
-    print("=" * 70 + "\n")
-
-    # Use assert instead of return for pytest compliance
-    assert all_passed, "Not all tests passed"
-
-
-if __name__ == "__main__":
-    run_all_tests()
+        # Test passes if we reach here without exceptions
