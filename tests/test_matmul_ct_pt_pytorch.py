@@ -20,7 +20,7 @@ from util.layout_util import apply_layout
 
 class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
     """Test matrix multiplication between ciphertext and plaintext tensors using PyTorch frontend."""
-    
+
     def _create_matmul_ct_pt_computation(self, inputs):
         """Helper method to create ciphertext-plaintext matrix multiplication computation using PyTorch frontend."""
         a = torch.tensor(inputs["a"], secret=True, name="a")
@@ -28,17 +28,17 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         result = torch.matmul(a, b)
         expected = inputs["a"] @ inputs["b"]
         return result._tensor_term, expected
-    
+
     def _run_test_case(self, inputs, args):
         """Helper method to run a test case."""
         # Generate test case
         tensor_ir, expected = self._create_matmul_ct_pt_computation(inputs)
-        
+
         # Run compiler
         kernel = LayoutAssignment(tensor_ir, args).run()
         circuit_ir = Lower(kernel).run()
         results = Toy(circuit_ir, inputs, args).run()
-        
+
         # Check result
         expected_cts = apply_layout(expected, kernel.layout)
         assert expected_cts == results
@@ -49,7 +49,7 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         args = get_default_args()
         args.n = 16
         args.benchmark = "matmul_ct_pt_pytorch_1"
-        
+
         # Create inputs
         size = 4
         inputs = {}
@@ -59,7 +59,7 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         inputs["b"] = np.array(
             [[random.choice(range(2)) for j in range(size)] for i in range(size)]
         )
-        
+
         self._run_test_case(inputs, args)
 
     def test_matmul_ct_pt_8x8_binary_random(self):
@@ -68,7 +68,7 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         args = get_default_args()
         args.n = 16
         args.benchmark = "matmul_ct_pt_pytorch_2"
-        
+
         # Create inputs
         size = 8
         inputs = {}
@@ -78,7 +78,7 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         inputs["b"] = np.array(
             [[random.choice(range(2)) for j in range(size)] for i in range(size)]
         )
-        
+
         self._run_test_case(inputs, args)
 
     def test_matmul_ct_pt_16x16_binary_random(self):
@@ -87,7 +87,7 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         args = get_default_args()
         args.n = 16
         args.benchmark = "matmul_ct_pt_pytorch_3"
-        
+
         # Create inputs
         size = 16
         inputs = {}
@@ -97,7 +97,7 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         inputs["b"] = np.array(
             [[random.choice(range(2)) for j in range(size)] for i in range(size)]
         )
-        
+
         self._run_test_case(inputs, args)
 
     def test_matmul_ct_pt_64x64_binary_random(self):
@@ -106,7 +106,7 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         args = get_default_args()
         args.n = 4096
         args.benchmark = "matmul_ct_pt_pytorch_4"
-        
+
         # Create inputs
         size = 64
         inputs = {}
@@ -116,7 +116,7 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         inputs["b"] = np.array(
             [[random.choice(range(2)) for j in range(size)] for i in range(size)]
         )
-        
+
         self._run_test_case(inputs, args)
 
     def test_matmul_ct_pt_64x64_binary_random_variant(self):
@@ -125,7 +125,7 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         args = get_default_args()
         args.n = 4096
         args.benchmark = "matmul_ct_pt_pytorch_5"
-        
+
         # Create inputs
         size = 64
         inputs = {}
@@ -135,7 +135,7 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         inputs["b"] = np.array(
             [[random.choice(range(2)) for j in range(size)] for i in range(size)]
         )
-        
+
         self._run_test_case(inputs, args)
 
     def test_matmul_ct_pt_4x4_4x16_binary_random(self):
@@ -144,7 +144,7 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         args = get_default_args()
         args.n = 16
         args.benchmark = "matmul_ct_pt_pytorch_6"
-        
+
         # Create inputs
         inputs = {}
         inputs["a"] = np.array(
@@ -153,7 +153,7 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         inputs["b"] = np.array(
             [[random.choice(range(2)) for j in range(16)] for i in range(4)]
         )
-        
+
         self._run_test_case(inputs, args)
 
     def test_matmul_ct_pt_4x4_with_rolls(self):
@@ -163,7 +163,7 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         args.n = 16
         args.rolls = True
         args.benchmark = "matmul_ct_pt_pytorch_7"
-        
+
         # Create inputs
         size = 4
         inputs = {}
@@ -173,7 +173,7 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         inputs["b"] = np.array(
             [[random.choice(range(2)) for j in range(size)] for i in range(size)]
         )
-        
+
         self._run_test_case(inputs, args)
 
     def test_matmul_ct_pt_8x8_with_rolls(self):
@@ -183,7 +183,7 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         args.n = 16
         args.rolls = True
         args.benchmark = "matmul_ct_pt_pytorch_8"
-        
+
         # Create inputs
         size = 8
         inputs = {}
@@ -193,7 +193,7 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         inputs["b"] = np.array(
             [[random.choice(range(2)) for j in range(size)] for i in range(size)]
         )
-        
+
         self._run_test_case(inputs, args)
 
     def test_matmul_ct_pt_16x16_with_rolls(self):
@@ -203,7 +203,7 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         args.n = 16
         args.rolls = True
         args.benchmark = "matmul_ct_pt_pytorch_9"
-        
+
         # Create inputs
         size = 16
         inputs = {}
@@ -213,7 +213,7 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         inputs["b"] = np.array(
             [[random.choice(range(2)) for j in range(size)] for i in range(size)]
         )
-        
+
         self._run_test_case(inputs, args)
 
     def test_matmul_ct_pt_64x64_with_rolls(self):
@@ -222,7 +222,7 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         args = get_default_args()
         args.rolls = True
         args.benchmark = "matmul_ct_pt_pytorch_10"
-        
+
         # Create inputs
         size = 64
         inputs = {}
@@ -232,5 +232,5 @@ class TestMatrixMultiplicationCiphertextPlaintextPyTorch:
         inputs["b"] = np.array(
             [[random.choice(range(2)) for j in range(size)] for i in range(size)]
         )
-        
+
         self._run_test_case(inputs, args)

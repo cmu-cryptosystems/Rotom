@@ -21,7 +21,7 @@ from lower.lower import Lower
 
 class TestCircuitSerialization:
     """Test circuit serialization and deserialization operations."""
-    
+
     def test_matmul_serialization(self):
         """Test serialization of a matrix-vector multiplication circuit."""
 
@@ -46,7 +46,9 @@ class TestCircuitSerialization:
 
         # Create test inputs
         inputs = {
-            "a": np.array([[i * 8 + j for j in range(8)] for i in range(8)], dtype=float),
+            "a": np.array(
+                [[i * 8 + j for j in range(8)] for i in range(8)], dtype=float
+            ),
             "b": np.array([i for i in range(8)], dtype=float),
         }
 
@@ -75,7 +77,9 @@ class TestCircuitSerialization:
         original_results = Toy(circuit_ir, inputs, args).run()
         # Toy backend returns a list of results
         result = (
-            original_results[0] if isinstance(original_results, list) else original_results
+            original_results[0]
+            if isinstance(original_results, list)
+            else original_results
         )
         print(
             f"   Original result (first 8 elements): {result[:8] if hasattr(result, '__getitem__') else result}"
@@ -92,7 +96,9 @@ class TestCircuitSerialization:
         # 6. Load circuit back
         print(f"\n6. Loading circuit from {output_dir}...")
         loaded_data = load_circuit(output_dir, circuit_name)
-        print(f"   Loaded manifest with {len(loaded_data['manifest']['kernels'])} kernels")
+        print(
+            f"   Loaded manifest with {len(loaded_data['manifest']['kernels'])} kernels"
+        )
         print(f"   Total instructions loaded: {len(loaded_data['instructions'])}")
 
         # 7. Verify loaded circuit structure
@@ -112,7 +118,9 @@ class TestCircuitSerialization:
         # 9. Compare results
         print("\n9. Comparing results...")
         orig_result = (
-            original_results[0] if isinstance(original_results, list) else original_results
+            original_results[0]
+            if isinstance(original_results, list)
+            else original_results
         )
         reexec_result = (
             reexec_results[0] if isinstance(reexec_results, list) else reexec_results
@@ -182,7 +190,9 @@ class TestCircuitSerialization:
         print(f"   Tensor IR: {tensor_ir}")
 
         inputs = {
-            "a": np.array([[i * 4 + j for j in range(4)] for i in range(4)], dtype=float),
+            "a": np.array(
+                [[i * 4 + j for j in range(4)] for i in range(4)], dtype=float
+            ),
             "b": np.array([[1.0] * 4 for _ in range(4)], dtype=float),
             "c": np.array([1.0, 2.0, 3.0, 4.0], dtype=float),
         }
@@ -208,7 +218,9 @@ class TestCircuitSerialization:
         file_paths = serialize_circuit(circuit_ir, output_dir, circuit_name)
 
         result = (
-            original_results[0] if isinstance(original_results, list) else original_results
+            original_results[0]
+            if isinstance(original_results, list)
+            else original_results
         )
         print(f"   Created {len(file_paths)} files")
         print(

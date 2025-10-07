@@ -20,24 +20,24 @@ from util.layout_util import apply_layout
 
 class TestDoubleMatrixMultiplicationCiphertextPlaintext:
     """Test double matrix multiplication (A @ B @ C) with ciphertext and plaintext tensors."""
-    
+
     def _create_double_matmul_ct_pt_computation(self, inputs):
         """Helper method to create double matrix multiplication computation."""
         a = TensorTerm.Tensor("a", list(inputs["a"].shape), True)
         b = TensorTerm.Tensor("b", list(inputs["b"].shape), False)
         c = TensorTerm.Tensor("c", list(inputs["c"].shape), False)
         return a @ b @ c
-    
+
     def _run_test_case(self, tensor_ir, inputs, args):
         """Helper method to run a test case."""
         # Generate expected result
         expected = tensor_ir.eval(inputs)
-        
+
         # Run compiler
         kernel = LayoutAssignment(tensor_ir, args).run()
         circuit_ir = Lower(kernel).run()
         results = Toy(circuit_ir, inputs, args).run()
-        
+
         # Check result
         expected_cts = apply_layout(expected, kernel.layout)
         assert expected_cts == results
@@ -53,9 +53,15 @@ class TestDoubleMatrixMultiplicationCiphertextPlaintext:
         # Create inputs
         size = 4
         inputs = {}
-        inputs["a"] = np.array([[i * size + j for j in range(size)] for i in range(size)])
-        inputs["b"] = np.array([[i * size + j for j in range(size)] for i in range(size)])
-        inputs["c"] = np.array([[i * size + j for j in range(size)] for i in range(size)])
+        inputs["a"] = np.array(
+            [[i * size + j for j in range(size)] for i in range(size)]
+        )
+        inputs["b"] = np.array(
+            [[i * size + j for j in range(size)] for i in range(size)]
+        )
+        inputs["c"] = np.array(
+            [[i * size + j for j in range(size)] for i in range(size)]
+        )
 
         # Generate test case
         tensor_ir = self._create_double_matmul_ct_pt_computation(inputs)
@@ -133,5 +139,3 @@ class TestDoubleMatrixMultiplicationCiphertextPlaintext:
         # Generate test case
         tensor_ir = self._create_double_matmul_ct_pt_computation(inputs)
         self._run_test_case(tensor_ir, inputs, args)
-
-

@@ -9,7 +9,7 @@ Modules:
     rotom_pytorch: PyTorch-like interface for familiar API with HE support
 """
 
+from .rotom_pytorch import Tensor, nn, optim, torch
 from .tensor import TensorOp, TensorTerm
-from .rotom_pytorch import Tensor, torch, nn, optim
 
 __all__ = ["TensorTerm", "TensorOp", "Tensor", "torch", "nn", "optim"]
