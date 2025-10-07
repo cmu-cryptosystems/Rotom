@@ -57,16 +57,9 @@ jobs:
     
     - name: Run tests with pytest
       run: |
-        pytest tests/ -v --tb=short --cov=. --cov-report=xml --cov-report=html --timeout=300
-      timeout-minutes: 15
+        pytest -v --tb=short --timeout=300
+      timeout-minutes: 30
     
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
-        fail_ci_if_error: false
 
   security:
     runs-on: ubuntu-latest

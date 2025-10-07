@@ -1,3 +1,10 @@
+"""
+Test suite for indexed matrix multiplication operations.
+
+This module tests indexed matrix multiplication operations with reshaping and permutation
+in the Rotom homomorphic encryption system.
+"""
+
 import random
 
 import numpy as np
@@ -11,226 +18,114 @@ from tests.test_util import get_default_args
 from util.layout_util import apply_layout
 
 
-## Test matrix multiply with secret inputs
-def index_matmul(index):
-    a = TensorTerm.Tensor("a", [4, 4], True)
-    b = TensorTerm.Tensor("b", [4, 16], False)
-    c = TensorTerm.Tensor("c", [4, 16], False)
-    s = a @ b
-    s2 = s.reshape(1, {1: 4, 2: 4}).permute({0: 1, 1: 2, 2: 0})
-    t = a @ c
-    t2 = t.reshape(1, {1: 4, 2: 4}).permute({0: 2, 1: 1, 2: 0})
+class TestIndexedMatrixMultiplication:
+    """Test indexed matrix multiplication with reshaping and permutation."""
 
-    res = []
-    for i in range(4):
-        res.append(s2[i] @ t2[i])
-    return s2[index] @ t2[index]
+    def _create_index_matmul_computation(self, index):
+        """Helper method to create indexed matrix multiplication computation."""
+        a = TensorTerm.Tensor("a", [4, 4], True)
+        b = TensorTerm.Tensor("b", [4, 16], False)
+        c = TensorTerm.Tensor("c", [4, 16], False)
+        s = a @ b
+        s2 = s.reshape(1, {1: 4, 2: 4}).permute({0: 1, 1: 2, 2: 0})
+        t = a @ c
+        t2 = t.reshape(1, {1: 4, 2: 4}).permute({0: 2, 1: 1, 2: 0})
 
+        res = []
+        for i in range(4):
+            res.append(s2[i] @ t2[i])
+        return s2[index] @ t2[index]
 
-def test_index_matmul_1():
-    # create args
-    args = get_default_args()
-    args.n = 16
-    args.benchmark = "index_matmul_1"
-    args.rolls = True
+    def _run_test_case(self, tensor_ir, inputs, args):
+        """Helper method to run a test case."""
+        # Generate expected result
+        expected = tensor_ir.eval(inputs)
 
-    # create inputs
-    inputs = {}
-    inputs["a"] = np.array([[i * 4 + j for j in range(4)] for i in range(4)])
-    inputs["b"] = np.array([[i * 4 + j for j in range(16)] for i in range(4)])
-    inputs["c"] = np.array([[i * 4 + j for j in range(16)] for i in range(4)])
+        # Run compiler
+        kernel = LayoutAssignment(tensor_ir, args).run()
+        circuit_ir = Lower(kernel).run()
+        results = Toy(circuit_ir, inputs, args).run()
 
-    # generate test case
-    tensor_ir = index_matmul(0)
+        # Check result
+        expected_cts = apply_layout(expected, kernel.layout)
+        assert expected_cts == results
 
-    # run compiler
-    kernel = LayoutAssignment(tensor_ir, args).run()
-    circuit_ir = Lower(kernel).run()
-    results = Toy(circuit_ir, inputs, args).run()
+    def test_index_matmul_index_0(self):
+        """Test indexed matrix multiplication with index 0."""
+        # Create args
+        args = get_default_args()
+        args.n = 16
+        args.benchmark = "index_matmul_1"
+        args.rolls = True
 
-    # check result
-    expected = tensor_ir.eval(inputs)
-    expected_cts = apply_layout(expected, kernel.layout)
-    assert expected_cts == results
+        # Create inputs
+        inputs = {}
+        inputs["a"] = np.array([[i * 4 + j for j in range(4)] for i in range(4)])
+        inputs["b"] = np.array([[i * 4 + j for j in range(16)] for i in range(4)])
+        inputs["c"] = np.array([[i * 4 + j for j in range(16)] for i in range(4)])
 
+        # Generate test case
+        tensor_ir = self._create_index_matmul_computation(0)
+        self._run_test_case(tensor_ir, inputs, args)
 
-def test_index_matmul_2():
-    # create args
-    args = get_default_args()
-    args.n = 16
-    args.benchmark = "index_matmul_2"
-    args.rolls = True
+    def test_index_matmul_index_1(self):
+        """Test indexed matrix multiplication with index 1."""
+        # Create args
+        args = get_default_args()
+        args.n = 16
+        args.benchmark = "index_matmul_2"
+        args.rolls = True
 
-    # create inputs
-    inputs = {}
-    inputs["a"] = np.array([[i * 4 + j for j in range(4)] for i in range(4)])
-    inputs["b"] = np.array([[i * 4 + j for j in range(16)] for i in range(4)])
-    inputs["c"] = np.array([[i * 4 + j for j in range(16)] for i in range(4)])
+        # Create inputs
+        inputs = {}
+        inputs["a"] = np.array([[i * 4 + j for j in range(4)] for i in range(4)])
+        inputs["b"] = np.array([[i * 4 + j for j in range(16)] for i in range(4)])
+        inputs["c"] = np.array([[i * 4 + j for j in range(16)] for i in range(4)])
 
-    # generate test case
-    tensor_ir = index_matmul(1)
+        # Generate test case
+        tensor_ir = self._create_index_matmul_computation(1)
+        self._run_test_case(tensor_ir, inputs, args)
 
-    # run compiler
-    kernel = LayoutAssignment(tensor_ir, args).run()
-    circuit_ir = Lower(kernel).run()
-    results = Toy(circuit_ir, inputs, args).run()
+    def test_index_matmul_4x4_4x16_reshape_index_0(self):
+        """Test indexed matrix multiplication with reshape and index 0."""
+        # Create args
+        args = get_default_args()
+        args.n = 16
+        args.benchmark = "index_matmul_3"
+        args.rolls = True
 
-    # check result
-    expected = tensor_ir.eval(inputs)
-    expected_cts = apply_layout(expected, kernel.layout)
-    assert expected_cts == results
+        # Create inputs
+        inputs = {}
+        inputs["a"] = np.array([[i * 4 + j for j in range(4)] for i in range(4)])
+        inputs["b"] = np.array([[i * 4 + j for j in range(16)] for i in range(4)])
+        inputs["c"] = np.array([[i * 4 + j for j in range(16)] for i in range(4)])
 
+        # Generate test case
+        a = TensorTerm.Tensor("a", [4, 4], True)
+        b = TensorTerm.Tensor("b", [4, 16], False)
+        b = b.reshape(1, {1: 4, 2: 4})
+        tensor_ir = a @ b[0]
 
-def index_matmul_2(index):
-    a = TensorTerm.Tensor("a", [4, 4], True)
-    b = TensorTerm.Tensor("b", [4, 16], False)
-    b = b.reshape(1, {1: 4, 2: 4})
-    return a @ b[index]
+        self._run_test_case(tensor_ir, inputs, args)
 
+    def test_index_matmul_4x4_4x16_reshape_index_1(self):
+        """Test indexed matrix multiplication with reshape and index 1."""
+        # Create args
+        args = get_default_args()
+        args.n = 16
+        args.benchmark = "index_matmul_4"
+        args.rolls = True
 
-def test_index_matmul_3():
-    # create args
-    args = get_default_args()
-    args.n = 16
-    args.benchmark = "index_matmul_3"
-    args.rolls = True
+        # Create inputs
+        inputs = {}
+        inputs["a"] = np.array([[i * 4 + j for j in range(4)] for i in range(4)])
+        inputs["b"] = np.array([[i * 4 + j for j in range(16)] for i in range(4)])
+        inputs["c"] = np.array([[i * 4 + j for j in range(16)] for i in range(4)])
 
-    # create inputs
-    inputs = {}
-    inputs["a"] = np.array([[i * 4 + j for j in range(4)] for i in range(4)])
-    inputs["b"] = np.array([[i * 4 + j for j in range(16)] for i in range(4)])
-    inputs["c"] = np.array([[i * 4 + j for j in range(16)] for i in range(4)])
+        # Generate test case
+        a = TensorTerm.Tensor("a", [4, 4], True)
+        b = TensorTerm.Tensor("b", [4, 16], False)
+        b = b.reshape(1, {1: 4, 2: 4})
+        tensor_ir = a @ b[1]
 
-    # generate test case
-    tensor_ir = index_matmul_2(0)
-
-    # run compiler
-    kernel = LayoutAssignment(tensor_ir, args).run()
-    circuit_ir = Lower(kernel).run()
-    results = Toy(circuit_ir, inputs, args).run()
-
-    # check result
-    expected = tensor_ir.eval(inputs)
-    expected_cts = apply_layout(expected, kernel.layout)
-    assert expected_cts == results
-
-
-def test_index_matmul_4():
-    # create args
-    args = get_default_args()
-    args.n = 16
-    args.benchmark = "index_matmul_4"
-    args.rolls = True
-
-    # create inputs
-    inputs = {}
-    inputs["a"] = np.array([[i * 4 + j for j in range(4)] for i in range(4)])
-    inputs["b"] = np.array([[i * 4 + j for j in range(16)] for i in range(4)])
-    inputs["c"] = np.array([[i * 4 + j for j in range(16)] for i in range(4)])
-
-    # generate test case
-    tensor_ir = index_matmul_2(1)
-
-    # run compiler
-    kernel = LayoutAssignment(tensor_ir, args).run()
-    circuit_ir = Lower(kernel).run()
-    results = Toy(circuit_ir, inputs, args).run()
-
-    # check result
-    expected = tensor_ir.eval(inputs)
-    expected_cts = apply_layout(expected, kernel.layout)
-    assert expected_cts == results
-
-
-def index_matmul_3(index):
-    h = TensorTerm.Tensor("h", [4, 48], True)
-    wq = TensorTerm.Tensor("wq", [48, 48], False)
-    bq = TensorTerm.Tensor("bq", [48], False)
-    wk = TensorTerm.Tensor("wk", [48, 48], False)
-    bk = TensorTerm.Tensor("bk", [48], False)
-
-    q = h @ wq + bq
-    k = h @ wk + bk
-
-    # reshape q and k
-    # [4, 48] -> [4, 3, 16]
-    blocked_q = q.reshape(1, {1: 3, 2: 16}).permute({0: 1, 1: 2, 2: 0})
-    blocked_k = k.reshape(1, {1: 3, 2: 16}).permute({0: 2, 1: 1, 2: 0})
-
-    # q @ k.t
-    res = []
-    for i in range(16):
-        res.append(blocked_q[i] @ blocked_k[i])
-    return res[index]
-
-
-# def test_index_matmul_4():
-#     # create args
-#     args = get_default_args()
-#     args.benchmark = "index_matmul_4"
-#     args.rolls = True
-
-#     # create inputs
-#     size = 48
-#     inputs = {}
-#     inputs["h"] = np.array(
-#         [[random.choice(range(2)) for _ in range(size)] for _ in range(4)]
-#     )
-#     inputs["wq"] = np.array(
-#         [[random.choice(range(2)) for _ in range(size)] for _ in range(size)]
-#     )
-#     inputs["bq"] = np.array([random.choice(range(2)) for _ in range(size)])
-#     inputs["wk"] = np.array(
-#         [[random.choice(range(2)) for _ in range(size)] for _ in range(size)]
-#     )
-#     inputs["bk"] = np.array([random.choice(range(2)) for _ in range(size)])
-
-#     # generate test case
-#     i = random.randint(0, 15)
-#     tensor_ir = index_matmul_3(i)
-
-#     # run compiler
-#     kernel = LayoutAssignment(tensor_ir, args).run()
-#     circuit_ir = Lower(kernel).run()
-#     results = Toy(circuit_ir, inputs, args).run()
-
-#     # check result
-#     expected = tensor_ir.eval(inputs)
-#     expected_cts = apply_layout(expected, kernel.layout)
-#     assert expected_cts == results
-
-
-# def test_index_matmul_5():
-#     # create args
-#     args = get_default_args()
-#     args.benchmark = "index_matmul_5"
-#     args.rolls = True
-
-#     # create inputs
-#     size = 48
-#     inputs = {}
-#     inputs["h"] = np.array(
-#         [[random.choice(range(2)) for _ in range(size)] for _ in range(4)]
-#     )
-#     inputs["wq"] = np.array(
-#         [[random.choice(range(2)) for _ in range(size)] for _ in range(size)]
-#     )
-#     inputs["bq"] = np.array([random.choice(range(2)) for _ in range(size)])
-#     inputs["wk"] = np.array(
-#         [[random.choice(range(2)) for _ in range(size)] for _ in range(size)]
-#     )
-#     inputs["bk"] = np.array([random.choice(range(2)) for _ in range(size)])
-
-#     # generate test case
-#     i = random.randint(0, 15)
-#     tensor_ir = index_matmul_3(i)
-
-#     # run compiler
-#     kernel = LayoutAssignment(tensor_ir, args).run()
-#     circuit_ir = Lower(kernel).run()
-#     results = Toy(circuit_ir, inputs, args).run()
-
-#     # check result
-#     expected = tensor_ir.eval(inputs)
-#     expected_cts = apply_layout(expected, kernel.layout)
-#     assert expected_cts == results
+        self._run_test_case(tensor_ir, inputs, args)
