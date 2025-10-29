@@ -73,6 +73,7 @@ class TensorOp(Enum):
     RESHAPE = "Reshape"  # tensor reshape
     PERMUTE = "Permute"  # permute dims
     INDEX = "Index"
+    RESCALE = "Rescale"  # scale division
 
 
 class TensorTerm:
@@ -425,6 +426,22 @@ class TensorTerm:
         """
         return TensorTerm(TensorOp.TRANSPOSE, [self])
 
+    def rescale(self, scale_exp, layout=None):
+        """Rescale the tensor by dividing by 2^scale_exp.
+
+        Args:
+            scale_exp (int): The exponent for the scale (e.g., 14 for 2^14)
+            layout (str, optional): Tensor layout string for the result
+
+        Returns:
+            TensorTerm: A new tensor term representing the rescaled tensor
+
+        Example:
+            >>> b = a.rescale(14)  # Divide by 2^14
+            >>> c = a.rescale(14, layout="[0:4:1][1:4:1]")  # With layout
+        """
+        return TensorTerm(TensorOp.RESCALE, [self, scale_exp], layout)
+
     @staticmethod
     def conv2d(a, b, stride, padding, layout=None):
         """Create a 2D convolution operation.
@@ -672,6 +689,9 @@ class TensorTerm:
             case TensorOp.PERMUTE:
                 tensor = env[self.cs[0]]
                 return np.moveaxis(tensor, self.cs[1].keys(), self.cs[1].values())
+            case TensorOp.RESCALE:
+                scale_value = 2 ** self.cs[1]
+                return env[self.cs[0]] / scale_value
             case _:
                 raise NotImplementedError(self.op)
 

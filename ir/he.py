@@ -306,7 +306,12 @@ class HETerm:
                     instruction_strs.append(f"{idx} {term.secret}: (poly {a})")
                     # instruction_strs.append(term.format_metadata(
                     #     f"{idx} {term.secret}: (poly {a})"))
-
+                case HEOp.RESCALE:
+                    a = env[term.cs[0]]
+                    b = term.cs[1]
+                    instruction_strs.append(
+                        f"{idx} {term.secret}: (rescale {a} / 2^{b})"
+                    )
                 case _:
                     raise NotImplementedError(term.op)
             env[term] = idx
@@ -324,6 +329,8 @@ class HETerm:
                 return f"{self.op} {self.cs[0]} {self.metadata}"
             case HEOp.ROT:
                 return f"{self.op} {self.cs[1]} {self.metadata}"
+            case HEOp.RESCALE:
+                return f"{self.op} {self.cs[0]} / 2^{self.cs[1]} {self.metadata}"
             case _:
                 return f"{self.op} {self.metadata}"
 
