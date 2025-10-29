@@ -125,6 +125,20 @@ class Toy:
     def eval_poly(self, term):
         return self.env[term.cs[0]]
 
+    def eval_rescale(self, term):
+        """Evaluate a rescale operation.
+
+        Args:
+            term: The rescale term to evaluate
+
+        Returns:
+            The rescaled vector
+        """
+        vector = self.env[term.cs[0]]
+        scale_exp = term.cs[1]  # The exponent (e.g., 14 for 2^14)
+        scale_value = 2**scale_exp  # Compute 2^scale_exp
+        return [v / scale_value for v in vector]
+
     def eval(self, term):
         match term.op:
             case HEOp.CS:
@@ -147,6 +161,8 @@ class Toy:
                 return self.eval_mul(term)
             case HEOp.POLY:
                 return self.eval_poly(term)
+            case HEOp.RESCALE:
+                return self.eval_rescale(term)
             case HEOp.ZERO_MASK:
                 return [0] * self.n
             case _:
@@ -168,8 +184,11 @@ class Toy:
                     results.append(self.env[ct_term])
 
             print("expected layout:", term.layout)
-            print("expected value:", term.layout.term.eval(self.inputs))
-            expected = apply_layout(term.layout.term.eval(self.inputs), term.layout)
+            # Evaluate the tensor computation to get the expected result
+            # Note: For RESCALE operations, the term already includes the rescale, so eval will apply it correctly
+            eval_result = term.layout.term.eval(self.inputs)
+            expected = apply_layout(eval_result, term.layout)
+            print("expected value:", eval_result)
             for e in expected:
                 print("e:", e)
             print()
