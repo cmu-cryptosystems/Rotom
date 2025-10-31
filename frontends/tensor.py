@@ -518,9 +518,12 @@ class TensorTerm:
             >>> # For computation: c = a @ b
             >>> traversal = c.post_order()  # Returns [a, b, c]
         """
-        seen = set()
-        res, seen = self.helper_post_order(seen)
-        return res
+        # Cache the result to avoid recomputing for large graphs
+        if not hasattr(self, '_post_order_cache'):
+            seen = set()
+            res, seen = self.helper_post_order(seen)
+            self._post_order_cache = res
+        return self._post_order_cache
 
     def root(self):
         """Return the root node of the tensor computation DAG.
