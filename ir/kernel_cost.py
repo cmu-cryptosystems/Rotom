@@ -612,6 +612,7 @@ class KernelCost:
                 | KernelOp.PERMUTE
                 | KernelOp.INDEX
                 | KernelOp.REORDER
+                | KernelOp.RESCALE
             ):
                 ops = self.nops(ops)
             case KernelOp.REPLICATE:
