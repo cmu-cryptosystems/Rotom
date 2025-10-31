@@ -204,11 +204,18 @@ def gen_conv2d(term, cs_kernels, shapes):
                 b_dim = copy(a_dim)
                 b_dims.append(b_dim)
             elif a_dim.dim is None:
-                b_dim = Dim(alignment[a_dim.dim][0], a_dim.extent, 1)
-                b_dims.append(b_dim)
-                alignment[a_dim.dim] = alignment[a_dim.dim][1:]
+                # Replicated dimension - consume from alignment list
+                if alignment[a_dim.dim]:
+                    b_dim = Dim(alignment[a_dim.dim][0], a_dim.extent, 1)
+                    b_dims.append(b_dim)
+                    alignment[a_dim.dim] = alignment[a_dim.dim][1:]
+                else:
+                    # No more alignment entries - skip this dimension
+                    b_dim = Dim(None, a_dim.extent, 1)
+                    b_dims.append(b_dim)
             else:
-                b_dim = Dim(alignment[a_dim.dim][0], a_dim.extent, 1)
+                # Data dimension - always maps to None (don't consume alignment)
+                b_dim = Dim(None, a_dim.extent, 1)
                 b_dims.append(b_dim)
 
         # back-fill, fix b_dim replication stride
