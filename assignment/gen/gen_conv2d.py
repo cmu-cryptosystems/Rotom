@@ -89,7 +89,16 @@ def apply_roll(term, kernel, roll):
 
 def calculate_padding(input_shape, filter_shape, stride, padding):
     H_in, W_in = input_shape[1], input_shape[2]
-    K_h, K_w = filter_shape[1], filter_shape[2]
+    # Filter shape is always [C_out, C_in, H_f, W_f]
+    # For single output (C_out=1, C_in=1), indices [1,2] give us [1, H_f]
+    # For multi-output, we need indices [2,3] to get [H_f, W_f]
+    # Use indices [1,2] when C_in=1 (to match existing lowering), else use [2,3]
+    if filter_shape[1] == 1:
+        # Single input channel - use old indices for compatibility
+        K_h, K_w = filter_shape[1], filter_shape[2]
+    else:
+        # Multiple input channels - use correct indices
+        K_h, K_w = filter_shape[2], filter_shape[3]
     S_h, S_w = stride, stride
 
     if padding == "valid":
@@ -118,15 +127,28 @@ def add_replicated_dimensions(a_shape, b_shape):
     # add replicated dimensions to the a_kernel
     # this is done to allow for the a_kernel to be replicated
     # and rolled to align with the b_kernel
+    #
+    # b_shape is always [C_out, C_in, H_f, W_f] in 4D form
+    # We need to replicate for C_in (input channels) and spatial dims (H_f, W_f)
+    # C_out (output channels) is handled separately in the output layout
+    
     replicated_dims = {}
-    if b_shape[0] > 1:
-        replicated_dims[0] = Dim(None, b_shape[0], b_shape[1] * a_shape[1] * a_shape[2])
-    if b_shape[1] > 1:
-        replicated_dims[1] = Dim(None, b_shape[1], a_shape[1] * a_shape[2])
+    c_in = b_shape[1]  # Number of input channels
+    h_f = b_shape[2]   # Filter height
+    w_f = b_shape[3]   # Filter width
+    
+    # Replicate for input channels (but only if we need different filters per channel)
+    if c_in > 1:
+        replicated_dims[1] = Dim(None, c_in, a_shape[1] * a_shape[2])
+    
+    # Replicate for spatial dimensions based on INPUT shape
+    # (needed for rotation alignment, regardless of filter size)
     if a_shape[1] > 1:
         replicated_dims[2] = Dim(None, a_shape[1], a_shape[2])
+    
     if a_shape[2] > 1:
         replicated_dims[3] = Dim(None, a_shape[2], 1)
+    
     return replicated_dims
 
 
@@ -236,9 +258,27 @@ def gen_conv2d(term, cs_kernels, shapes):
 
         # find output layout after convolution
         output_dims = []
+        
+        # Add output channel dimension if C_out > 1
+        c_out = b_shape[0]
+        if c_out > 1:
+            # Calculate stride for channel dimension (product of spatial dimensions)
+            spatial_extent = 1
+            for dim in a_kernel.layout.slot_dims:
+                if dim.dim and dim.dim > 0:  # Spatial dimensions (1, 2)
+                    spatial_extent *= dim.extent
+            output_dims.append(Dim(0, c_out, spatial_extent))
+        
+        # Add remaining dimensions (spatial and any others)
+        # For single output (C_out=1), just copy all dims from input
+        # For multi-output (C_out>1), skip dimension 0 if it exists (input channels)
         for dim in a_kernel.layout.slot_dims:
             if dim.dim:
+                # Skip input channel dimension (0) if we already added output channel dimension
+                if c_out > 1 and dim.dim == 0:
+                    continue
                 output_dims.append(copy(dim))
+        
         output_layout = Layout(
             term,
             [],
