@@ -1,11 +1,28 @@
-from ir.analysis.shape import Shape
+from frontends.tensor import TensorOp
 from ir.he import HEOp, HETerm
 from util.layout_util import layout_to_ct_indices
 
 
+def get_term_shape(term):
+    """Get the shape of a tensor term directly.
+    
+    Args:
+        term: TensorTerm to get shape from
+        
+    Returns:
+        list: Shape of the tensor
+    """
+    if term.op == TensorOp.TENSOR:
+        return term.cs[1]
+    else:
+        # For other ops, this would need proper shape inference
+        # but CS_PACK is only called on TENSOR terms
+        raise NotImplementedError(f"get_term_shape not implemented for {term.op}")
+
+
 def lower_cs_pack(kernel):
     layout = kernel.layout
-    shape = Shape(layout.term).get_shape()
+    shape = get_term_shape(layout.term)
 
     # evaluate ct dims
     if layout.ct_dims:
