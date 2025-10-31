@@ -1,6 +1,10 @@
 # Conv2D Test Summary and Analysis
 
-## Working Tests (11 passed - UPDATED AGAIN)
+## Status: 11/14 Tests Passing
+
+**Last Updated**: After fixing layout generation for multi-input channels and 1x1 convolutions
+
+## Working Tests (11 passed)
 
 ### Original Tests
 1. ✅ **test_conv2d_4x4_filter_2x2** - Basic 2x2 filter
@@ -101,6 +105,66 @@ From `test_conv2d_simple_3x3_ones` detailed trace:
    - Status: ValueError("kernel shape [1, 8, 8] does not match expected shape [4, 8, 8]")
    - Root cause: Same architectural limitation
    - Fix required: Same as #2
+
+## Deep Dive: Multi-Output Channel Architecture (NEW)
+
+### Current Status
+The layout generation in `gen_conv2d.py` HAS been updated to support multi-output channels:
+- ✓ Output layout includes channel dimension: `[0:2:16][1:4:1][2:4:1]` for 2 outputs
+- ✓ Input/filter use group (EMPTY) dimensions: `[G:2]` for computation separation
+- ✓ Replicated dimensions correctly handle multi-input channels
+
+### What's Still Missing
+The lowering in `lower_conv2d.py` needs three major changes:
+
+1. **Padding Calculation Fix**
+   - Current: Uses `filter_shape[1,2]` indices (workaround for C_in=1 case)
+   - Correct: Should always use `filter_shape[2,3]` for filter height/width
+   - Impact: 3x3 filters need `[1,1,1,1]` symmetric padding, not `[0,0,1,1]` asymmetric
+   - Fix location: `assignment/gen/gen_conv2d.py:calculate_padding()`
+
+2. **Group Dimension Handling**  
+   - Current: Lowering ignores EMPTY (group) dimensions, processes all inputs as one
+   - Required: Process each group separately, create separate intermediate results
+   - Impact: Need to iterate over groups, multiply each output channel's weights separately
+   - Fix location: `lower/lower_conv2d.py:lower_conv2d()` main logic
+
+3. **Output Packing**
+   - Current: Returns `{0: single_ct}` - one ciphertext total
+   - Required: Pack all output channels into one CT at correct strides (e.g., stride 16 apart)
+   - Impact: Use output layout's dim=0 stride to place results correctly
+   - Fix location: `lower/lower_conv2d.py:lower_conv2d()` return statement
+
+### Technical Details
+
+**Layout Structure for C_out=2:**
+```
+Output:  [0:2:16][1:4:1][2:4:1]  # dim=0 with extent=2, stride=16
+Input:   [R:4:4][R:4:1];[1:4:1][2:4:1][G:2]  # Group dim for 2 outputs
+Filter:  [2:4:1][3:4:1];[R:4:4][R:4:1][G:2]  # Group dim for 2 outputs
+```
+
+The `[G:2]` (EMPTY dimension with extent=2) indicates 2 separate computation groups.
+Each group should produce one output channel, placed at stride=16 offset in final CT.
+
+**Required Algorithm:**
+```python
+for each group g in [0, 1]:
+    # Filter group g's input/filter data
+    input_g = extract_group(input, g)
+    filter_g = extract_group(filter, g)
+    
+    # Do convolution for this group
+    result_g = convolve(input_g, filter_g)  # multiply, sum positions, sum input channels
+    
+    # Place result at correct offset in output
+    output[g * stride : (g+1) * stride] = result_g
+```
+
+### Estimated Effort
+- **Small**: Fix `calculate_padding` to use correct indices (10 minutes)
+- **Medium**: Add `[1,1,1,1]` padding pattern to lowering (1 hour)
+- **Large**: Refactor lowering to handle groups and output packing (4-8 hours)
 
 ### Fixes Applied (NEW)
 
