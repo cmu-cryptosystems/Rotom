@@ -26,6 +26,7 @@ from assignment.gen.gen_block_matmul import gen_block_matmul
 from assignment.gen.gen_conv2d import gen_conv2d
 from assignment.gen.gen_index import gen_index
 from assignment.gen.gen_permute import gen_permute
+from assignment.gen.gen_rescale import gen_rescale
 from assignment.gen.gen_reshape import gen_reshape
 from assignment.gen.gen_strassens import gen_strassens
 from assignment.gen.gen_sum import gen_sum
@@ -149,6 +150,8 @@ class LayoutAssignment:
                 kernels = gen_reshape(term, cs_kernels[0])
             case TensorOp.PERMUTE:
                 kernels = gen_permute(term, cs_kernels[0])
+            case TensorOp.RESCALE:
+                kernels = gen_rescale(term, cs_kernels[0])
             case TensorOp.INDEX:
                 kernels = gen_index(term, cs_kernels[0])
             case TensorOp.BLOCK_MATMUL:
@@ -381,6 +384,7 @@ class LayoutAssignment:
                 | TensorOp.RESHAPE
                 | TensorOp.PERMUTE
                 | TensorOp.INDEX
+                | TensorOp.RESCALE
             ):
                 return [self.get_last_kernels(self.kernels[term.cs[0]].values())]
             case _:

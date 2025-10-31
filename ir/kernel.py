@@ -72,6 +72,7 @@ class KernelOp(Enum):
     INDEX = "INDEX"
     COMBINE = "COMBINE"
     REORDER = "REORDER"
+    RESCALE = "RESCALE"
 
 
 class Kernel:
@@ -175,7 +176,7 @@ class Kernel:
             case KernelOp.TENSOR | KernelOp.CONST | KernelOp.CS:
                 seen.add(self)
                 return [self], seen
-            case KernelOp.SUM | KernelOp.PRODUCT | KernelOp.INDEX:
+            case KernelOp.SUM | KernelOp.PRODUCT | KernelOp.INDEX | KernelOp.RESCALE:
                 res = []
                 _res, _seen = self.cs[0].helper_post_order(seen)
                 res += _res

@@ -53,6 +53,7 @@ class Secret:
                 | TensorOp.RESHAPE
                 | TensorOp.PERMUTE
                 | TensorOp.INDEX
+                | TensorOp.RESCALE
             ):
                 return secrets[0]
             case (
@@ -103,6 +104,7 @@ class Secret:
                 | TensorOp.RESHAPE
                 | TensorOp.PERMUTE
                 | TensorOp.INDEX
+                | TensorOp.RESCALE
             ):
                 cs_secrets = [self.secret[term.cs[0]]]
                 kernel_secret = self.get_secret(term, cs_secrets)

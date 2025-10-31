@@ -36,6 +36,9 @@ class Shape:
                     return a_shape
                 else:
                     return b_shape
+            case TensorOp.RESCALE:
+                # Rescale preserves the shape of the input tensor
+                return copy(self.padded_shapes[term.cs[0]])
             case TensorOp.MATMUL:
                 a_shape = copy(self.padded_shapes[term.cs[0]])
                 b_shape = copy(self.padded_shapes[term.cs[1]])
@@ -122,6 +125,9 @@ class Shape:
                 # Remove the dimension being reduced over
                 result_shape = a_shape[:dim_idx] + a_shape[dim_idx + 1 :]
                 return result_shape
+            case TensorOp.RESCALE:
+                # Rescale preserves the shape of the input tensor
+                return copy(self.padded_shapes[term.cs[0]])
             case _:
                 raise NotImplementedError(term.op)
 
@@ -138,6 +144,9 @@ class Shape:
                     return a_shape
                 else:
                     return b_shape
+            case TensorOp.RESCALE:
+                # Rescale preserves the shape of the input tensor
+                return copy(self.get_shape(term.cs[0]))
             case TensorOp.MATMUL:
                 a = term.cs[0]
                 b = term.cs[1]
