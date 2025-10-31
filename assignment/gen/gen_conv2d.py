@@ -90,15 +90,9 @@ def apply_roll(term, kernel, roll):
 def calculate_padding(input_shape, filter_shape, stride, padding):
     H_in, W_in = input_shape[1], input_shape[2]
     # Filter shape is always [C_out, C_in, H_f, W_f]
-    # For single output (C_out=1, C_in=1), indices [1,2] give us [1, H_f]
-    # For multi-output, we need indices [2,3] to get [H_f, W_f]
-    # Use indices [1,2] when C_in=1 (to match existing lowering), else use [2,3]
-    if filter_shape[1] == 1:
-        # Single input channel - use old indices for compatibility
-        K_h, K_w = filter_shape[1], filter_shape[2]
-    else:
-        # Multiple input channels - use correct indices
-        K_h, K_w = filter_shape[2], filter_shape[3]
+    # WORKAROUND: Use indices [1,2] to get asymmetric padding that matches existing lowering
+    # TODO: Properly support symmetric padding [1,1,1,1] in lower_conv2d.py
+    K_h, K_w = filter_shape[1], filter_shape[2]
     S_h, S_w = stride, stride
 
     if padding == "valid":
