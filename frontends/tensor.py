@@ -129,7 +129,10 @@ class TensorTerm:
         Returns:
             int: Hash value based on string representation
         """
-        return hash(str(self))
+        # Cache the hash to avoid recomputing for large graphs
+        if not hasattr(self, '_hash_cache'):
+            self._hash_cache = hash(str(self))
+        return self._hash_cache
 
     def __eq__(self, other):
         """Check equality of two tensor terms.
@@ -148,23 +151,27 @@ class TensorTerm:
         Returns:
             str: Human-readable representation of the composed tensor program
         """
-        cs = " ".join([str(c) for c in self.cs])
-        match self.op:
-            case TensorOp.TENSOR:
-                return str(self.cs[0])
-            case TensorOp.MATMUL:
-                return f"(@ {cs})"
-            case TensorOp.ADD:
-                return f"(+ {cs})"
-            case TensorOp.TRANSPOSE:
-                return f"{cs}.T"
-            case TensorOp.CONST:
-                return str(self.cs[0])
-            case TensorOp.INDEX:
-                return f"([{self.cs[1]}] {self.cs[0]})"
-            case TensorOp.CONV2D:
-                return f"(conv2d {str(self.cs[0])} {str(self.cs[1])})"
-        return f"({self.op} {cs})"
+        # Cache the string representation to avoid recomputing for large graphs
+        if not hasattr(self, '_str_cache'):
+            cs = " ".join([str(c) for c in self.cs])
+            match self.op:
+                case TensorOp.TENSOR:
+                    self._str_cache = str(self.cs[0])
+                case TensorOp.MATMUL:
+                    self._str_cache = f"(@ {cs})"
+                case TensorOp.ADD:
+                    self._str_cache = f"(+ {cs})"
+                case TensorOp.TRANSPOSE:
+                    self._str_cache = f"{cs}.T"
+                case TensorOp.CONST:
+                    self._str_cache = str(self.cs[0])
+                case TensorOp.INDEX:
+                    self._str_cache = f"([{self.cs[1]}] {self.cs[0]})"
+                case TensorOp.CONV2D:
+                    self._str_cache = f"(conv2d {str(self.cs[0])} {str(self.cs[1])})"
+                case _:
+                    self._str_cache = f"({self.op} {cs})"
+        return self._str_cache
 
     @staticmethod
     def Tensor(name, shape, secret, layout=None):
