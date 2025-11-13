@@ -130,7 +130,7 @@ class TensorTerm:
             int: Hash value based on string representation
         """
         # Cache the hash to avoid recomputing for large graphs
-        if not hasattr(self, '_hash_cache'):
+        if not hasattr(self, "_hash_cache"):
             self._hash_cache = hash(str(self))
         return self._hash_cache
 
@@ -152,7 +152,7 @@ class TensorTerm:
             str: Human-readable representation of the composed tensor program
         """
         # Cache the string representation to avoid recomputing for large graphs
-        if not hasattr(self, '_str_cache'):
+        if not hasattr(self, "_str_cache"):
             cs = " ".join([str(c) for c in self.cs])
             match self.op:
                 case TensorOp.TENSOR:
@@ -526,7 +526,7 @@ class TensorTerm:
             >>> traversal = c.post_order()  # Returns [a, b, c]
         """
         # Cache the result to avoid recomputing for large graphs
-        if not hasattr(self, '_post_order_cache'):
+        if not hasattr(self, "_post_order_cache"):
             seen = set()
             res, seen = self.helper_post_order(seen)
             self._post_order_cache = res

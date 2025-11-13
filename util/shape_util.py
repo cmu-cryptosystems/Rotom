@@ -4,13 +4,13 @@ from util.util import prod
 
 def get_term_shape(term):
     """Get the shape of a tensor term directly.
-    
+
     Args:
         term: TensorTerm to get shape from
-        
+
     Returns:
         list: Shape of the tensor
-        
+
     Note:
         For TENSOR ops, this is a quick lookup of term.cs[1].
         For other operations, this falls back to the full Shape analyzer.
@@ -20,6 +20,7 @@ def get_term_shape(term):
     else:
         # For other ops, use full shape analysis
         from ir.analysis.shape import Shape
+
         shape_analyzer = Shape(term)
         shape_analyzer.run()
         return shape_analyzer.shapes[term]
