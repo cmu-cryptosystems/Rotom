@@ -1,11 +1,11 @@
-from ir.analysis.shape import Shape
 from ir.he import HEOp, HETerm
 from util.layout_util import layout_to_ct_indices
+from util.shape_util import get_term_shape
 
 
 def lower_cs_pack(kernel):
     layout = kernel.layout
-    shape = Shape(layout.term).get_shape()
+    shape = get_term_shape(layout.term)
 
     # evaluate ct dims
     if layout.ct_dims:

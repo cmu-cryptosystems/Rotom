@@ -2,11 +2,11 @@ import math
 
 import numpy as np
 
-from ir.analysis.shape import Shape
 from ir.dim import DimType
 from ir.he import HEOp, HETerm
 from lower.lower_util import rotate_and_sum
 from util.layout_util import convert_layout_to_mask, get_segment
+from util.shape_util import get_term_shape
 from util.util import split_lists
 
 
@@ -44,13 +44,10 @@ def lower_conv2d(env, kernel):
     for k in kernel.post_order():
         print("k", k)
 
-    shape = Shape(kernel.layout.term)
-    shape.run()
-
     # figure out filters
     padding = kernel.layout.term.cs[4]
-    a_shape = shape.shapes[kernel.layout.term.cs[0]]
-    b_shape = shape.shapes[kernel.layout.term.cs[1]]
+    a_shape = get_term_shape(kernel.layout.term.cs[0])
+    b_shape = get_term_shape(kernel.layout.term.cs[1])
     i_c = a_shape[0]
     i_h = a_shape[1]
     i_w = a_shape[2]

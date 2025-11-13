@@ -1,15 +1,12 @@
-from ir.analysis.shape import Shape
 from ir.he import HEOp, HETerm
-from util.shape_util import layout_to_shape_indices
+from util.shape_util import get_term_shape, layout_to_shape_indices
 
 
 def lower_tensor(kernel):
     layout = kernel.layout
 
     # get shape of term
-    shape = Shape(layout.term)
-    shape.run()
-    layout_shape = shape.shapes[layout.term]
+    layout_shape = get_term_shape(layout.term)
 
     # evaluate ct dims
     if layout.ct_dims:
