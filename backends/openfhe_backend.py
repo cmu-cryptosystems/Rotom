@@ -9,13 +9,6 @@ import numpy as np
 from openfhe import *
 
 from ir.he import HEOp, HETerm
-from lower.circuit_opts.associativity import mul_associativity
-from lower.circuit_opts.mask_opts import (
-    mask_identity_opt,
-    zero_mask_identity_opt,
-    zero_mask_opt,
-)
-from lower.circuit_opts.rot_opts import join_rot, rot_zero_opt
 from lower.lower_util import total_ops
 from util.layout_util import *
 
@@ -131,8 +124,8 @@ class CKKS:
         print(sorted(list(rots)))
         self.cc.EvalRotateKeyGen(self.keys.secretKey, list(rots))
 
-        # if self.serialize:
-        #     self.serialize_context_and_keys()
+        if self.serialize:
+            self.serialize_context_and_keys()
 
     def serialize_context_and_keys(self):
         serType = BINARY
@@ -506,15 +499,6 @@ class CKKS:
         return max(depth.values())
 
     def run_and_check(self, term, cts):
-        opt_cts = []
-        for ct_idx, ct in cts.items():
-            opt_ct = rot_zero_opt(ct)
-            opt_ct = zero_mask_opt(ct)
-            opt_ct = mask_identity_opt(ct)
-            opt_ct = zero_mask_identity_opt(ct)
-            opt_cts.append(opt_ct)
-        cts = opt_cts
-
         self.preprocess_packing(cts)
         self.preprocess_pt_compute(cts)
         self.preprocess_encoding(cts)
@@ -539,18 +523,6 @@ class CKKS:
     def run(self):
         print("dagifying...")
         cts = self.dagify_fhe_circuit()
-        print("running circuit opt...")
-        opt_cts = []
-        for ct in cts:
-            opt_ct = rot_zero_opt(ct)
-            opt_ct = join_rot(ct)
-            opt_ct = zero_mask_opt(ct)
-            opt_ct = mask_identity_opt(ct)
-            opt_ct = zero_mask_identity_opt(ct)
-            opt_ct = mul_associativity(ct)
-            opt_cts.append(opt_ct)
-        cts = opt_cts
-
         rots = self.find_unique_rots(cts)
         try:
             depth = self.find_depth(cts[0])
@@ -562,24 +534,6 @@ class CKKS:
         self.preprocess_pt_compute(cts)
         self.preprocess_encoding(cts)
         self.track_dependencies(cts)
-
-        # # HACK: reset secrets, bug in ^ opts
-        # for ct in cts:
-        #     for ct_term in ct.post_order():
-        #         match ct_term.op:
-        #             case HEOp.ADD | HEOp.MUL | HEOp.SUB:
-        #                 ct_term.secret = ct_term.cs[0].secret or ct_term.cs[1].secret
-
-        for ct in cts:
-            for ct_term in ct.post_order():
-                if ct_term.op == HEOp.ADD:
-                    if (
-                        ct_term.secret
-                        and not ct_term.cs[0].secret
-                        and not ct_term.cs[1].secret
-                    ):
-                        print("STILL BUGGED WTF")
-                        exit(0)
 
         runtime, results = self.run_dagified_fhe_circuit(cts)
         for i, result in enumerate(results):
