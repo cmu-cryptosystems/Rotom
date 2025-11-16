@@ -47,7 +47,6 @@ class Lower:
 
     def lower(self):
         for term in self.kernel.post_order():
-            # print("lowering:", term)
             match term.op:
                 case KernelOp.TENSOR:
                     self.env[term] = lower_tensor(term)
