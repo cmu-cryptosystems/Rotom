@@ -1167,13 +1167,6 @@ def gen_block_matmul(term, cs_kernels):
                 print(output_kernel)
                 print()
 
-                # if str(output_kernel) == "KernelOp.MATMUL: [1:128:1][0:4:4];[G:128][0:4:1][2:64:1]" or str(output_kernel) == "KernelOp.MATMUL: [1:128:1][0:4:4];[0:4:1][2:64:1][G:128]":
-                #     print("HERE!!!!")
-                #     compacted_kernel = find_compaction(output_kernel)
-                #     print(output_kernel)
-                #     print(compacted_kernel)
-                #     exit(0)
-
                 # compaction:
                 if not output_kernel.layout.rolls:
                     compacted_kernel = find_compaction(output_kernel)

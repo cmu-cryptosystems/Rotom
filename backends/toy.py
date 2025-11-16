@@ -101,11 +101,6 @@ class Toy:
         return [vector[(term.cs[1] + i) % len(vector)] for i in range(len(vector))]
 
     def eval_add(self, term):
-        # print("add:", term)
-        # print(self.env[term.cs[0]])
-        # print(self.env[term.cs[1]])
-        # print("result:", [a * b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])])
-        # print()
         return [a + b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
     def eval_sub(self, term):
@@ -242,11 +237,8 @@ class Toy:
     def fuzz(self):
         results = []
         for term, cts in self.circuit_ir.items():
-            # print("term:", term)
             results = []
             for ct_idx, ct in cts.items():
-                # print("ct_idx:", ct_idx)
-                # print("ct:", ct)
                 if isinstance(ct, list):
                     for c in ct:
                         for ct_term in c.post_order():
@@ -258,14 +250,6 @@ class Toy:
                     results.append(self.env[ct_term])
 
             expected = apply_layout(term.layout.term.eval(self.inputs), term.layout)
-            # if results != expected:
-            #     print("results:", results)
-            #     print("expected:", expected)
-            #     print("diff:")
-            #     for expected, result in zip(expected, results):
-            #         print([e - r for e, r in zip(expected, result)])
-            #     print()
-            #     print(term)
             assert results == expected
 
             # check that results match up
@@ -273,51 +257,11 @@ class Toy:
                 expected = apply_layout(
                     self.inputs[term.layout.term.cs[0]], term.layout
                 )
-                # print("term:", term)
-                # print("layout:", term.layout)
-                # print("layout offset:", term.layout.offset)
-                # print(self.inputs[term.layout.term.cs[0]])
-                # print("expected:", expected)
-                # print("results:", results)
-                # print()
                 assert results[: len(expected)] == expected
             else:
-                # print(term.layout.term)
                 expected = apply_layout(term.layout.term.eval(self.inputs), term.layout)
-                # print("expected:")
-                # for e in expected:
-                #     print(e)
-                # print()
-                # print("results:")
-                # for result in results:
-                #     print(result)
-                # print()
-
-                # if results != expected:
-                #     print("diff:")
-                #     for expected, result in zip(expected, results):
-                #         print([e - r for e, r in zip(expected, result)])
-                #     print()
-                #     print(term)
                 assert results == expected
             print("check passed:", term)
             print()
 
-        return results
-
-    def fuzz(self):
-        results = []
-        for term, cts in self.circuit_ir.items():
-            print("term:", term)
-            results = []
-            for _, ct in cts.items():
-                if isinstance(ct, list):
-                    for c in ct:
-                        for ct_term in c.post_order():
-                            self.env[ct_term] = self.eval(ct_term)
-                        results.append(self.env[ct_term])
-                else:
-                    for ct_term in ct.post_order():
-                        self.env[ct_term] = self.eval(ct_term)
-                    results.append(self.env[ct_term])
         return results
