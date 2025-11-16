@@ -10,6 +10,7 @@ Each backend implements a common interface for executing FHE circuits
 with different underlying homomorphic encryption libraries.
 """
 
+from .heir import HEIR
 from .openfhe_backend import CKKS
 from .toy import Toy
 
