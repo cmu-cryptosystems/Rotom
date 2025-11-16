@@ -254,11 +254,6 @@ def check_ct_dim_alignment(alignment, a_kernel, b_kernel):
 def check_slot_dim_alignment(alignment, a_kernel, b_kernel):
     a_dims = a_kernel.layout.slot_dims
     b_dims = b_kernel.layout.slot_dims
-    # assert check_dim_len_eq(a_dims, b_dims)
-    # print(a_kernel)
-    # print(b_kernel)
-    # print(a_dims)
-    # print(b_dims)
 
     a_start = 0
     b_start = 0
