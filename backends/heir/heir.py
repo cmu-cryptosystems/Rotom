@@ -17,7 +17,7 @@ class HEIR:
         self.circuit_ir = circuit_ir
         self.inputs = inputs
         self.n = args.n
-        self.env = {}   
+        self.env = {}
         self.pt_env = {}
         self.fn = args.fn
 
@@ -37,14 +37,12 @@ class HEIR:
         self.next_id = 1
         self.returns = []
 
-
-
     def write_vector(self, fn, data):
         # Convert to numpy array for easier handling
         if not isinstance(data, np.ndarray):
             data = np.array(data)
-        
-        with open(fn, 'w') as f:
+
+        with open(fn, "w") as f:
             if data.ndim == 1:
                 # 1D vector
                 f.write(f"{len(data)}\n")
@@ -55,10 +53,9 @@ class HEIR:
                 rows, cols = data.shape
                 f.write(f"{rows} {cols}\n")
                 for row in data:
-                    f.write(' '.join(map(str, row)) + '\n')
+                    f.write(" ".join(map(str, row)) + "\n")
             else:
                 raise ValueError(f"Only 1D and 2D vectors supported, got {data.ndim}D")
-
 
     def eval_mask(self, term):
         out_id = self.term_to_id[term]
@@ -135,16 +132,18 @@ class HEIR:
 
     def eval_mul(self, term):
         if term.cs[0] not in self.term_to_id:
-            vector = self.env[term.cs[0]
-                              ] if term.cs[0].secret else self.pt_env[term.cs[0]]
+            vector = (
+                self.env[term.cs[0]] if term.cs[0].secret else self.pt_env[term.cs[0]]
+            )
             self.term_to_vector[term.cs[0]] = vector
             self.term_to_id[term.cs[0]] = f"%{self.next_id}"
             self.term_to_type[term.cs[0]] = self.term_type(term.cs[0])
             self.next_id += 1
 
         if term.cs[1] not in self.term_to_id:
-            vector = self.env[term.cs[1]
-                              ] if term.cs[1].secret else self.pt_env[term.cs[1]]
+            vector = (
+                self.env[term.cs[1]] if term.cs[1].secret else self.pt_env[term.cs[1]]
+            )
             self.term_to_vector[term.cs[1]] = vector
             self.term_to_id[term.cs[1]] = f"%{self.next_id}"
             self.term_to_type[term.cs[1]] = self.term_type(term.cs[1])
@@ -200,10 +199,9 @@ class HEIR:
         parameters = []
         for term, vector in self.term_to_vector.items():
             term_id = self.term_to_id[term]
-            parameters.append(
-                f"{term_id} : {self.term_input_type(term)}")
+            parameters.append(f"{term_id} : {self.term_input_type(term)}")
 
-            var_name = term_id.lstrip('%')
+            var_name = term_id.lstrip("%")
             fn = f"heir/{self.fn}/inputs/{var_name}.txt"
             self.write_vector(fn, vector)
 
@@ -324,8 +322,7 @@ class HEIR:
                         if not ct_term.cs[0].secret:
                             assert ct_term.cs[0] in self.pt_env
                             self.pt_env[ct_term] = [
-                                self.pt_env[ct_term.cs[0]][(
-                                    i + ct_term.cs[1]) % self.n]
+                                self.pt_env[ct_term.cs[0]][(i + ct_term.cs[1]) % self.n]
                                 for i in range(len(self.pt_env[ct_term.cs[0]]))
                             ]
                     case HEOp.INDICES:
@@ -347,7 +344,7 @@ class HEIR:
 
         print("dagifying...")
         cts = self.dagify_fhe_circuit()
-        
+
         self.preprocess_packing(cts)
         self.preprocess_pt_compute(cts)
 
@@ -364,9 +361,7 @@ class HEIR:
         self.write_to_file()
         print("done!")
 
-    
     def serialize_results(self, results):
         os.makedirs(f"heir/{self.fn}/results", exist_ok=True)
         for i, result in enumerate(results):
             self.write_vector(f"heir/{self.fn}/results/result_{i}.txt", result)
-    
