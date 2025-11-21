@@ -16,14 +16,8 @@ The HEIR backend performs the following operations:
 ### Serialize to MLIR with the HEIR Backend
 
 ```bash
-python main.py --backend heir --n 4096 --rolls --fn chained_matmul
+python main.py --backend heir --n <number_of_slots> --rolls --fn <name>
 ```
-
-This command:
-- Uses the HEIR backend (`--backend heir`)
-- Sets the vector size to 4096 slots (`--n 4096`)
-- Enables roll optimizations (`--rolls`)
-- Names the output `chained_matmul` (`--fn chained_matmul`)
 
 ### Command-Line Arguments
 
@@ -46,8 +40,7 @@ heir/
     │   └── {input}_{layout}.txt
     ├── tensor/                 # Original tensor values
     ├── inputs/                 # MLIR function inputs (by SSA variable ID)
-    │   ├── 2.txt
-    │   ├── 3.txt
+    │   ├── {SSA_ID}.txt
     │   └── ...
     └── results/                # Execution results
         ├── result_0.txt
@@ -63,13 +56,6 @@ The HEIR backend includes an MLIR interpreter (`backends/heir/mlir_interpreter.p
 - Reads input vectors from the `inputs/` directory
 - Executes MLIR operations (arithmetic, rotation, constants)
 - Returns computed results for verification
-
-The interpreter supports:
-- `arith.constant`: Integer and dense array constants
-- `arith.mulf`: Element-wise multiplication
-- `arith.addf`: Element-wise addition
-- `arith.subf`: Element-wise subtraction
-- `tensor_ext.rotate`: Vector rotation operations
 
 ## Example: Chained Matrix Multiplication
 
@@ -98,7 +84,7 @@ The generated MLIR can be used with the HEIR framework:
    - `inputs/` - Directory containing input vectors
    - `results/` - Directory containing expected results (for verification)
 2. **Use HEIR's compilation pipeline**: Pass the MLIR through HEIR's passes
-3. See as an example: [https://github.com/google/heir/pull/2432](https://github.com/google/heir/pull/2432)
+3. See example: [https://github.com/google/heir/pull/2432](https://github.com/google/heir/pull/2432)
 
 ## See Also
 
