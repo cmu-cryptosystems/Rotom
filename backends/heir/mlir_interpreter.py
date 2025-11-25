@@ -192,13 +192,14 @@ def interpret_mlir(mlir_file, inputs_dir=None):
                     offsets_str = offsets_match.group(1)
                     offsets = [int(x.strip()) for x in offsets_str.split(",")]
 
-                    # Find sizes: [1 4096] (note: no comma in sizes)
+                    # Find sizes: [1, 4096] or [1 4096] (can have commas or spaces)
                     sizes_match = re.search(
                         r"\[([^\]]+)\]", args_str[args_str.find("]") + 1 :]
                     )
                     if sizes_match:
                         sizes_str = sizes_match.group(1)
-                        sizes = [int(x.strip()) for x in sizes_str.split()]
+                        # Handle both comma and space separated values
+                        sizes = [int(x.strip()) for x in re.split(r"[,\s]+", sizes_str) if x.strip()]
 
                         # Extract slice from tensor
                         if source_tensor.ndim == 2:

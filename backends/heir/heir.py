@@ -37,16 +37,17 @@ class HEIR:
         self.next_id = 1
         self.returns = []
 
-    def find_base_term(self, term):
-        base_term = None
-        base_term_secret = None
+    def get_base_term(self, term):
         for t in term.post_order():
             if t.op == HEOp.PACK:
-                base_term = t.cs[0].term.cs[0]
-                base_term_secret = t.cs[0].term.cs[1]
-                break
-        assert base_term is not None
-        return base_term, base_term_secret
+                return t 
+        raise ValueError(f"No base term found for {term}")
+
+    def get_base_term_name(self, base_term):
+       return base_term.cs[0].term.cs[0]
+    
+    def get_base_term_secret(self, base_term):
+        return base_term.cs[0].term.cs[2]
 
     def write_vector(self, fn, data):
         # Convert to numpy array for easier handling
@@ -133,46 +134,50 @@ class HEIR:
             vector = (
                 self.env[term.cs[0]] if term.cs[0].secret else self.pt_env[term.cs[0]]
             )
-            base_term, base_term_secret = self.find_base_term(term.cs[0])
+            base = self.get_base_term(term.cs[0])
+            base_term = self.get_base_term_name(base)
+            base_term_secret = self.get_base_term_secret(base)
             if base_term not in self.term_to_vector:
                 self.term_to_vector[base_term] = []
                 self.term_to_id[base_term] = f"%{self.next_id}"
                 self.next_id += 1
             self.term_to_vector[base_term].append(vector)
             base_term_id = self.term_to_id[base_term]
-            base_term_type = self.term_input_type(
-                self.inputs[base_term], base_term_secret
+            self.term_to_type[base_term] = self.term_input_type(
+                self.input_cache[base.cs[0]], base_term_secret
             )
-            self.term_to_type[base_term] = base_term_type
+            base_term_type = self.term_input_type(self.input_cache[base.cs[0]], False)
             self.term_to_id[term.cs[0]] = f"%{self.next_id}"
             self.term_to_type[term.cs[0]] = self.term_type(term.cs[0])
             self.next_id += 1
             extract_term_id = self.term_to_id[term.cs[0]]
             extract_term_type = self.term_to_type[term.cs[0]]
-            line = f"{extract_term_id} = tensor.extract_slice {base_term_id} [{len(self.term_to_vector[base_term])-1}, 0] [1 {self.n}] [1, 1] : {base_term_type} to {extract_term_type}"
+            line = f"{extract_term_id} = tensor.extract_slice {base_term_id} [{len(self.term_to_vector[base_term])-1}, 0] [1, {self.n}] [1, 1] : {base_term_type} to {extract_term_type}"
             self.lines.append(line)
 
         if term.cs[1] not in self.term_to_id:
             vector = (
                 self.env[term.cs[1]] if term.cs[1].secret else self.pt_env[term.cs[1]]
             )
-            base_term, base_term_secret = self.find_base_term(term.cs[1])
+            base = self.get_base_term(term.cs[1])
+            base_term = self.get_base_term_name(base)
+            base_term_secret = self.get_base_term_secret(base)
             if base_term not in self.term_to_vector:
                 self.term_to_vector[base_term] = []
                 self.term_to_id[base_term] = f"%{self.next_id}"
                 self.next_id += 1
             self.term_to_vector[base_term].append(vector)
             base_term_id = self.term_to_id[base_term]
-            base_term_type = self.term_input_type(
-                self.inputs[base_term], base_term_secret
+            self.term_to_type[base_term] = self.term_input_type(
+                self.input_cache[base.cs[0]], base_term_secret
             )
-            self.term_to_type[base_term] = base_term_type
+            base_term_type = self.term_input_type(self.input_cache[base.cs[0]], False)
             self.term_to_id[term.cs[1]] = f"%{self.next_id}"
             self.term_to_type[term.cs[1]] = self.term_type(term.cs[1])
             self.next_id += 1
             extract_term_id = self.term_to_id[term.cs[1]]
             extract_term_type = self.term_to_type[term.cs[1]]
-            line = f"{extract_term_id} = tensor.extract_slice {base_term_id} [{len(self.term_to_vector[base_term])-1}, 0] [1 {self.n}] [1, 1] : {base_term_type} to {extract_term_type}"
+            line = f"{extract_term_id} = tensor.extract_slice {base_term_id} [{len(self.term_to_vector[base_term])-1}, 0] [1, {self.n}] [1, 1] : {base_term_type} to {extract_term_type}"
             self.lines.append(line)
 
         a_term_id = self.term_to_id[term.cs[0]]
@@ -229,7 +234,6 @@ class HEIR:
 
             var_name = term_id.lstrip("%")
             fn = f"heir/{self.fn}/inputs/{var_name}.npz"
-            # Write as 2D array: rows x n
             vectors_array = np.array(vectors)
             self.write_vector(fn, vectors_array)
 
@@ -369,8 +373,6 @@ class HEIR:
 
     def run(self):
         print("evaluating terms...")
-
-        print("dagifying...")
         cts = self.dagify_fhe_circuit()
 
         self.preprocess_packing(cts)
