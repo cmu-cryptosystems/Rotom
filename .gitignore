@@ -4,8 +4,10 @@ layout_cache
 *.so
 data
 .venv
+# Ignore HEIR output directory (generated MLIR files)
 heir/
-heir*
+# Explicitly allow backends/heir source code
+!backends/heir/
 
 # Generated circuit output files
 output/

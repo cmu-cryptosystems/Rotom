@@ -4,6 +4,8 @@ from argparse import ArgumentParser, BooleanOptionalAction
 import numpy as np
 
 from assignment.assignment import LayoutAssignment
+from backends.heir.heir import HEIR
+from backends.heir.mlir_interpreter import run_mlir_interpreter
 from backends.openfhe_backend import CKKS
 from backends.toy import Toy
 
@@ -84,6 +86,16 @@ def run_benchmark_or_microbenchmark(args):
         elif args.backend.lower() == "ckks":
             runtime, results = CKKS(circuit_ir, inputs, args).run()
             check_results(kernel.term, inputs, kernel, results, runtime, args)
+        elif args.backend.lower() == "heir":
+            # HEIR backend generates MLIR output
+            heir_backend = HEIR(circuit_ir, inputs, args)
+            heir_backend.run()
+            # Run MLIR interpreter to get results
+            mlir_file = f"heir/{args.fn}/{args.fn}.mlir"
+            mlir_results = run_mlir_interpreter(mlir_file)
+            # Check MLIR results against kernel.term.eval()
+            check_results(kernel.term, inputs, kernel, mlir_results, runtime, args)
+            heir_backend.serialize_results(mlir_results)
         else:
             raise NotImplementedError("unknown backend")
 
@@ -148,63 +160,16 @@ def run_benchmark_or_microbenchmark(args):
         elif args.backend.lower() == "ckks":
             runtime, results = CKKS(circuit_ir, inputs, args).run()
             check_results(tensor_ir, inputs, kernel, results, runtime, args)
-        else:
-            raise NotImplementedError("unknown backend")
-
-        print("runtime:", runtime)
-        return
-    else:
-        args.benchmark = "main"
-
-        n = 8
-        a = TensorTerm.Tensor("a", [4, 2], True)
-        b = TensorTerm.Tensor("b", [2, 4], False)
-        c = TensorTerm.Tensor("c", [4, 2], False)
-        tensor_ir = a @ b @ c
-        inputs = {}
-        inputs["a"] = np.array([[i * 4 + j for j in range(2)] for i in range(4)])
-        inputs["b"] = np.array([[i * 2 + j for j in range(4)] for i in range(2)])
-        inputs["c"] = np.array([[i * 4 + j for j in range(2)] for i in range(4)])
-
-        # Generate kernel from tensor_ir
-        kernel = LayoutAssignment(tensor_ir, args).run()
-
-        # Print kernel information
-        print(
-            "picked kernel:",
-            kernel,
-            KernelCost(kernel, args.net).total_cost(),
-            KernelCost(kernel, args.net).comm_cost(),
-        )
-        print(KernelCost(kernel, args.net).total_operations())
-        print(kernel.layout.term)
-        print()
-        for k in kernel.post_order():
-            print(k)
-            print(k, KernelCost(k, args.net).op_cost())
-            print(KernelCost(k, args.net).ops())
-        print()
-
-        # Lower to circuit IR
-        circuit_ir = Lower(kernel).run()
-
-        # Serialize circuit if requested
-        if args.serialize:
-            circuit_name = f"main_matmul_{args.n}"
-            output_dir = f"output/{circuit_name}"
-            file_paths = serialize_circuit(circuit_ir, output_dir, circuit_name)
-            print(
-                f"Serialized circuit to {len(file_paths)} instruction files in {output_dir}/"
-            )
-
-        # Run backend with result checking
-        runtime = 0
-        if args.backend.lower() == "toy":
-            results = Toy(circuit_ir, inputs, args).run()
-            check_results(tensor_ir, inputs, kernel, results, runtime, args)
-        elif args.backend.lower() == "ckks":
-            runtime, results = CKKS(circuit_ir, inputs, args).run()
-            check_results(tensor_ir, inputs, kernel, results, runtime, args)
+        elif args.backend.lower() == "heir":
+            # HEIR backend generates MLIR output
+            heir_backend = HEIR(circuit_ir, inputs, args)
+            heir_backend.run()
+            # Run MLIR interpreter to get results
+            mlir_file = f"heir/{args.fn}/{args.fn}.mlir"
+            mlir_results = run_mlir_interpreter(mlir_file)
+            # Check MLIR results against tensor_ir.eval()
+            check_results(tensor_ir, inputs, kernel, mlir_results, runtime, args)
+            heir_backend.serialize_results(mlir_results)
         else:
             raise NotImplementedError("unknown backend")
 
@@ -220,21 +185,22 @@ def main(args):
         run_benchmark_or_microbenchmark(args)
         return
 
-    # Original main logic for default case
-    # generate inputs
-    n = args.n
-
     # create inputs
+    a = TensorTerm.Tensor("a", [64, 64], True)
+    b = TensorTerm.Tensor("b", [64, 64], False)
+    c = TensorTerm.Tensor("c", [64, 64], False)
+    tensor_ir = a @ b @ c
     inputs = {}
     inputs["a"] = np.array(
-        [[random.randint(0, 2) for i in range(64)] for j in range(64)]
+        [[np.random.randint(0, 10) * 0.1 for j in range(64)] for i in range(64)]
     )
-    inputs["b"] = np.array([random.randint(0, 2) for i in range(64)])
+    inputs["b"] = np.array(
+        [[np.random.randint(0, 10) * 0.1 for j in range(64)] for i in range(64)]
+    )
+    inputs["c"] = np.array(
+        [[np.random.randint(0, 10) * 0.1 for j in range(64)] for i in range(64)]
+    )
 
-    # generate test case
-    a = TensorTerm.Tensor("a", [64, 64], True)
-    b = TensorTerm.Tensor("b", [64], False)
-    tensor_ir = a @ b
     kernel = LayoutAssignment(tensor_ir, args).run()
 
     for k in kernel.post_order():
@@ -246,7 +212,7 @@ def main(args):
 
     # Serialize circuit if requested
     if args.serialize:
-        circuit_name = f"main_64x64_matmul_{args.n}"
+        circuit_name = f"main_{args.serialize}_{args.n}"
         output_dir = f"output/{circuit_name}"
         file_paths = serialize_circuit(circuit_ir, output_dir, circuit_name)
         print(
@@ -261,6 +227,16 @@ def main(args):
     elif args.backend.lower() == "ckks":
         runtime, results = CKKS(circuit_ir, inputs, args).run()
         check_results(tensor_ir, inputs, kernel, results, runtime, args)
+    elif args.backend.lower() == "heir":
+        # lower to HEIR MLIR
+        heir_backend = HEIR(circuit_ir, inputs, args)
+        heir_backend.run()
+        # Run MLIR interpreter to get results
+        mlir_file = f"heir/{args.fn}/{args.fn}.mlir"
+        mlir_results = run_mlir_interpreter(mlir_file)
+        # Check MLIR results against tensor_ir.eval()
+        check_results(tensor_ir, inputs, kernel, mlir_results, runtime, args)
+        heir_backend.serialize_results(mlir_results)
     else:
         raise NotImplementedError("unknown backend")
 
@@ -278,7 +254,7 @@ if __name__ == "__main__":
     parser.add_argument("--cache", action=BooleanOptionalAction, default=False)
     parser.add_argument(
         "--serialize",
-        action=BooleanOptionalAction,
+        type=BooleanOptionalAction,
         default=False,
         help="Serialize circuit IR to modular instruction files",
     )
@@ -291,7 +267,7 @@ if __name__ == "__main__":
         default=False,
         help="Disable 128-bit security level for OpenFHE backend",
     )
-    parser.add_argument("--fn", type=str, default="fn")
+    parser.add_argument("--fn", type=str, default="main")
     args = parser.parse_args()
 
     main(args)
