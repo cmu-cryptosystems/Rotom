@@ -33,12 +33,9 @@ class TestMLIRInterpreter:
         shutil.rmtree(self.test_dir, ignore_errors=True)
 
     def _write_input_file(self, filename, values):
-        """Write input vector file in the expected format."""
+        """Write input vector file in numpy compressed format."""
         filepath = os.path.join(self.inputs_dir, filename)
-        with open(filepath, "w") as f:
-            f.write(f"{len(values)}\n")
-            for value in values:
-                f.write(f"{value}\n")
+        np.savez_compressed(filepath, data=np.array(values, dtype=np.float32))
         return filepath
 
     def _write_mlir_file(self, content, filename="test.mlir"):
@@ -51,7 +48,7 @@ class TestMLIRInterpreter:
     def test_read_input_vector(self):
         """Test reading input vector from file."""
         values = [1.0, 2.0, 3.0, 4.0]
-        filepath = self._write_input_file("test.txt", values)
+        filepath = self._write_input_file("test.npz", values)
 
         result = read_input_vector(filepath)
 
@@ -61,7 +58,7 @@ class TestMLIRInterpreter:
 
     def test_read_input_vector_empty(self):
         """Test reading empty input vector."""
-        filepath = self._write_input_file("empty.txt", [])
+        filepath = self._write_input_file("empty.npz", [])
 
         result = read_input_vector(filepath)
 
@@ -71,8 +68,8 @@ class TestMLIRInterpreter:
     def test_interpret_mlir_simple_add(self):
         """Test interpreting simple addition MLIR."""
         # Create input files
-        self._write_input_file("2.txt", [1.0, 2.0, 3.0, 4.0])
-        self._write_input_file("3.txt", [5.0, 6.0, 7.0, 8.0])
+        self._write_input_file("2.npz", [1.0, 2.0, 3.0, 4.0])
+        self._write_input_file("3.npz", [5.0, 6.0, 7.0, 8.0])
 
         # Create MLIR file
         mlir_content = """func.func @test(%2 : tensor<4xf32>, %3 : tensor<4xf32>) -> tensor<4xf32> {
@@ -90,8 +87,8 @@ class TestMLIRInterpreter:
 
     def test_interpret_mlir_simple_multiply(self):
         """Test interpreting simple multiplication MLIR."""
-        self._write_input_file("2.txt", [1.0, 2.0, 3.0, 4.0])
-        self._write_input_file("3.txt", [2.0, 3.0, 4.0, 5.0])
+        self._write_input_file("2.npz", [1.0, 2.0, 3.0, 4.0])
+        self._write_input_file("3.npz", [2.0, 3.0, 4.0, 5.0])
 
         mlir_content = """func.func @test(%2 : tensor<4xf32>, %3 : tensor<4xf32>) -> tensor<4xf32> {
   %1 = arith.mulf %2, %3 : tensor<4xf32>
@@ -108,8 +105,8 @@ class TestMLIRInterpreter:
 
     def test_interpret_mlir_simple_subtract(self):
         """Test interpreting simple subtraction MLIR."""
-        self._write_input_file("2.txt", [10.0, 8.0, 6.0, 4.0])
-        self._write_input_file("3.txt", [1.0, 2.0, 3.0, 4.0])
+        self._write_input_file("2.npz", [10.0, 8.0, 6.0, 4.0])
+        self._write_input_file("3.npz", [1.0, 2.0, 3.0, 4.0])
 
         mlir_content = """func.func @test(%2 : tensor<4xf32>, %3 : tensor<4xf32>) -> tensor<4xf32> {
   %1 = arith.subf %2, %3 : tensor<4xf32>
@@ -126,7 +123,7 @@ class TestMLIRInterpreter:
 
     def test_interpret_mlir_constant(self):
         """Test interpreting MLIR with constants."""
-        self._write_input_file("2.txt", [1.0, 2.0, 3.0, 4.0])
+        self._write_input_file("2.npz", [1.0, 2.0, 3.0, 4.0])
 
         # Test both formats: with and without brackets
         mlir_content = """func.func @test(%2 : tensor<4xf32>) -> tensor<4xf32> {
@@ -146,7 +143,7 @@ class TestMLIRInterpreter:
 
     def test_interpret_mlir_rotate(self):
         """Test interpreting MLIR with rotation operation."""
-        self._write_input_file("2.txt", [1.0, 2.0, 3.0, 4.0])
+        self._write_input_file("2.npz", [1.0, 2.0, 3.0, 4.0])
 
         mlir_content = """func.func @test(%2 : tensor<4xf32>) -> tensor<4xf32> {
   %c1 = arith.constant 1 : index
@@ -165,7 +162,7 @@ class TestMLIRInterpreter:
 
     def test_interpret_mlir_rotate_negative(self):
         """Test interpreting MLIR with negative rotation."""
-        self._write_input_file("2.txt", [1.0, 2.0, 3.0, 4.0])
+        self._write_input_file("2.npz", [1.0, 2.0, 3.0, 4.0])
 
         mlir_content = """func.func @test(%2 : tensor<4xf32>) -> tensor<4xf32> {
   %c1 = arith.constant 3 : index
@@ -184,8 +181,8 @@ class TestMLIRInterpreter:
 
     def test_interpret_mlir_complex_expression(self):
         """Test interpreting complex MLIR expression with multiple operations."""
-        self._write_input_file("2.txt", [1.0, 2.0, 3.0, 4.0])
-        self._write_input_file("3.txt", [2.0, 3.0, 4.0, 5.0])
+        self._write_input_file("2.npz", [1.0, 2.0, 3.0, 4.0])
+        self._write_input_file("3.npz", [2.0, 3.0, 4.0, 5.0])
 
         mlir_content = """func.func @test(%2 : tensor<4xf32>, %3 : tensor<4xf32>) -> tensor<4xf32> {
   %1 = arith.mulf %2, %3 : tensor<4xf32>
@@ -207,8 +204,8 @@ class TestMLIRInterpreter:
 
     def test_run_mlir_interpreter(self):
         """Test run_mlir_interpreter wrapper function."""
-        self._write_input_file("2.txt", [1.0, 2.0, 3.0, 4.0])
-        self._write_input_file("3.txt", [5.0, 6.0, 7.0, 8.0])
+        self._write_input_file("2.npz", [1.0, 2.0, 3.0, 4.0])
+        self._write_input_file("3.npz", [5.0, 6.0, 7.0, 8.0])
 
         mlir_content = """func.func @test(%2 : tensor<4xf32>, %3 : tensor<4xf32>) -> tensor<4xf32> {
   %1 = arith.addf %2, %3 : tensor<4xf32>
@@ -237,7 +234,7 @@ class TestMLIRInterpreter:
 
     def test_interpret_mlir_no_return(self):
         """Test interpret_mlir with MLIR that has no return statement."""
-        self._write_input_file("2.txt", [1.0, 2.0, 3.0, 4.0])
+        self._write_input_file("2.npz", [1.0, 2.0, 3.0, 4.0])
 
         mlir_content = """func.func @test(%2 : tensor<4xf32>) -> tensor<4xf32> {
   %1 = arith.addf %2, %2 : tensor<4xf32>
@@ -252,7 +249,7 @@ class TestMLIRInterpreter:
 
     def test_interpret_mlir_default_inputs_dir(self):
         """Test that interpret_mlir uses default inputs/ directory."""
-        self._write_input_file("2.txt", [1.0, 2.0, 3.0, 4.0])
+        self._write_input_file("2.npz", [1.0, 2.0, 3.0, 4.0])
 
         mlir_content = """func.func @test(%2 : tensor<4xf32>) -> tensor<4xf32> {
   %1 = arith.addf %2, %2 : tensor<4xf32>
@@ -270,9 +267,9 @@ class TestMLIRInterpreter:
 
     def test_interpret_mlir_multiple_inputs(self):
         """Test interpreting MLIR with multiple input parameters."""
-        self._write_input_file("2.txt", [1.0, 2.0])
-        self._write_input_file("5.txt", [3.0, 4.0])
-        self._write_input_file("7.txt", [5.0, 6.0])
+        self._write_input_file("2.npz", [1.0, 2.0])
+        self._write_input_file("5.npz", [3.0, 4.0])
+        self._write_input_file("7.npz", [5.0, 6.0])
 
         mlir_content = """func.func @test(%2 : tensor<2xf32>, %5 : tensor<2xf32>, %7 : tensor<2xf32>) -> tensor<2xf32> {
   %1 = arith.addf %2, %5 : tensor<2xf32>
@@ -292,7 +289,7 @@ class TestMLIRInterpreter:
 
     def test_run_mlir_interpreter_returns_none(self):
         """Test run_mlir_interpreter when interpret_mlir returns None."""
-        self._write_input_file("2.txt", [1.0, 2.0, 3.0, 4.0])
+        self._write_input_file("2.npz", [1.0, 2.0, 3.0, 4.0])
 
         # MLIR with no return statement
         mlir_content = """func.func @test(%2 : tensor<4xf32>) -> tensor<4xf32> {
