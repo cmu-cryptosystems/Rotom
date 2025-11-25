@@ -25,8 +25,8 @@ class HEIR:
             shutil.rmtree(f"heir/{self.fn}")
         os.mkdir(f"heir/{self.fn}")
         os.mkdir(f"heir/{self.fn}/base")
-        os.mkdir(f"heir/{self.fn}/tensor")
         os.mkdir(f"heir/{self.fn}/inputs")
+        os.mkdir(f"heir/{self.fn}/results")
 
         self.input_cache = {}
         self.lines = []
@@ -37,25 +37,29 @@ class HEIR:
         self.next_id = 1
         self.returns = []
 
+    def find_base_term(self, term):
+        base_term = None
+        base_term_secret = None
+        for t in term.post_order():
+            if t.op == HEOp.PACK:
+                base_term = t.cs[0].term.cs[0]
+                base_term_secret = t.cs[0].term.cs[1]
+                break
+        assert base_term is not None
+        return base_term, base_term_secret
+
     def write_vector(self, fn, data):
         # Convert to numpy array for easier handling
         if not isinstance(data, np.ndarray):
             data = np.array(data)
 
-        with open(fn, "w") as f:
-            if data.ndim == 1:
-                # 1D vector
-                f.write(f"{len(data)}\n")
-                for value in data:
-                    f.write(f"{value}\n")
-            elif data.ndim == 2:
-                # 2D vector (matrix)
-                rows, cols = data.shape
-                f.write(f"{rows} {cols}\n")
-                for row in data:
-                    f.write(" ".join(map(str, row)) + "\n")
-            else:
-                raise ValueError(f"Only 1D and 2D vectors supported, got {data.ndim}D")
+        # Write using numpy savez_compressed
+        np.savez_compressed(fn, data=data)
+
+    def read_vector(self, fn):
+        """Read a vector from a numpy compressed file."""
+        data = np.load(fn)
+        return data["data"]
 
     def eval_mask(self, term):
         out_id = self.term_to_id[term]
@@ -71,15 +75,8 @@ class HEIR:
                 self.input_cache[layout] = self.read_vector(fn)
             else:
                 tensor = layout.term.eval(self.inputs)
-                tensor_fn = f"heir/{self.fn}/tensor/{layout.term}.txt"
-                self.write_vector(tensor_fn, tensor)
-
-                # apply layout to tensor
                 packed_tensor = apply_layout(tensor, layout)
                 self.input_cache[layout] = packed_tensor
-
-                # save to cache
-                self.write_vector(fn, packed_tensor)
 
         # get packing index and return packed vector
         packing_idx = int(term.metadata.split()[0])
@@ -131,23 +128,52 @@ class HEIR:
         self.lines.append(line)
 
     def eval_mul(self, term):
+        # Add inputs when they're determined to be private
         if term.cs[0] not in self.term_to_id:
             vector = (
                 self.env[term.cs[0]] if term.cs[0].secret else self.pt_env[term.cs[0]]
             )
-            self.term_to_vector[term.cs[0]] = vector
+            base_term, base_term_secret = self.find_base_term(term.cs[0])
+            if base_term not in self.term_to_vector:
+                self.term_to_vector[base_term] = []
+                self.term_to_id[base_term] = f"%{self.next_id}"
+                self.next_id += 1
+            self.term_to_vector[base_term].append(vector)
+            base_term_id = self.term_to_id[base_term]
+            base_term_type = self.term_input_type(
+                self.inputs[base_term], base_term_secret
+            )
+            self.term_to_type[base_term] = base_term_type
             self.term_to_id[term.cs[0]] = f"%{self.next_id}"
             self.term_to_type[term.cs[0]] = self.term_type(term.cs[0])
             self.next_id += 1
+            extract_term_id = self.term_to_id[term.cs[0]]
+            extract_term_type = self.term_to_type[term.cs[0]]
+            line = f"{extract_term_id} = tensor.extract_slice {base_term_id} [{len(self.term_to_vector[base_term])-1}, 0] [1 {self.n}] [1, 1] : {base_term_type} to {extract_term_type}"
+            self.lines.append(line)
 
         if term.cs[1] not in self.term_to_id:
             vector = (
                 self.env[term.cs[1]] if term.cs[1].secret else self.pt_env[term.cs[1]]
             )
-            self.term_to_vector[term.cs[1]] = vector
+            base_term, base_term_secret = self.find_base_term(term.cs[1])
+            if base_term not in self.term_to_vector:
+                self.term_to_vector[base_term] = []
+                self.term_to_id[base_term] = f"%{self.next_id}"
+                self.next_id += 1
+            self.term_to_vector[base_term].append(vector)
+            base_term_id = self.term_to_id[base_term]
+            base_term_type = self.term_input_type(
+                self.inputs[base_term], base_term_secret
+            )
+            self.term_to_type[base_term] = base_term_type
             self.term_to_id[term.cs[1]] = f"%{self.next_id}"
             self.term_to_type[term.cs[1]] = self.term_type(term.cs[1])
             self.next_id += 1
+            extract_term_id = self.term_to_id[term.cs[1]]
+            extract_term_type = self.term_to_type[term.cs[1]]
+            line = f"{extract_term_id} = tensor.extract_slice {base_term_id} [{len(self.term_to_vector[base_term])-1}, 0] [1 {self.n}] [1, 1] : {base_term_type} to {extract_term_type}"
+            self.lines.append(line)
 
         a_term_id = self.term_to_id[term.cs[0]]
         b_term_id = self.term_to_id[term.cs[1]]
@@ -156,14 +182,14 @@ class HEIR:
         line = f"{out_term_id} = arith.mulf {a_term_id}, {b_term_id} : {out_term_type}"
         self.lines.append(line)
 
-    def term_input_type(self, term):
-        if term.secret:
-            return f"tensor<{self.n}xf64> " + "{secret.secret}"
+    def term_input_type(self, vectors, secret):
+        if secret:
+            return f"tensor<{len(vectors)}x{self.n}xf64> " + "{secret.secret}"
         else:
-            return f"tensor<{self.n}xf64>"
+            return f"tensor<{len(vectors)}x{self.n}xf64>"
 
     def term_type(self, term):
-        return f"tensor<{self.n}xf64>"
+        return f"tensor<1x{self.n}xf64>"
 
     def eval(self, term):
         if term in self.term_to_id:
@@ -197,13 +223,15 @@ class HEIR:
         print("writing to file...")
         # create header
         parameters = []
-        for term, vector in self.term_to_vector.items():
+        for term, vectors in self.term_to_vector.items():
             term_id = self.term_to_id[term]
-            parameters.append(f"{term_id} : {self.term_input_type(term)}")
+            parameters.append(f"{term_id} : {self.term_to_type[term]}")
 
             var_name = term_id.lstrip("%")
-            fn = f"heir/{self.fn}/inputs/{var_name}.txt"
-            self.write_vector(fn, vector)
+            fn = f"heir/{self.fn}/inputs/{var_name}.npz"
+            # Write as 2D array: rows x n
+            vectors_array = np.array(vectors)
+            self.write_vector(fn, vectors_array)
 
         parameter_str = ", ".join(parameters)
 
@@ -362,6 +390,4 @@ class HEIR:
         print("done!")
 
     def serialize_results(self, results):
-        os.makedirs(f"heir/{self.fn}/results", exist_ok=True)
-        for i, result in enumerate(results):
-            self.write_vector(f"heir/{self.fn}/results/result_{i}.txt", result)
+        self.write_vector(f"heir/{self.fn}/results/result.npz", np.array(results))

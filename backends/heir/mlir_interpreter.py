@@ -14,20 +14,16 @@ import numpy as np
 
 def read_input_vector(fn):
     """
-    Read a vector from input file (first line is length, then values).
+    Read a vector or tensor from numpy compressed file.
 
     Args:
-        fn: Path to the input file
+        fn: Path to the input file (.npz)
 
     Returns:
-        numpy.ndarray: The vector as a numpy array
+        numpy.ndarray: The vector/tensor as a numpy array
     """
-    with open(fn, "r") as f:
-        length = int(f.readline().strip())
-        values = []
-        for _ in range(length):
-            values.append(float(f.readline().strip()))
-        return np.array(values, dtype=np.float32)
+    data = np.load(fn)
+    return data["data"]
 
 
 def interpret_mlir(mlir_file, inputs_dir=None):
@@ -73,9 +69,9 @@ def interpret_mlir(mlir_file, inputs_dir=None):
             var_match = re.match(r"(%\d+)", param)
             if var_match:
                 var_name = var_match.group(1)
-                # Try to read input file by SSA variable name first (e.g., %2 -> inputs/2.txt)
+                # Try to read input file by SSA variable name first (e.g., %2 -> inputs/2.npz)
                 var_filename = var_name.lstrip("%")
-                input_file = os.path.join(inputs_dir, f"{var_filename}.txt")
+                input_file = os.path.join(inputs_dir, f"{var_filename}.npz")
                 if os.path.exists(input_file):
                     input_vectors[var_name] = read_input_vector(input_file)
 
@@ -95,7 +91,11 @@ def interpret_mlir(mlir_file, inputs_dir=None):
         # or: %result = op %arg1, %arg2 : type1, type2
 
         # Match: %var = operation args : types
+        # Handle both regular operations and extract_slice with "to" keyword
         match = re.match(r"(%\w+) = (\w+\.\w+) (.+) : (.+)", line)
+        if not match:
+            # Try extract_slice format with "to" keyword
+            match = re.match(r"(%\w+) = (\w+\.\w+) (.+) : (.+) to (.+)", line)
         if not match:
             # Try return statement
             if line.startswith("return"):
@@ -111,6 +111,10 @@ def interpret_mlir(mlir_file, inputs_dir=None):
         operation = match.group(2)
         args_str = match.group(3).strip()
         types_str = match.group(4).strip()
+
+        # For extract_slice with "to" keyword, we have an extra group
+        if len(match.groups()) > 4:
+            result_type_str = match.group(5).strip()
 
         # Parse arguments
         args = [arg.strip() for arg in args_str.split(",")]
@@ -170,6 +174,59 @@ def interpret_mlir(mlir_file, inputs_dir=None):
                 # Left rotate by rot_amt: element at i goes to (i - rot_amt) % n
                 rotated = np.array([vector[(i + rot_amt) % n] for i in range(n)])
                 env[result_var] = rotated
+
+        elif operation == "tensor.extract_slice":
+            # Format: %3 = tensor.extract_slice %2 [0, 0] [1 4096] [1, 1] : tensor<64x4096xf64> {secret.secret} to tensor<1x4096xf64>
+            # Parse: source [offsets] [sizes] [strides] : source_type to result_type
+            # Extract source argument (first token before brackets)
+            source_match = re.match(r"(%\w+)", args_str)
+            if not source_match:
+                continue
+            source_arg = source_match.group(1)
+            source_tensor = env.get(source_arg)
+
+            if source_tensor is not None:
+                # Parse offsets: [0, 0]
+                offsets_match = re.search(r"\[([^\]]+)\]", args_str)
+                if offsets_match:
+                    offsets_str = offsets_match.group(1)
+                    offsets = [int(x.strip()) for x in offsets_str.split(",")]
+
+                    # Find sizes: [1 4096] (note: no comma in sizes)
+                    sizes_match = re.search(
+                        r"\[([^\]]+)\]", args_str[args_str.find("]") + 1 :]
+                    )
+                    if sizes_match:
+                        sizes_str = sizes_match.group(1)
+                        sizes = [int(x.strip()) for x in sizes_str.split()]
+
+                        # Extract slice from tensor
+                        if source_tensor.ndim == 2:
+                            row_start, col_start = offsets[0], offsets[1]
+                            row_size, col_size = sizes[0], sizes[1]
+                            row_end = row_start + row_size
+                            col_end = col_start + col_size
+
+                            # Extract the slice
+                            slice_result = source_tensor[
+                                row_start:row_end, col_start:col_end
+                            ]
+
+                            # If result should be 1D (row_size == 1), flatten it
+                            if row_size == 1:
+                                env[result_var] = slice_result.flatten()
+                            else:
+                                env[result_var] = slice_result
+                        elif source_tensor.ndim == 1:
+                            # 1D tensor slice
+                            start = offsets[0]
+                            size = sizes[0]
+                            end = start + size
+                            env[result_var] = source_tensor[start:end]
+                        else:
+                            raise ValueError(
+                                f"Unsupported tensor dimension for extract_slice: {source_tensor.ndim}"
+                            )
 
         step += 1
 
