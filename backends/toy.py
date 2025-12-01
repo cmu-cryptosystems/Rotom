@@ -107,14 +107,6 @@ class Toy:
         return [a - b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
     def eval_mul(self, term):
-        print("mul:", term)
-        print(self.env[term.cs[0]])
-        print(self.env[term.cs[1]])
-        print(
-            "result:",
-            [a * b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])],
-        )
-        print()
         return [a * b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
     def eval_poly(self, term):
@@ -178,31 +170,13 @@ class Toy:
                         self.env[ct_term] = self.eval(ct_term)
                     results.append(self.env[ct_term])
 
-            print("expected layout:", term.layout)
             # Evaluate the tensor computation to get the expected result
             eval_result = term.layout.term.eval(self.inputs)
             expected = apply_layout(eval_result, term.layout)
-            print("expected value:", eval_result)
-            for e in expected:
-                print("e:", e)
-            print()
 
             # skip checks for split rolls
             if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE, KernelOp.INDEX]:
                 continue
-
-            print("kernel:", term)
-            for k in term.post_order():
-                print("k:", k)
-            print()
-
-            for r in results:
-                print("r:", r)
-            print()
-
-            for e in expected:
-                print("e:", e)
-            print()
 
             # Check if values are close instead of exact equality
             all_close = True
