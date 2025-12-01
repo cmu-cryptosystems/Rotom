@@ -1,5 +1,5 @@
 """
-MLIR Interpreter for executing HEIR-generated MLIR code.
+MLIR Interpreter for executing generated MLIR code for HEIR.
 
 This module provides functionality to parse and execute MLIR code generated
 by the HEIR backend, allowing verification of the generated MLIR against

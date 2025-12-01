@@ -1,6 +1,6 @@
 # HEIR Backend
 
-The HEIR backend generates MLIR (Multi-Level Intermediate Representation) code compatible with the [HEIR](https://github.com/google/heir) homomorphic encryption research framework. This backend enables you to compile FHE circuits to HEIR's MLIR format for further processing and execution.
+The HEIR backend generates MLIR code compatible with the [HEIR](https://github.com/google/heir) homomorphic encryption research framework. This backend enables you to compile FHE circuits to HEIR's MLIR format for further processing and execution.
 
 ## Overview
 
@@ -13,7 +13,7 @@ The HEIR backend performs the following operations:
 
 ## Quick Start
 
-### Serialize to MLIR with the HEIR Backend
+### Serialize to MLIR for the HEIR Backend
 
 ```bash
 python main.py --backend heir --n <number_of_slots> --rolls --fn <name>
@@ -25,7 +25,7 @@ Key arguments for the HEIR backend:
 
 - `--backend heir`: Selects the HEIR backend
 - `--n <size>`: Sets the number of slots (vector size) for homomorphic encryption. Common values: 4096, 8192, 16384
-- `--rolls`: Enables roll optimizations for better performance
+- `--rolls`: Enables roll optimizations 
 - `--fn <name>`: Sets the output filename and directory name (default: "main")
 
 ## Output Structure
@@ -37,15 +37,12 @@ heir/
 └── <fn>/
     ├── <fn>.mlir              # Generated MLIR code
     ├── base/                   # Base input tensors (by layout term)
-    │   └── {input}_{layout}.txt
-    ├── tensor/                 # Original tensor values
+    │   └── {input}_{layout}.npz
     ├── inputs/                 # MLIR function inputs (by SSA variable ID)
-    │   ├── {SSA_ID}.txt
+    │   ├── {SSA_ID}.npz
     │   └── ...
     └── results/                # Execution results
-        ├── result_0.txt
-        ├── result_1.txt
-        └── ...
+        └── result.npz
 ```
 
 ## MLIR Interpreter
@@ -54,7 +51,7 @@ The HEIR backend includes an MLIR interpreter (`backends/heir/mlir_interpreter.p
 
 - Parses the generated MLIR file
 - Reads input vectors from the `inputs/` directory
-- Executes MLIR operations (arithmetic, rotation, constants)
+- Executes MLIR operations
 - Returns computed results for verification
 
 ## Example: Chained Matrix Multiplication

@@ -125,7 +125,6 @@ class TestMLIRInterpreter:
         """Test interpreting MLIR with constants."""
         self._write_input_file("2.npz", [1.0, 2.0, 3.0, 4.0])
 
-        # Test both formats: with and without brackets
         mlir_content = """func.func @test(%2 : tensor<4xf32>) -> tensor<4xf32> {
   %c1 = arith.constant 2 : index
   %c2 = arith.constant dense<[10.0, 20.0, 30.0, 40.0]> : tensor<4xf32>
@@ -258,7 +257,6 @@ class TestMLIRInterpreter:
 """
         mlir_file = self._write_mlir_file(mlir_content)
 
-        # Don't pass inputs_dir, should default to inputs/ relative to MLIR file
         result = interpret_mlir(mlir_file)
 
         assert result is not None
