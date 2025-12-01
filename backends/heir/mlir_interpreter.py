@@ -199,7 +199,11 @@ def interpret_mlir(mlir_file, inputs_dir=None):
                     if sizes_match:
                         sizes_str = sizes_match.group(1)
                         # Handle both comma and space separated values
-                        sizes = [int(x.strip()) for x in re.split(r"[,\s]+", sizes_str) if x.strip()]
+                        sizes = [
+                            int(x.strip())
+                            for x in re.split(r"[,\s]+", sizes_str)
+                            if x.strip()
+                        ]
 
                         # Extract slice from tensor
                         if source_tensor.ndim == 2:

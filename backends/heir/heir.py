@@ -40,12 +40,12 @@ class HEIR:
     def get_base_term(self, term):
         for t in term.post_order():
             if t.op == HEOp.PACK:
-                return t 
+                return t
         raise ValueError(f"No base term found for {term}")
 
     def get_base_term_name(self, base_term):
-       return base_term.cs[0].term.cs[0]
-    
+        return base_term.cs[0].term.cs[0]
+
     def get_base_term_secret(self, base_term):
         return base_term.cs[0].term.cs[2]
 
