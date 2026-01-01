@@ -1,4 +1,5 @@
 from ir.he import HEOp, HETerm
+from lower.layout_cts import LayoutCiphertexts
 from lower.lower_util import bsgs, get_rots_per_ct
 from util.layout_util import get_segments
 from util.util import split_lists
@@ -10,7 +11,7 @@ def lower_roll(env, kernel):
     ct_dims = kernel.layout.ct_dims
 
     if roll.dim_to_roll in ct_dims and roll.dim_to_roll_by in ct_dims:
-        cts = env[kernel.cs[1]]
+        input_cts = env[kernel.cs[1]]
 
         base_indices_by_cts, rolled_indices_by_cts = get_rots_per_ct(kernel)
 
@@ -23,8 +24,8 @@ def lower_roll(env, kernel):
         for i, indices in enumerate(rolled_indices_by_cts):
             if str(indices) not in base_ct_map:
                 raise KeyError("missing ct")
-            new_cts[i] = cts[base_ct_map[str(indices)]]
-        return new_cts
+            new_cts[i] = input_cts[base_ct_map[str(indices)]]
+        return LayoutCiphertexts(layout=kernel.layout, cts=new_cts)
     else:
         base_indices_by_cts, rolled_indices_by_cts = get_rots_per_ct(kernel)
         cts = {}
@@ -47,7 +48,8 @@ def lower_roll(env, kernel):
                 rots[rot_amt].append(i)
 
             # self.env ct term
-            base_term = env[kernel.cs[1]][ct_index]
+            input_cts = env[kernel.cs[1]]
+            base_term = input_cts[ct_index]
             if len(rots) == 1:
                 # this roll can be done with a single rotation
                 for rot_amt, _ in rots.items():
@@ -88,7 +90,7 @@ def lower_roll(env, kernel):
                 for sum_term in terms_to_sum[1:]:
                     sum_base = sum_base + sum_term
                 cts[ct_index] = sum_base
-        return cts
+        return LayoutCiphertexts(layout=kernel.layout, cts=cts)
 
 
 def lower_rot_roll(env, kernel):
@@ -98,7 +100,8 @@ def lower_rot_roll(env, kernel):
         if dim == roll.dim_to_roll_by:
             break
         rot_stride *= dim.extent
-    split_cts = split_lists(list(env[kernel.cs[1]].values()), roll.dim_to_roll.extent)
+    input_cts = env[kernel.cs[1]]
+    split_cts = split_lists(list(input_cts.values()), roll.dim_to_roll.extent)
     cts = {}
     ct_index = 0
     for i, split_ct in enumerate(split_cts):
@@ -106,7 +109,7 @@ def lower_rot_roll(env, kernel):
         for ct in split_ct:
             cts[ct_index] = HETerm(HEOp.ROT, [ct, rot_amt], ct.secret)
             ct_index += 1
-    return cts
+    return LayoutCiphertexts(layout=kernel.layout, cts=cts)
 
 
 def lower_bsgs_rot_roll(env, kernel):
@@ -142,7 +145,8 @@ def lower_split_roll(env, kernel):
         else:
             rots = cache[(rot_amt, rot_amt_2)]
 
-        base_term = env[kernel.cs[1]][ct_index]
+        input_cts = env[kernel.cs[1]]
+        base_term = input_cts[ct_index]
         if len(rots) == 1:
             # this roll can be done with a single rotation
             for rot_amt, _ in rots.items():
@@ -184,6 +188,8 @@ def lower_split_roll(env, kernel):
                 rot_left_term = masked_left_term << rot_amts[0]
                 rot_right_term = masked_right_term << rot_amts[1]
                 cts[ct_index] = [rot_left_term, rot_right_term]
+    # Note: lower_split_roll returns a dict with list values, which is a special case
+    # We'll keep it as-is for now, but it may need special handling
     return cts
 
 
@@ -251,8 +257,9 @@ def lower_bsgs_roll(env, kernel):
                 break
             stride += 1
 
-        base_term = env[kernel.cs[1]][ct_index]
+        input_cts = env[kernel.cs[1]]
+        base_term = input_cts[ct_index]
         left = bsgs(base_term, left_masks, dim_size, stride, True)
         right = bsgs(base_term, right_masks, dim_size, stride, False)
         cts[ct_index] = left + right
-    return cts
+    return LayoutCiphertexts(layout=kernel.layout, cts=cts)

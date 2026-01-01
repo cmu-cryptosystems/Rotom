@@ -2,6 +2,8 @@ from copy import deepcopy as copy
 
 from ir.dim import DimType
 from ir.he import HEOp, HETerm
+from ir.layout import Layout
+from lower.layout_cts import LayoutCiphertexts
 from lower.lower_util import rotate_and_sum
 from util.layout_util import get_cts_by_dim, get_dim_indices, get_segments, mul_vec
 from util.util import get_mask_from_segment
@@ -11,9 +13,9 @@ def lower_conversion(env, kernel):
     n = kernel.layout.n
 
     # create CS cts
+    input_cts = env[kernel.cs[2]]
     cts = [
-        HETerm(HEOp.CS, [ct], kernel.cs[2].layout.secret)
-        for ct in env[kernel.cs[2]].values()
+        HETerm(HEOp.CS, [ct], kernel.cs[2].layout.secret) for ct in input_cts.values()
     ]
 
     # get conversion metadata
@@ -157,7 +159,20 @@ def lower_conversion(env, kernel):
                 continue
             swap_to_dim_index = swap_slot[1]
             new_relevant_cts = []
-            ct_groups = get_cts_by_dim(relevant_cts, relevant_ct_dims, swap_dim)
+            # Create expanded layout with split dimensions for get_cts_by_dim
+            expanded_dims = split_ct_dims + split_slot_dims
+            expanded_layout = Layout(
+                kernel.cs[2].layout.term,
+                kernel.cs[2].layout.rolls,
+                expanded_dims,
+                kernel.cs[2].layout.offset,
+                n,
+                kernel.cs[2].layout.secret,
+            )
+            temp_layout_cts = LayoutCiphertexts(
+                layout=expanded_layout, cts={i: ct for i, ct in enumerate(relevant_cts)}
+            )
+            ct_groups = get_cts_by_dim(temp_layout_cts, swap_dim)
             for ct_group in ct_groups:
                 base = ct_group[0]
                 for i in range(1, len(ct_group)):
@@ -221,4 +236,4 @@ def lower_conversion(env, kernel):
         cts[i] = relevant_cts[ct_index]
 
     assert kernel.layout.num_ct() == len(cts)
-    return cts
+    return LayoutCiphertexts(layout=kernel.layout, cts=cts)

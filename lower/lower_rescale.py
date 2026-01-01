@@ -1,4 +1,5 @@
 from ir.he import HEOp, HETerm
+from lower.layout_cts import LayoutCiphertexts
 
 
 def lower_rescale(env, kernel):
@@ -9,7 +10,7 @@ def lower_rescale(env, kernel):
         kernel: The rescale kernel operation
 
     Returns:
-        dict: Dictionary mapping ciphertext indices to HETerms
+        LayoutCiphertexts: Layout-aware ciphertexts with rescaled terms
     """
     # Get the input tensor's ciphertexts
     input_cts = env[kernel.cs[0]]
@@ -22,4 +23,4 @@ def lower_rescale(env, kernel):
         rescale_term = HETerm(HEOp.RESCALE, [ct, scale_exp], ct.secret)
         cts[i] = rescale_term
 
-    return cts
+    return LayoutCiphertexts(layout=kernel.layout, cts=cts)
