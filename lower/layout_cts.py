@@ -3,7 +3,7 @@
 from copy import copy
 from typing import Dict, List
 
-from ir.dim import Dim
+from ir.dim import Dim, DimType
 from ir.he import HETerm
 from ir.layout import Layout
 from ir.roll import Roll
@@ -92,7 +92,7 @@ def create_layout_without_dims(layout: Layout, dims_to_remove: List[Dim]) -> Lay
 
     # Filter out removed dimensions from ct_dims and slot_dims
     new_ct_dims = [dim for dim in layout.ct_dims if dim not in dims_to_remove_set]
-    new_slot_dims = [dim for dim in layout.slot_dims if dim not in dims_to_remove_set]
+    new_slot_dims = [Dim(None, dim.extent, dim.stride, DimType.EMPTY) if dim in dims_to_remove_set else dim for dim in layout.slot_dims]
 
     # Combine into full dims list (ct_dims come before slot_dims in the full dims)
     new_dims = new_ct_dims + new_slot_dims
