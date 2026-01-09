@@ -20,6 +20,7 @@ from ir.dim import Dim, DimType
 from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
 from ir.roll import Roll
+from util.shape_util import get_term_shape
 
 
 def apply_replication(term, kernel, dim):
@@ -243,4 +244,93 @@ def gen_conv2d(term, cs_kernels, shapes):
 
         kernel = Kernel(KernelOp.CONV2D, [a_kernel, b_kernel], output_layout)
         output_kernels.add(kernel)
+    return output_kernels
+
+
+def gen_conv2d_toeplitz(term, cs_kernels, shapes):
+    # assumption is that a_kernel (input) is secret and b_kernel (weights) is public
+    # the goal is to use toeplitz convolution to compute the convolution
+    # 
+    # Implementation goal:
+    # - gen_conv2d_toeplitz should analyze the input layout and determine the output layout 
+    # - lower_conv2d_toeplitz should convert the toeplitz convolution to a matrix-vector multiplication
+    # - lower_conv2d_toeplitz should determine the packing for the convolution, since the weights are public 
+    #
+    # Input layout:
+    # - Input channel, dimension 1 (height), dimension 2 (width)
+    # Filter layout:
+    # - Output channel, kernel dimension 1, kernel dimension 2 
+    # Stride:
+    # - Stride is either 1 or 2 
+    # Padding:
+    # - Padding is either valid or same
+    # Output layout:
+    # - Output channel, dimension 0 (height), dimension 1 (width) (depending on stride and padding)
+
+
+    # The question is given any generalized input layout, how to figure out the summation dimensions and output layout?
+    # Step 1: Replicate the input layout to find dimension alignment 
+    # Step 2: Identify the summation dimensions:
+    # - This should be: the input channel, kernel dimension 0, kernel dimension 1 
+    # Step 3: Identify the output dimensions:
+    # - This should be: the output channel, dimension 0 (height), dimension 1 (width) (depending on stride and padding)
+    # Step 4: Create the layout and kernel
+
+    
+    a_shape = shapes[0]
+    b_shape = shapes[1]
+
+    # find padding
+    padding = calculate_padding(a_shape, b_shape, term.cs[2], term.cs[3])
+    term.cs.append(padding)
+
+    output_kernels = set()
+    for a_kernel in cs_kernels:
+        # assumes that a layout does not have any rolls applied to it
+        if a_kernel.layout.rolls:
+            continue
+
+        # add replication dimensions to the a_kernel
+        replicated_dims = add_replicated_dimensions(a_shape, b_shape)
+
+        for dim in replicated_dims:
+            a_kernel = apply_replication(term.cs[0], a_kernel, replicated_dims[dim])
+
+        # since b is public, we can create a cs_kernel for b
+        # and add metada information to help with packing the weights
+        # into a toeplitz matrix
+        b_dims = []
+        b_dim_index = 0
+        for dim in a_kernel.layout.get_dims():
+            if dim.dim is None and dim.dim_type == DimType.FILL:
+                b_dims.append(Dim(b_dim_index, dim.extent, 1))
+                b_dim_index += 1
+            elif dim.dim_type == DimType.FILL:
+                b_dims.append(Dim(None, dim.extent, 1))
+        
+        b_layout = Layout(term.cs[1], [], b_dims, {}, a_kernel.layout.n, False)
+        b_kernel = Kernel(KernelOp.TOEPLITZ_TENSOR, [], b_layout)
+
+        # find output shape using Shape class
+        output_shape = get_term_shape(term)        
+        output_dim_map= {}
+        for dim, extent in enumerate(output_shape):
+            output_dim_map[dim] = Dim(dim, extent, 1)
+        
+        # Output layout: 
+        # - the output layout should just pass the height and width forward from the input layout 
+        # - if there are gap-slots open in the layout, then we should compact the output channels 
+        output_dims = []
+        for dim in a_kernel.layout.get_dims():
+            if dim.dim in output_dim_map:
+                output_dims.append(output_dim_map[dim.dim])
+        output_layout = Layout(term, [], output_dims, {}, a_kernel.layout.n, a_kernel.layout.secret)
+
+
+        # TODO: this should work with bsgs matmul later
+        kernel = Kernel(KernelOp.TOEPLITZ_CONV2D, [a_kernel, b_kernel], output_layout)
+        output_kernels.add(kernel)
+
+        # TODO: add compaction or masking for stride here.
+
     return output_kernels

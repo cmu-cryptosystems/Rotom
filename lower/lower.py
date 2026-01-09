@@ -33,6 +33,7 @@ from lower.lower_roll import (
 from lower.lower_sub import lower_sub
 from lower.lower_sum import lower_sum
 from lower.lower_tensor import lower_tensor
+from lower.lower_toeplitz_tensor import lower_toeplitz_tensor
 from lower.lower_transpose import lower_transpose
 
 
@@ -50,6 +51,8 @@ class Lower:
             match term.op:
                 case KernelOp.TENSOR:
                     self.env[term] = lower_tensor(term)
+                case KernelOp.TOEPLITZ_TENSOR:
+                    self.env[term] = lower_toeplitz_tensor(term)
                 case KernelOp.CS:
                     self.env[term] = lower_cs_pack(term)
                 case KernelOp.REPLICATE:
@@ -61,6 +64,8 @@ class Lower:
                 case KernelOp.MUL:
                     self.env[term] = lower_mul(self.env, term)
                 case KernelOp.CONV2D:
+                    self.env[term] = lower_conv2d(self.env, term)
+                case KernelOp.TOEPLITZ_CONV2D:
                     self.env[term] = lower_conv2d(self.env, term)
                 case KernelOp.SUM:
                     self.env[term] = lower_sum(self.env, term)

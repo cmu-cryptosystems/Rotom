@@ -262,6 +262,12 @@ if __name__ == "__main__":
     parser.add_argument("--fuzz", action=BooleanOptionalAction, default=False)
     parser.add_argument("--fuzz_result", action=BooleanOptionalAction, default=False)
     parser.add_argument(
+        "--toeplitz",
+        action=BooleanOptionalAction,
+        default=False,
+        help="Enable Toeplitz convolution for conv2d operations",
+    )
+    parser.add_argument(
         "--not-secure",
         action=BooleanOptionalAction,
         default=False,

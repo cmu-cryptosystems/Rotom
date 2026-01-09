@@ -603,7 +603,7 @@ class KernelCost:
             return ops
 
         match self.kernel.op:
-            case KernelOp.TENSOR:
+            case KernelOp.TENSOR | KernelOp.TOEPLITZ_TENSOR:
                 ops = self.tensor_ops(ops)
             case (
                 KernelOp.CS
@@ -673,7 +673,7 @@ class KernelCost:
         cost_model = self.cost_model()
         total_num_ct_real = 0
         for term in self.kernel.post_order():
-            if term.op == KernelOp.TENSOR and term.layout.secret:
+            if (term.op == KernelOp.TENSOR or term.op == KernelOp.TOEPLITZ_TENSOR) and term.layout.secret:
                 total_num_ct_real += term.layout.num_ct_unique()
         return cost_model["comm"] * total_num_ct_real
 
@@ -685,7 +685,7 @@ class KernelCost:
         """
         total_num_ct_real = 0
         for term in self.kernel.post_order():
-            if term.op == KernelOp.TENSOR and term.layout.secret:
+            if (term.op == KernelOp.TENSOR or term.op == KernelOp.TOEPLITZ_TENSOR) and term.layout.secret:
                 total_num_ct_real += term.layout.num_ct_unique()
         if self.network == "lan":
             return 0.0096 * total_num_ct_real

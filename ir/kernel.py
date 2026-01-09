@@ -40,6 +40,7 @@ class KernelOp(Enum):
 
     # tensor ops
     TENSOR = "TENSOR"
+    TOEPLITZ_TENSOR = "TOEPLITZ_TENSOR"
     CS = "CS"
     CONST = "CONST"
     ADD = "ADD"
@@ -110,7 +111,7 @@ class Kernel:
             str: Human-readable representation of the kernel
         """
         layout = dimension_merging(self.layout)
-        if self.op == KernelOp.TENSOR:
+        if self.op == KernelOp.TENSOR or self.op == KernelOp.TOEPLITZ_TENSOR:
             return f"{self.op}: {self.layout.term.cs[0]} {layout.layout_str()}"
         else:
             return f"{self.op}: {layout.layout_str()}"
@@ -173,7 +174,7 @@ class Kernel:
         if self in seen:
             return [], seen
         match self.op:
-            case KernelOp.TENSOR | KernelOp.CONST | KernelOp.CS:
+            case KernelOp.TENSOR | KernelOp.TOEPLITZ_TENSOR | KernelOp.CONST | KernelOp.CS:
                 seen.add(self)
                 return [self], seen
             case KernelOp.SUM | KernelOp.PRODUCT | KernelOp.INDEX | KernelOp.RESCALE:

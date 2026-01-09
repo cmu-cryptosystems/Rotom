@@ -55,6 +55,7 @@ class TestConvolution2D:
         args.n = 16
         args.rolls = True
         args.benchmark = "conv2d_1"
+        args.toeplitz = True
 
         # Create inputs
         dim_size = 4
