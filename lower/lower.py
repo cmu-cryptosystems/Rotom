@@ -100,8 +100,9 @@ class Lower:
                     raise NotImplementedError(term.op)
 
     def opt(self):
+        layout_cts = self.env[self.kernel]
         opt_cts = {}
-        for ct_idx, ct in self.env[self.kernel].items():
+        for ct_idx, ct in layout_cts.items():
             opt_ct = rot_zero_opt(ct)
             opt_ct = zero_mask_opt(ct)
             opt_ct = mask_identity_opt(ct)
@@ -109,7 +110,9 @@ class Lower:
             opt_cts[ct_idx] = opt_ct
 
         # replace with optimized cts
-        self.env[self.kernel] = opt_cts
+        from lower.layout_cts import LayoutCiphertexts
+
+        self.env[self.kernel] = LayoutCiphertexts(layout=layout_cts.layout, cts=opt_cts)
 
     def run(self):
         self.lower()

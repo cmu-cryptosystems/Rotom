@@ -2,11 +2,12 @@ import math
 
 import numpy as np
 
+from ir.analysis.shape import Shape
 from ir.dim import DimType
 from ir.he import HEOp, HETerm
+from lower.layout_cts import LayoutCiphertexts
 from lower.lower_util import rotate_and_sum
 from util.layout_util import convert_layout_to_mask, get_segment
-from util.shape_util import get_term_shape
 from util.util import split_lists
 
 
@@ -38,16 +39,21 @@ def sum_slot_dim(kernel, ct, slot_sum_dims):
 
 def lower_conv2d(env, kernel):
     """same as a normal mul, but with filtering rules"""
-    assert env[kernel.cs[0]].keys() == env[kernel.cs[1]].keys()
+    a_cts = env[kernel.cs[0]]
+    b_cts = env[kernel.cs[1]]
+    assert a_cts.keys() == b_cts.keys()
 
     print("kernel", kernel)
     for k in kernel.post_order():
         print("k", k)
 
+    shape = Shape(kernel.layout.term)
+    shape.run()
+
     # figure out filters
     padding = kernel.layout.term.cs[4]
-    a_shape = get_term_shape(kernel.layout.term.cs[0])
-    b_shape = get_term_shape(kernel.layout.term.cs[1])
+    a_shape = shape.shapes[kernel.layout.term.cs[0]]
+    b_shape = shape.shapes[kernel.layout.term.cs[1]]
     i_c = a_shape[0]
     i_h = a_shape[1]
     i_w = a_shape[2]
@@ -58,13 +64,19 @@ def lower_conv2d(env, kernel):
     f_w = b_shape[3]
 
     # a_cs is a list of cts
+    # Note: split_roll returns dict with list values, but LayoutCiphertexts has single HETerm values
     a_cs = []
-    for cts in env[kernel.cs[0]].values():
-        a_cts = []
-        for ct in cts:
-            a_cts.append(HETerm(HEOp.CS, [ct], ct.secret))
-        a_cs.append(a_cts)
-    b_cs = [HETerm(HEOp.CS, [ct], ct.secret) for ct in env[kernel.cs[1]].values()]
+    for cts_item in a_cts.values():
+        # Handle both list (from split_roll) and single HETerm (from LayoutCiphertexts)
+        if isinstance(cts_item, list):
+            cts_list = cts_item
+        else:
+            cts_list = [cts_item]
+        a_cts_list = []
+        for ct in cts_list:
+            a_cts_list.append(HETerm(HEOp.CS, [ct], ct.secret))
+        a_cs.append(a_cts_list)
+    b_cs = [HETerm(HEOp.CS, [ct], ct.secret) for ct in b_cts.values()]
 
     split_a_cs = split_lists(a_cs, i_h)
     split_b_cs = split_lists(b_cs, i_h)
@@ -266,4 +278,4 @@ def lower_conv2d(env, kernel):
         if dim.dim == 0:
             slot_sum_dims.append(dim)
     ct = sum_slot_dim(kernel, sum_together, slot_sum_dims)
-    return {0: ct}
+    return LayoutCiphertexts(layout=kernel.layout, cts={0: ct})
