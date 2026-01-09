@@ -125,24 +125,24 @@ def add_replicated_dimensions(a_shape, b_shape):
     # b_shape is always [C_out, C_in, H_f, W_f] in 4D form
     # We need to replicate for C_in (input channels) and spatial dims (H_f, W_f)
     # C_out (output channels) is handled separately in the output layout
-    
+
     replicated_dims = {}
     c_in = b_shape[1]  # Number of input channels
-    h_f = b_shape[2]   # Filter height
-    w_f = b_shape[3]   # Filter width
-    
+    h_f = b_shape[2]  # Filter height
+    w_f = b_shape[3]  # Filter width
+
     # Replicate for input channels (but only if we need different filters per channel)
     if c_in > 1:
         replicated_dims[1] = Dim(None, c_in, a_shape[1] * a_shape[2])
-    
+
     # Replicate for spatial dimensions based on INPUT shape
     # (needed for rotation alignment, regardless of filter size)
     if a_shape[1] > 1:
         replicated_dims[2] = Dim(None, a_shape[1], a_shape[2])
-    
+
     if a_shape[2] > 1:
         replicated_dims[3] = Dim(None, a_shape[2], 1)
-    
+
     return replicated_dims
 
 
@@ -252,7 +252,7 @@ def gen_conv2d(term, cs_kernels, shapes):
 
         # find output layout after convolution
         output_dims = []
-        
+
         # Add output channel dimension if C_out > 1
         c_out = b_shape[0]
         if c_out > 1:
@@ -262,7 +262,7 @@ def gen_conv2d(term, cs_kernels, shapes):
                 if dim.dim and dim.dim > 0:  # Spatial dimensions (1, 2)
                     spatial_extent *= dim.extent
             output_dims.append(Dim(0, c_out, spatial_extent))
-        
+
         # Add remaining dimensions (spatial and any others)
         # For single output (C_out=1), just copy all dims from input
         # For multi-output (C_out>1), skip dimension 0 if it exists (input channels)
@@ -272,7 +272,7 @@ def gen_conv2d(term, cs_kernels, shapes):
                 if c_out > 1 and dim.dim == 0:
                     continue
                 output_dims.append(copy(dim))
-        
+
         output_layout = Layout(
             term,
             [],
