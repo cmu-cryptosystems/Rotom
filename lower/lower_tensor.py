@@ -1,4 +1,5 @@
 from ir.he import HEOp, HETerm
+from lower.layout_cts import LayoutCiphertexts
 from util.shape_util import get_term_shape, layout_to_shape_indices
 
 
@@ -17,8 +18,8 @@ def lower_tensor(kernel):
                 cts[i] = HETerm(HEOp.ZERO_MASK, [], False)
             else:
                 cts[i] = HETerm(HEOp.PACK, [layout], layout.secret, f"{i} {kernel}")
-        return cts
+        return LayoutCiphertexts(layout=layout, cts=cts)
 
     else:
         term = HETerm(HEOp.PACK, [layout], layout.secret, f"0 {kernel}")
-        return {0: term}
+        return LayoutCiphertexts(layout=layout, cts={0: term})

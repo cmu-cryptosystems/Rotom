@@ -1,4 +1,5 @@
 from ir.dim import DimType
+from lower.layout_cts import LayoutCiphertexts
 from lower.lower_util import rotate_and_sum
 from util.layout_util import align_dimension_extents, get_segments
 
@@ -6,6 +7,7 @@ from util.layout_util import align_dimension_extents, get_segments
 def lower_replicate(env, kernel):
     layout = kernel.layout
     cs = kernel.cs[0]
+    input_cts = env[cs]
 
     # 1. compare slot dimensions
     rotate_and_sums = []
@@ -24,12 +26,12 @@ def lower_replicate(env, kernel):
         mul_offset *= layout_dim.extent
 
     # 2. apply rotate_and_sum
-    replicated = env[cs].copy()
-    for index, term in env[cs].items():
+    replicated_cts = {}
+    for index, term in input_cts.items():
         base_term = term
         for extent, mul_offset in rotate_and_sums:
             base_term = rotate_and_sum(base_term, extent, mul_offset, True)
-        replicated[index] = base_term
+        replicated_cts[index] = base_term
 
     # 3. compare ct dimensions
     num_ct = layout.num_ct()
@@ -55,5 +57,5 @@ def lower_replicate(env, kernel):
 
     cts = {}
     for i, ct_index in enumerate(relevant_ct_indices):
-        cts[i] = replicated[ct_index]
-    return cts
+        cts[i] = replicated_cts[ct_index]
+    return LayoutCiphertexts(layout=kernel.layout, cts=cts)

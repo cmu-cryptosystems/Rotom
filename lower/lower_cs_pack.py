@@ -1,4 +1,5 @@
 from ir.he import HEOp, HETerm
+from lower.layout_cts import LayoutCiphertexts
 from util.layout_util import layout_to_ct_indices
 from util.shape_util import get_term_shape
 
@@ -18,10 +19,10 @@ def lower_cs_pack(kernel):
                 cts[i] = HETerm(
                     HEOp.CS_PACK, [kernel.cs[0], layout], layout.secret, f"{i} {kernel}"
                 )
-        return cts
+        return LayoutCiphertexts(layout=layout, cts=cts)
 
     else:
         term = HETerm(
             HEOp.CS_PACK, [kernel.cs[0], layout], layout.secret, f"0 {kernel}"
         )
-        return {0: term}
+        return LayoutCiphertexts(layout=layout, cts={0: term})

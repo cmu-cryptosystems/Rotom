@@ -230,6 +230,13 @@ class Layout:
                     # Handle replication dimension
                     extent = int(match.split(":")[1])
                     dims.append(Dim(None, extent, 1, DimType.FILL))
+                elif match.startswith("G:"):
+                    # Handle empty dimension
+                    extent = int(match.split(":")[1])
+                    dims.append(Dim(None, extent, 1, DimType.EMPTY))
+                else:
+                    # Handle regular dimension (e.g., [1:4:1])
+                    dims.append(Dim.parse(f"[{match}]"))
 
         # Parse slot dimensions
         slot_dim_matches = re.findall(r"\[([^\]]+)\]", dims_str)

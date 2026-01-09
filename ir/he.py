@@ -264,7 +264,6 @@ class HETerm:
                     instruction_strs.append(
                         f"{idx} {term.secret}: {kernel_env[layout_term][term.cs[0]]}"
                     )
-
                 case HEOp.MASK:
                     instruction_strs.append(
                         term.format_metadata(f"{idx} {term.secret}: mask {term.cs[0]}")
