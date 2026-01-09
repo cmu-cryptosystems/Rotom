@@ -69,7 +69,7 @@ def lower_conv2d(env, kernel):
     split_a_cs = split_lists(a_cs, i_h)
     split_b_cs = split_lists(b_cs, i_h)
 
-    # rotate b
+    # rotate b based on padding
     if padding == [0, 0, 1, 1]:
         new_splits = []
         for split in split_b_cs:
@@ -79,6 +79,14 @@ def lower_conv2d(env, kernel):
         split_b_cs = [
             split_b_cs[(i + 1) % len(split_b_cs)] for i in range(len(split_b_cs))
         ]
+    elif padding == [0, 1, 1, 1]:
+        # Multi-channel 3x3: bottom/left/right padding, rotate vertically only
+        split_b_cs = [
+            split_b_cs[(i + 1) % len(split_b_cs)] for i in range(len(split_b_cs))
+        ]
+    elif padding == [1, 1, 1, 1]:
+        # For symmetric padding, no rotation of b needed - filter is centered
+        pass
 
     # cts are split rolls
     # each ct can have either a length of 1, 2, or 4
@@ -98,7 +106,14 @@ def lower_conv2d(env, kernel):
             group.append(split)
         cts.append(group)
 
-    if padding == [0, 0, 0, 1]:
+    if padding == [0, 0, 0, 0]:
+        # 1x1 convolution - no padding, single element multiplication
+        # For 1x1 filter, we only need the first element (no rotation)
+        output_cts = {}
+        output_cts[0] = cts[0][0][0]
+
+    elif padding == [0, 0, 0, 1]:
+        # 2x2 filter - asymmetric padding (0 left, 1 right)
         # filter only relevant rotations
         filter_cts = cts[:f_h]
         for i in range(len(filter_cts)):
@@ -116,6 +131,7 @@ def lower_conv2d(env, kernel):
             output_cts[i] = left_rots[i]
 
     elif padding == [0, 0, 1, 1]:
+        # 3x3 filter - asymmetric padding (0 top/left, 1 bottom/right)
         # keep left masks
         left_rots = []
         for group in cts[: f_h - 1]:
@@ -142,6 +158,98 @@ def lower_conv2d(env, kernel):
         output_cts = {}
         for i in range(len(both)):
             output_cts[i] = both[i]
+
+    elif padding == [0, 1, 1, 1]:
+        # 3x3 filter - padding on bottom/left/right (multi-channel case)
+        # Similar to [0,0,1,1] but with bottom padding
+        # keep left masks
+        left_rots = []
+        for group in cts[:f_h]:
+            for split in group[: f_w - 1]:
+                left_rots.append(split[0])
+
+        # keep right masks
+        right_rots = []
+        for group in cts[:f_h]:
+            split = group[-1]
+            if len(split) == 2:
+                right_rots.append(split[-1])
+            elif len(split) == 4:
+                right_rots.append(split[-2])
+            else:
+                right_rots.append(split[0])
+
+        both = left_rots + right_rots
+
+        # flatten filtered list
+        output_cts = {}
+        for i in range(len(both)):
+            output_cts[i] = both[i]
+
+    elif padding == [1, 1, 1, 1]:
+        # 3x3 filter - symmetric padding (1 on all sides)
+        # Use same pattern as [0,0,1,1] asymmetric
+        # keep left masks
+        left_rots = []
+        for group in cts[: f_h - 1]:
+            for split in group[: f_w - 1]:
+                left_rots.append(split[0])
+
+        # keep right masks
+        right_rots = []
+        for group in cts[: f_h - 1]:
+            split = group[-1]
+            if len(split) == 2:
+                right_rots.append(split[-1])
+            elif len(split) == 4:
+                right_rots.append(split[-2])
+
+        group = cts[-1]
+        for i in range(f_h - 1):
+            right_rots.append(group[i][1])
+        right_rots.append(group[-1][-1])
+
+        both = left_rots + right_rots
+
+        # flatten filtered list
+        output_cts = {}
+        for i in range(len(both)):
+            output_cts[i] = both[i]
+
+    elif padding == [0, 0, 1, 2]:
+        # 4x4 filter - asymmetric padding (1 left, 2 right)
+        # Collect rotations for all 16 positions
+        all_rots = []
+
+        # First 3 rows
+        for i in range(f_h - 1):
+            # Columns 0-1: use rotation index 0
+            for j in range(2):
+                all_rots.append(cts[i][j][0])
+            # Column 2: use rotation index 1
+            split = cts[i][2]
+            all_rots.append(split[1] if len(split) > 1 else split[0])
+            # Column 3: use last rotation
+            split = cts[i][3]
+            all_rots.append(split[-1] if len(split) > 1 else split[0])
+
+        # Last row (row 3)
+        # Columns 0-1: use rotation index 1
+        for j in range(2):
+            split = cts[3][j]
+            all_rots.append(split[1] if len(split) > 1 else split[0])
+        # Column 2: use rotation index 2
+        split = cts[3][2]
+        all_rots.append(
+            split[2] if len(split) > 2 else (split[-1] if len(split) > 1 else split[0])
+        )
+        # Column 3: use last rotation
+        split = cts[3][3]
+        all_rots.append(split[-1] if len(split) > 1 else split[0])
+
+        output_cts = {}
+        for i in range(len(all_rots)):
+            output_cts[i] = all_rots[i]
     else:
         print(padding)
         raise NotImplementedError("different padding")
