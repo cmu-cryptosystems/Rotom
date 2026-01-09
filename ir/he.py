@@ -264,11 +264,6 @@ class HETerm:
                     instruction_strs.append(
                         f"{idx} {term.secret}: {kernel_env[layout_term][term.cs[0]]}"
                     )
-
-                    # instruction_strs.append(
-                    #     term.format_metadata(
-                    #         f"{idx} {term.secret}: cs_pack {term.cs[0]} ({term.cs[1].layout_str()})")
-                    # )
                 case HEOp.MASK:
                     instruction_strs.append(
                         term.format_metadata(f"{idx} {term.secret}: mask {term.cs[0]}")
@@ -281,31 +276,21 @@ class HETerm:
                     a = env[term.cs[0]]
                     b = env[term.cs[1]]
                     instruction_strs.append(f"{idx} {term.secret}: (+ {a} {b})")
-                    # instruction_strs.append(term.format_metadata(
-                    #     f"{idx} {term.secret}: (+ {a} {b})"))
                 case HEOp.SUB:
                     a = env[term.cs[0]]
                     b = env[term.cs[1]]
                     instruction_strs.append(f"{idx} {term.secret}: (- {a} {b})")
-                    # instruction_strs.append(term.format_metadata(
-                    #     f"{idx} {term.secret}: (- {a} {b})"))
                 case HEOp.MUL:
                     a = env[term.cs[0]]
                     b = env[term.cs[1]]
                     instruction_strs.append(f"{idx} {term.secret}: (* {a} {b})")
-                    # instruction_strs.append(term.format_metadata(
-                    #     f"{idx} {term.secret}: (* {a} {b})"))
                 case HEOp.ROT:
                     a = env[term.cs[0]]
                     b = str(term.cs[1])
                     instruction_strs.append(f"{idx} {term.secret}: (<< {a} {b})")
-                    # instruction_strs.append(term.format_metadata(
-                    #     f"{idx} {term.secret}: (<< {a} {b})"))
                 case HEOp.POLY:
                     a = env[term.cs[0]]
                     instruction_strs.append(f"{idx} {term.secret}: (poly {a})")
-                    # instruction_strs.append(term.format_metadata(
-                    #     f"{idx} {term.secret}: (poly {a})"))
                 case HEOp.RESCALE:
                     a = env[term.cs[0]]
                     b = term.cs[1]

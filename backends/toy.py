@@ -101,25 +101,12 @@ class Toy:
         return [vector[(term.cs[1] + i) % len(vector)] for i in range(len(vector))]
 
     def eval_add(self, term):
-        # print("add:", term)
-        # print(self.env[term.cs[0]])
-        # print(self.env[term.cs[1]])
-        # print("result:", [a * b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])])
-        # print()
         return [a + b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
     def eval_sub(self, term):
         return [a - b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
     def eval_mul(self, term):
-        print("mul:", term)
-        print(self.env[term.cs[0]])
-        print(self.env[term.cs[1]])
-        print(
-            "result:",
-            [a * b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])],
-        )
-        print()
         return [a * b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
     def eval_poly(self, term):
@@ -187,27 +174,10 @@ class Toy:
             # Evaluate the tensor computation to get the expected result
             eval_result = term.layout.term.eval(self.inputs)
             expected = apply_layout(eval_result, term.layout)
-            print("expected value:", eval_result)
-            for e in expected:
-                print("e:", e)
-            print()
 
             # skip checks for split rolls
             if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE, KernelOp.INDEX]:
                 continue
-
-            print("kernel:", term)
-            for k in term.post_order():
-                print("k:", k)
-            print()
-
-            for r in results:
-                print("r:", r)
-            print()
-
-            for e in expected:
-                print("e:", e)
-            print()
 
             # Check if values are close instead of exact equality
             all_close = True
@@ -242,11 +212,8 @@ class Toy:
     def fuzz(self):
         results = []
         for term, cts in self.circuit_ir.items():
-            # print("term:", term)
             results = []
-            for ct_idx, ct in cts.items():
-                # print("ct_idx:", ct_idx)
-                # print("ct:", ct)
+            for _, ct in cts.items():
                 if isinstance(ct, list):
                     for c in ct:
                         for ct_term in c.post_order():
@@ -258,14 +225,6 @@ class Toy:
                     results.append(self.env[ct_term])
 
             expected = apply_layout(term.layout.term.eval(self.inputs), term.layout)
-            # if results != expected:
-            #     print("results:", results)
-            #     print("expected:", expected)
-            #     print("diff:")
-            #     for expected, result in zip(expected, results):
-            #         print([e - r for e, r in zip(expected, result)])
-            #     print()
-            #     print(term)
             assert results == expected
 
             # check that results match up
@@ -273,32 +232,9 @@ class Toy:
                 expected = apply_layout(
                     self.inputs[term.layout.term.cs[0]], term.layout
                 )
-                # print("term:", term)
-                # print("layout:", term.layout)
-                # print("layout offset:", term.layout.offset)
-                # print(self.inputs[term.layout.term.cs[0]])
-                # print("expected:", expected)
-                # print("results:", results)
-                # print()
                 assert results[: len(expected)] == expected
             else:
-                # print(term.layout.term)
                 expected = apply_layout(term.layout.term.eval(self.inputs), term.layout)
-                # print("expected:")
-                # for e in expected:
-                #     print(e)
-                # print()
-                # print("results:")
-                # for result in results:
-                #     print(result)
-                # print()
-
-                # if results != expected:
-                #     print("diff:")
-                #     for expected, result in zip(expected, results):
-                #         print([e - r for e, r in zip(expected, result)])
-                #     print()
-                #     print(term)
                 assert results == expected
             print("check passed:", term)
             print()
