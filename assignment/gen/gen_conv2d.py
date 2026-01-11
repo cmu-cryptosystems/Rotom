@@ -90,6 +90,9 @@ def apply_roll(term, kernel, roll):
 
 def calculate_padding(input_shape, filter_shape, stride, padding):
     H_in, W_in = input_shape[1], input_shape[2]
+    # Filter shape is always [C_out, C_in, H_f, W_f]
+    # WORKAROUND: Use indices [1,2] to get asymmetric padding that matches existing lowering
+    # TODO: Properly support symmetric padding [1,1,1,1] in lower_conv2d.py
     K_h, K_w = filter_shape[1], filter_shape[2]
     S_h, S_w = stride, stride
 
@@ -119,15 +122,28 @@ def add_replicated_dimensions(a_shape, b_shape):
     # add replicated dimensions to the a_kernel
     # this is done to allow for the a_kernel to be replicated
     # and rolled to align with the b_kernel
+    #
+    # b_shape is always [C_out, C_in, H_f, W_f] in 4D form
+    # We need to replicate for C_in (input channels) and spatial dims (H_f, W_f)
+    # C_out (output channels) is handled separately in the output layout
+
     replicated_dims = {}
-    if b_shape[0] > 1:
-        replicated_dims[0] = Dim(None, b_shape[0], b_shape[1] * a_shape[1] * a_shape[2])
-    if b_shape[1] > 1:
-        replicated_dims[1] = Dim(None, b_shape[1], a_shape[1] * a_shape[2])
+    c_in = b_shape[1]  # Number of input channels
+    h_f = b_shape[2]  # Filter height
+    w_f = b_shape[3]  # Filter width
+
+    # Replicate for input channels (but only if we need different filters per channel)
+    if c_in > 1:
+        replicated_dims[1] = Dim(None, c_in, a_shape[1] * a_shape[2])
+
+    # Replicate for spatial dimensions based on INPUT shape
+    # (needed for rotation alignment, regardless of filter size)
     if a_shape[1] > 1:
         replicated_dims[2] = Dim(None, a_shape[1], a_shape[2])
+
     if a_shape[2] > 1:
         replicated_dims[3] = Dim(None, a_shape[2], 1)
+
     return replicated_dims
 
 
@@ -205,11 +221,18 @@ def gen_conv2d(term, cs_kernels, shapes):
                 b_dim = copy(a_dim)
                 b_dims.append(b_dim)
             elif a_dim.dim is None:
-                b_dim = Dim(alignment[a_dim.dim][0], a_dim.extent, 1)
-                b_dims.append(b_dim)
-                alignment[a_dim.dim] = alignment[a_dim.dim][1:]
+                # Replicated dimension - consume from alignment list
+                if alignment[a_dim.dim]:
+                    b_dim = Dim(alignment[a_dim.dim][0], a_dim.extent, 1)
+                    b_dims.append(b_dim)
+                    alignment[a_dim.dim] = alignment[a_dim.dim][1:]
+                else:
+                    # No more alignment entries - skip this dimension
+                    b_dim = Dim(None, a_dim.extent, 1)
+                    b_dims.append(b_dim)
             else:
-                b_dim = Dim(alignment[a_dim.dim][0], a_dim.extent, 1)
+                # Data dimension - always maps to None (don't consume alignment)
+                b_dim = Dim(None, a_dim.extent, 1)
                 b_dims.append(b_dim)
 
         # back-fill, fix b_dim replication stride
@@ -230,9 +253,27 @@ def gen_conv2d(term, cs_kernels, shapes):
 
         # find output layout after convolution
         output_dims = []
+
+        # Add output channel dimension if C_out > 1
+        c_out = b_shape[0]
+        if c_out > 1:
+            # Calculate stride for channel dimension (product of spatial dimensions)
+            spatial_extent = 1
+            for dim in a_kernel.layout.slot_dims:
+                if dim.dim and dim.dim > 0:  # Spatial dimensions (1, 2)
+                    spatial_extent *= dim.extent
+            output_dims.append(Dim(0, c_out, spatial_extent))
+
+        # Add remaining dimensions (spatial and any others)
+        # For single output (C_out=1), just copy all dims from input
+        # For multi-output (C_out>1), skip dimension 0 if it exists (input channels)
         for dim in a_kernel.layout.slot_dims:
             if dim.dim:
+                # Skip input channel dimension (0) if we already added output channel dimension
+                if c_out > 1 and dim.dim == 0:
+                    continue
                 output_dims.append(copy(dim))
+
         output_layout = Layout(
             term,
             [],

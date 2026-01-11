@@ -170,6 +170,7 @@ class Toy:
                         self.env[ct_term] = self.eval(ct_term)
                     results.append(self.env[ct_term])
 
+            print("expected layout:", term.layout)
             # Evaluate the tensor computation to get the expected result
             eval_result = term.layout.term.eval(self.inputs)
             expected = apply_layout(eval_result, term.layout)
@@ -212,7 +213,7 @@ class Toy:
         results = []
         for term, cts in self.circuit_ir.items():
             results = []
-            for ct_idx, ct in cts.items():
+            for _, ct in cts.items():
                 if isinstance(ct, list):
                     for c in ct:
                         for ct_term in c.post_order():
@@ -238,4 +239,21 @@ class Toy:
             print("check passed:", term)
             print()
 
+        return results
+
+    def fuzz(self):
+        results = []
+        for term, cts in self.circuit_ir.items():
+            print("term:", term)
+            results = []
+            for _, ct in cts.items():
+                if isinstance(ct, list):
+                    for c in ct:
+                        for ct_term in c.post_order():
+                            self.env[ct_term] = self.eval(ct_term)
+                        results.append(self.env[ct_term])
+                else:
+                    for ct_term in ct.post_order():
+                        self.env[ct_term] = self.eval(ct_term)
+                    results.append(self.env[ct_term])
         return results

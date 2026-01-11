@@ -540,11 +540,16 @@ class LayoutAssignment:
 
             # flatten kernel_shape
             kernel_shape = []
-            for i in range(max(kernel_shape_map.keys()) + 1):
-                if i not in kernel_shape_map:
-                    kernel_shape.append(1)
-                else:
-                    kernel_shape.append(kernel_shape_map[i])
+            if kernel_shape_map:
+                for i in range(max(kernel_shape_map.keys()) + 1):
+                    if i not in kernel_shape_map:
+                        kernel_shape.append(1)
+                    else:
+                        kernel_shape.append(kernel_shape_map[i])
+            else:
+                # No dimensions with actual dim indices (e.g., 1x1 convolution with only replicated dims)
+                # In this case, the kernel represents a broadcast/elementwise operation
+                kernel_shape = [1] * len(shape)
 
             for i, k in enumerate(kernel_shape):
                 if k != shape[i]:

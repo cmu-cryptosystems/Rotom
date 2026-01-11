@@ -340,7 +340,19 @@ def get_segment(dim, dims):
     return segments[dim_map[dim]]
 
 
-def get_cts_by_dim(cts, ct_dims, dim):
+def get_cts_by_dim(layout_cts, dim):
+    """Get ciphertext groups by dimension from LayoutCiphertexts.
+
+    Args:
+        layout_cts: LayoutCiphertexts object containing layout and ciphertexts
+        dim: Dim object to group by
+
+    Returns:
+        List of lists of HETerm objects, grouped by the dimension
+    """
+    # Access cts and layout from LayoutCiphertexts object
+    cts = layout_cts.cts
+    ct_dims = layout_cts.layout.ct_dims
     assert dim in ct_dims
     ct_dim_map = get_dim_map(ct_dims)
     ct_dim_index = ct_dim_map[dim]
