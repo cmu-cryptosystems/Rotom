@@ -91,9 +91,7 @@ def apply_roll(term, kernel, roll):
 def calculate_padding(input_shape, filter_shape, stride, padding):
     H_in, W_in = input_shape[1], input_shape[2]
     # Filter shape is always [C_out, C_in, H_f, W_f]
-    # WORKAROUND: Use indices [1,2] to get asymmetric padding that matches existing lowering
-    # TODO: Properly support symmetric padding [1,1,1,1] in lower_conv2d.py
-    K_h, K_w = filter_shape[1], filter_shape[2]
+    K_h, K_w = filter_shape[2], filter_shape[3]
     S_h, S_w = stride, stride
 
     if padding == "valid":
@@ -137,7 +135,6 @@ def add_replicated_dimensions(a_shape, b_shape):
         replicated_dims[1] = Dim(None, c_in, a_shape[1] * a_shape[2])
 
     # Replicate for spatial dimensions based on INPUT shape
-    # (needed for rotation alignment, regardless of filter size)
     if a_shape[1] > 1:
         replicated_dims[2] = Dim(None, a_shape[1], a_shape[2])
 
@@ -287,6 +284,33 @@ def gen_conv2d(term, cs_kernels, shapes):
         output_kernels.add(kernel)
     return output_kernels
 
+def add_replicated_dimensions_toeplitz(a_shape, b_shape):
+    # add replicated dimensions to the a_kernel
+    # this is done to allow for the a_kernel to be replicated
+    # and rolled to align with the b_kernel
+    #
+    # b_shape is always [C_out, C_in, H_f, W_f] in 4D form
+    # We need to replicate for C_in (input channels) and spatial dims (H_f, W_f)
+    # C_out (output channels) is handled separately in the output layout
+
+    replicated_dims = {}
+    c_in = b_shape[1]  # Number of input channels
+    h_f = b_shape[2]  # Filter height
+    w_f = b_shape[3]  # Filter width
+
+    # Replicate for input channels (but only if we need different filters per channel)
+    if c_in > 1:
+        replicated_dims[1] = Dim(None, c_in, a_shape[1] * a_shape[2])
+
+    # Replicate for spatial dimensions based on INPUT shape
+    if h_f > 1:
+        replicated_dims[2] = Dim(None, h_f, a_shape[2])
+
+    if w_f > 1:
+        replicated_dims[3] = Dim(None, w_f, 1)
+
+    return replicated_dims
+
 
 def gen_conv2d_toeplitz(term, cs_kernels, shapes):
     # assumption is that a_kernel (input) is secret and b_kernel (weights) is public
@@ -317,13 +341,19 @@ def gen_conv2d_toeplitz(term, cs_kernels, shapes):
     # - This should be: the output channel, dimension 0 (height), dimension 1 (width) (depending on stride and padding)
     # Step 4: Create the layout and kernel
 
-    
     a_shape = shapes[0]
     b_shape = shapes[1]
 
     # find padding
     padding = calculate_padding(a_shape, b_shape, term.cs[2], term.cs[3])
     term.cs.append(padding)
+
+    b_term = term.cs[1]
+
+    # add a_shape, b_shape, and padding to the b_term
+    b_term.cs.append(a_shape)
+    b_term.cs.append(b_shape)
+    b_term.cs.append(padding)
 
     output_kernels = set()
     for a_kernel in cs_kernels:
@@ -332,7 +362,7 @@ def gen_conv2d_toeplitz(term, cs_kernels, shapes):
             continue
 
         # add replication dimensions to the a_kernel
-        replicated_dims = add_replicated_dimensions(a_shape, b_shape)
+        replicated_dims = add_replicated_dimensions_toeplitz(a_shape, b_shape)
 
         for dim in replicated_dims:
             a_kernel = apply_replication(term.cs[0], a_kernel, replicated_dims[dim])
@@ -340,16 +370,23 @@ def gen_conv2d_toeplitz(term, cs_kernels, shapes):
         # since b is public, we can create a cs_kernel for b
         # and add metada information to help with packing the weights
         # into a toeplitz matrix
+
+        # if a dim is None, then b should be either the channel dimension or filter dimension 
+        # if a dim is >0, then b should be a repeated dimension 
         b_dims = []
-        b_dim_index = 0
+        b_dim_index = 1 if b_shape[1] > 1 else 2
+        r_offset = 1
+        # TODO: maybe use a dim_map to track extents instead
         for dim in a_kernel.layout.get_dims():
             if dim.dim is None and dim.dim_type == DimType.FILL:
                 b_dims.append(Dim(b_dim_index, dim.extent, 1))
                 b_dim_index += 1
             elif dim.dim_type == DimType.FILL:
-                b_dims.append(Dim(None, dim.extent, 1))
-        
-        b_layout = Layout(term.cs[1], [], b_dims, {}, a_kernel.layout.n, False)
+                b_dims.append(Dim(None, dim.extent, r_offset))
+                r_offset *= dim.extent
+
+
+        b_layout = Layout(b_term, [], b_dims, {}, a_kernel.layout.n, False)
         b_kernel = Kernel(KernelOp.TOEPLITZ_TENSOR, [], b_layout)
 
         # find output shape using Shape class

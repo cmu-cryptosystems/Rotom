@@ -13,6 +13,7 @@ from lower.lower_add import lower_add
 from lower.lower_combine import lower_combine
 from lower.lower_compact import lower_compact
 from lower.lower_conv2d import lower_conv2d
+from lower.lower_toeplitz_conv2d import lower_toeplitz_conv2d
 from lower.lower_conversion import lower_conversion
 from lower.lower_cs_pack import lower_cs_pack
 from lower.lower_index import lower_index
@@ -66,7 +67,7 @@ class Lower:
                 case KernelOp.CONV2D:
                     self.env[term] = lower_conv2d(self.env, term)
                 case KernelOp.TOEPLITZ_CONV2D:
-                    self.env[term] = lower_conv2d(self.env, term)
+                    self.env[term] = lower_toeplitz_conv2d(self.env, term)
                 case KernelOp.SUM:
                     self.env[term] = lower_sum(self.env, term)
                 case KernelOp.CONVERSION:

@@ -585,10 +585,35 @@ def apply_layout(pt_tensor, layout):
                         ct.append(0)
             else:
                 raise NotImplementedError("other tensor dimensions are not supported")
+
         # this places cts in row-major order
         cts.append(ct)
     return cts
 
+
+
+def apply_toeplitz_layout(pt_tensor, layout):
+    """apply a layout to a pt tensor"""
+    cts = apply_layout(pt_tensor, layout)
+
+    # make the toeplitz matrix holey!
+    rot_amts = []
+    a_shape = layout.term.cs[3]
+    b_shape = layout.term.cs[4]
+    padding = layout.term.cs[5]
+    for i in range(b_shape[2]):
+        for j in range(b_shape[3]):
+            rot_amts.append((i * a_shape[1] + j) % (a_shape[1] * a_shape[2]))
+    assert len(rot_amts) == len(cts)
+
+    for i in range(len(cts)):
+        rot_amt = rot_amts[i]
+        for j in range(len(cts[i])):
+            if j >= (a_shape[1] - rot_amt//a_shape[2]) * a_shape[1]:
+                cts[i][j] = 0
+            elif rot_amt % a_shape[2] and (j + rot_amt) % a_shape[2] == 0:
+                cts[i][j] = 0
+    return cts
 
 def parse_layout(layout_str, n, secret):
     import re

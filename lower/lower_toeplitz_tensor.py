@@ -16,25 +16,16 @@ def lower_toeplitz_tensor(kernel):
         dict: Dictionary mapping ciphertext indices to HETerm nodes
     """
     layout = kernel.layout
-
-    # get shape of term
-    layout_shape = get_term_shape(layout.term)
-
+    
     # evaluate ct dims
     if layout.ct_dims:
         cts = {}
         ct_indices = layout_to_shape_indices(layout)
-        for i, offset in enumerate(ct_indices):
-            if not all(a < b for a, b in zip(offset, layout_shape)):
-                cts[i] = HETerm(HEOp.ZERO_MASK, [], False)
-            else:
-                # For Toeplitz tensors, use TOEPLITZ_PACK operation (or PACK with special handling)
-                # This can be extended to use a different packing strategy for Toeplitz matrices
-                cts[i] = HETerm(HEOp.PACK, [layout], layout.secret, f"{i} {kernel} (toeplitz)")
+        for i, _ in enumerate(ct_indices):
+            cts[i] = HETerm(HEOp.TOEPLITZ_PACK, [layout], layout.secret, f"{i} {kernel} (toeplitz)")
         return cts
-
     else:
         # For Toeplitz tensors, use TOEPLITZ_PACK operation (or PACK with special handling)
         # This can be extended to use a different packing strategy for Toeplitz matrices
-        term = HETerm(HEOp.PACK, [layout], layout.secret, f"0 {kernel} (toeplitz)")
+        term = HETerm(HEOp.TOEPLITZ_PACK, [layout], layout.secret, f"0 {kernel} (toeplitz)")
         return {0: term}

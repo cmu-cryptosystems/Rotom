@@ -729,5 +729,6 @@ class TensorTerm:
         """
         env = {}
         for term in self.post_order():
+            print("term:", term)
             env[term] = term.eval_helper(env, inputs)
         return env[term]
