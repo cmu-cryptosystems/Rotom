@@ -1,5 +1,6 @@
 import numpy as np
-np.set_printoptions(legacy='1.25')
+
+np.set_printoptions(legacy="1.25")
 
 
 from frontends.tensor import TensorOp
@@ -76,8 +77,7 @@ class Toy:
         packing_idx = int(term.metadata.split()[0])
         return self.input_cache[(layout.term, layout)][packing_idx]
 
-    
-    def eval_pack_toeplitz(self, term):
+    def eval_pack_punctured(self, term):
         """
         Evaluate a pack operation for tensor data.
 
@@ -94,7 +94,7 @@ class Toy:
         if (layout.term, layout) not in self.input_cache:
             tensor = layout.term.eval(self.inputs)
             # apply layout to tensor
-            packed_tensor = apply_toeplitz_layout(tensor, layout)
+            packed_tensor = apply_punctured_layout(tensor, layout)
             self.input_cache[(layout.term, layout)] = packed_tensor
 
         # get packing index and return packed vector
@@ -164,8 +164,8 @@ class Toy:
                 return self.eval_mask(term)
             case HEOp.PACK:
                 return self.eval_pack(term)
-            case HEOp.TOEPLITZ_PACK:
-                return self.eval_pack_toeplitz(term)
+            case HEOp.PUNCTURED_PACK:
+                return self.eval_pack_punctured(term)
             case HEOp.CS_PACK:
                 return self.eval_cs_pack(term)
             case HEOp.INDICES:
@@ -206,10 +206,10 @@ class Toy:
             # Evaluate the tensor computation to get the expected result
             eval_result = term.layout.term.eval(self.inputs)
             print("eval_result:", eval_result)
-            print('term:', term)
-            print('term.layout:', term.layout)
-            if term.op == KernelOp.TOEPLITZ_TENSOR:
-                expected = apply_toeplitz_layout(eval_result, term.layout)
+            print("term:", term)
+            print("term.layout:", term.layout)
+            if term.op == KernelOp.PUNCTURED_TENSOR:
+                expected = apply_punctured_layout(eval_result, term.layout)
             else:
                 expected = apply_layout(eval_result, term.layout)
 
@@ -281,5 +281,3 @@ class Toy:
             print()
 
         return results
-
-    

@@ -45,7 +45,7 @@ class HEOp(Enum):
     CS = "CS"
     CS_PACK = "CS_PACK"
     PACK = "PACK"
-    TOEPLITZ_PACK = "TOEPLITZ_PACK"
+    PUNCTURED_PACK = "PUNCTURED_PACK"
     INDICES = "INDICES"
     ADD = "ADD"
     SUB = "SUB"
@@ -99,7 +99,12 @@ class HETerm:
             raise ValueError("Child terms must be a list, not a tuple")
 
         cs_hashes = [c.hash if isinstance(c, HETerm) else c for c in self.cs]
-        if self.op == HEOp.PACK or self.op == HEOp.CS_PACK or self.op == HEOp.CS or self.op == HEOp.TOEPLITZ_PACK:
+        if (
+            self.op == HEOp.PACK
+            or self.op == HEOp.CS_PACK
+            or self.op == HEOp.CS
+            or self.op == HEOp.PUNCTURED_PACK
+        ):
             self.hash = hash(f"{self.op}:{cs_hashes}:{self.metadata}")
         else:
             self.hash = hash(f"{self.op}:{cs_hashes}")
@@ -259,10 +264,10 @@ class HETerm:
                             f"{idx} {term.secret}: pack ({term.cs[0].layout_str()})"
                         )
                     )
-                case HEOp.TOEPLITZ_PACK:
+                case HEOp.PUNCTURED_PACK:
                     instruction_strs.append(
                         term.format_metadata(
-                            f"{idx} {term.secret}: toeplitz pack ({term.cs[0].layout_str()})"
+                            f"{idx} {term.secret}: punctured pack ({term.cs[0].layout_str()})"
                         )
                     )
                 case HEOp.CS_PACK:
@@ -339,7 +344,9 @@ class HETerm:
             return []
         seen.add(self)
         match self.op:
-            case HEOp.PACK | HEOp.TOEPLITZ_PACK | HEOp.INDICES | HEOp.CS | HEOp.CS_PACK:
+            case (
+                HEOp.PACK | HEOp.PUNCTURED_PACK | HEOp.INDICES | HEOp.CS | HEOp.CS_PACK
+            ):
                 return [self]
             case HEOp.ADD | HEOp.SUB | HEOp.MUL:
                 a = self.cs[0].helper_post_order(seen)

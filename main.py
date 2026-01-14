@@ -261,10 +261,10 @@ if __name__ == "__main__":
     parser.add_argument("--fuzz", action=BooleanOptionalAction, default=False)
     parser.add_argument("--fuzz_result", action=BooleanOptionalAction, default=False)
     parser.add_argument(
-        "--toeplitz",
+        "--conv_roll",
         action=BooleanOptionalAction,
         default=False,
-        help="Enable Toeplitz convolution for conv2d operations",
+        help="Use roll-based convolution for conv2d operations (default: use Toeplitz-based)",
     )
     parser.add_argument(
         "--not-secure",

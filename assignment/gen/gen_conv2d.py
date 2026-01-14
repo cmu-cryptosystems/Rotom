@@ -11,6 +11,8 @@ Key functions:
 - apply_roll: Applies roll operations for convolution alignment
 - calculate_padding: Calculates padding requirements for convolution
 - gen_conv2d: Main function for generating convolution layouts
+- gen_conv2d_roll: Main function for generating roll-based convolution layouts
+
 """
 
 from copy import deepcopy as copy
@@ -116,7 +118,7 @@ def calculate_padding(input_shape, filter_shape, stride, padding):
         raise NotImplementedError("unknown padding: " + padding)
 
 
-def add_replicated_dimensions(a_shape, b_shape):
+def add_replicated_dimensions_roll(a_shape, b_shape):
     # add replicated dimensions to the a_kernel
     # this is done to allow for the a_kernel to be replicated
     # and rolled to align with the b_kernel
@@ -144,7 +146,7 @@ def add_replicated_dimensions(a_shape, b_shape):
     return replicated_dims
 
 
-def gen_conv2d(term, cs_kernels, shapes):
+def gen_conv2d_roll(term, cs_kernels, shapes):
     # assumption is that a_kernel (input) is secret and b_kernel (weights) is public
     # the goal is to use rolls to align the a_kernel for summation
     # the b layout can then follow the same alignment as the a_kernel
@@ -167,7 +169,7 @@ def gen_conv2d(term, cs_kernels, shapes):
             continue
 
         # add replicated dimensions to the a_kernel
-        replicated_dims = add_replicated_dimensions(a_shape, b_shape)
+        replicated_dims = add_replicated_dimensions_roll(a_shape, b_shape)
 
         # map a_dims
         a_dim_map = {}
@@ -280,11 +282,12 @@ def gen_conv2d(term, cs_kernels, shapes):
             a_kernel.layout.secret,
         )
 
-        kernel = Kernel(KernelOp.CONV2D, [a_kernel, b_kernel], output_layout)
+        kernel = Kernel(KernelOp.CONV2D_ROLL, [a_kernel, b_kernel], output_layout)
         output_kernels.add(kernel)
     return output_kernels
 
-def add_replicated_dimensions_toeplitz(a_shape, b_shape):
+
+def add_replicated_dimensions(a_shape, b_shape):
     # add replicated dimensions to the a_kernel
     # this is done to allow for the a_kernel to be replicated
     # and rolled to align with the b_kernel
@@ -312,31 +315,29 @@ def add_replicated_dimensions_toeplitz(a_shape, b_shape):
     return replicated_dims
 
 
-def gen_conv2d_toeplitz(term, cs_kernels, shapes):
+def gen_conv2d(term, cs_kernels, shapes):
     # assumption is that a_kernel (input) is secret and b_kernel (weights) is public
-    # the goal is to use toeplitz convolution to compute the convolution
-    # 
+    #
     # Implementation goal:
-    # - gen_conv2d_toeplitz should analyze the input layout and determine the output layout 
-    # - lower_conv2d_toeplitz should convert the toeplitz convolution to a matrix-vector multiplication
-    # - lower_conv2d_toeplitz should determine the packing for the convolution, since the weights are public 
+    # - gen_conv2d should analyze the input layout and determine the output layout
+    # - lower_conv2d should convert the convolution to a matrix-vector multiplication
+    # - lower_conv2d should determine the packing for the convolution, since the weights are public
     #
     # Input layout:
     # - Input channel, dimension 1 (height), dimension 2 (width)
     # Filter layout:
-    # - Output channel, kernel dimension 1, kernel dimension 2 
+    # - Output channel, kernel dimension 1, kernel dimension 2
     # Stride:
-    # - Stride is either 1 or 2 
+    # - Stride is either 1 or 2
     # Padding:
     # - Padding is either valid or same
     # Output layout:
     # - Output channel, dimension 0 (height), dimension 1 (width) (depending on stride and padding)
 
-
     # The question is given any generalized input layout, how to figure out the summation dimensions and output layout?
-    # Step 1: Replicate the input layout to find dimension alignment 
+    # Step 1: Replicate the input layout to find dimension alignment
     # Step 2: Identify the summation dimensions:
-    # - This should be: the input channel, kernel dimension 0, kernel dimension 1 
+    # - This should be: the input channel, kernel dimension 0, kernel dimension 1
     # Step 3: Identify the output dimensions:
     # - This should be: the output channel, dimension 0 (height), dimension 1 (width) (depending on stride and padding)
     # Step 4: Create the layout and kernel
@@ -354,7 +355,7 @@ def gen_conv2d_toeplitz(term, cs_kernels, shapes):
     output_kernels = set()
     for a_kernel in cs_kernels:
         # enforce row-major layout
-        # sort dims by dim, ascending order 
+        # sort dims by dim, ascending order
         a_dims = a_kernel.layout.get_dims().copy()
         a_dims.sort(key=lambda x: x.dim)
         if sorted(a_dims) != a_kernel.layout.get_dims():
@@ -365,17 +366,16 @@ def gen_conv2d_toeplitz(term, cs_kernels, shapes):
             continue
 
         # add replication dimensions to the a_kernel
-        replicated_dims = add_replicated_dimensions_toeplitz(a_shape, b_shape)
+        replicated_dims = add_replicated_dimensions(a_shape, b_shape)
 
         for dim in replicated_dims:
             a_kernel = apply_replication(term.cs[0], a_kernel, replicated_dims[dim])
 
         # since b is public, we can create a cs_kernel for b
         # and add metada information to help with packing the weights
-        # into a toeplitz matrix
 
-        # if a dim is None, then b should be either the channel dimension or filter dimension 
-        # if a dim is >0, then b should be a repeated dimension 
+        # if a dim is None, then b should be either the channel dimension or filter dimension
+        # if a dim is >0, then b should be a repeated dimension
         b_dims = []
         b_index_order = []
         for dim in a_kernel.layout.get_dims():
@@ -383,7 +383,7 @@ def gen_conv2d_toeplitz(term, cs_kernels, shapes):
                 b_index_order.append(2)
             if dim.dim == 2:
                 b_index_order.append(3)
-        
+
         b_dim_index = 0
         r_offset = 1
         # TODO: maybe use a dim_map to track extents instead
@@ -396,25 +396,27 @@ def gen_conv2d_toeplitz(term, cs_kernels, shapes):
                 r_offset *= dim.extent
 
         b_layout = Layout(b_term, [], b_dims, {}, a_kernel.layout.n, False)
-        b_kernel = Kernel(KernelOp.TOEPLITZ_TENSOR, [], b_layout)
+        b_kernel = Kernel(KernelOp.PUNCTURED_TENSOR, [], b_layout)
 
-        # Output layout: 
-        # - the output layout should just pass the height and width forward from the input layout 
-        # - if there are gap-slots open in the layout, then we should compact the output channels 
+        # Output layout:
+        # - the output layout should just pass the height and width forward from the input layout
+        # - if there are gap-slots open in the layout, then we should compact the output channels
         output_dims = []
         for a_dim, b_dim in zip(a_kernel.layout.get_dims(), b_kernel.layout.get_dims()):
             if a_dim.dim is not None and a_dim.dim > 0:
                 output_dims.append(a_dim)
             elif b_dim.dim == 0:
                 output_dims.append(b_dim)
-            elif a_dim.dim == 0: 
+            elif a_dim.dim == 0:
                 output_dims.append(Dim(None, a_dim.extent, 1, DimType.EMPTY))
             else:
                 output_dims.append(Dim(None, a_dim.extent, 1, DimType.EMPTY))
-        output_layout = Layout(term, [], output_dims, {}, a_kernel.layout.n, a_kernel.layout.secret)
+        output_layout = Layout(
+            term, [], output_dims, {}, a_kernel.layout.n, a_kernel.layout.secret
+        )
 
         # TODO: this should work with bsgs matmul later
-        kernel = Kernel(KernelOp.TOEPLITZ_CONV2D, [a_kernel, b_kernel], output_layout)
+        kernel = Kernel(KernelOp.CONV2D, [a_kernel, b_kernel], output_layout)
         output_kernels.add(kernel)
 
         # TODO: add compaction or masking for stride here.

@@ -65,7 +65,7 @@ class CircuitSerializer:
             else:
                 # Handle legacy format where it's already a dict
                 he_terms_dict = layout_cts
-            
+
             # Generate filename for this kernel
             kernel_file = f"{self.circuit_name}_kernel_{kernel_idx}.txt"
             kernel_path = os.path.join(self.output_dir, kernel_file)
