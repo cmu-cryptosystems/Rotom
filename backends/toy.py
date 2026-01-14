@@ -134,6 +134,9 @@ class Toy:
         return [a - b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
     def eval_mul(self, term):
+        print("term.cs[0]:", self.env[term.cs[0]])
+        print("term.cs[1]:", self.env[term.cs[1]])
+        print()
         return [a * b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
     def eval_poly(self, term):

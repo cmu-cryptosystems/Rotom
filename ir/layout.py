@@ -1,5 +1,6 @@
 """Layout class for packing tensor elements into HE vectors."""
 
+import math
 import re
 
 from ir.dim import Dim, DimType
@@ -80,6 +81,14 @@ class Layout:
                 self.slot_dims.insert(0, dim)
         if n > 1:
             self.slot_dims.insert(0, Dim.parse(f"G:{n}"))
+
+        # remove empty dimensions from ct_dims 
+        self.ct_dims = [dim for dim in self.ct_dims if dim.dim_type != DimType.EMPTY]
+
+        # assert slot dimensions have powers of two extents
+        for dim in self.slot_dims:
+            assert math.log2(dim.extent).is_integer() 
+            assert math.log2(dim.stride).is_integer()
 
         # assert no duplicate dimensions are added
         seen_dims = set()

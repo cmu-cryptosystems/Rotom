@@ -14,5 +14,6 @@ def get_default_args():
     parser.fuzz = False
     parser.fuzz_result = False
     parser.not_secure = False
+    parser.toeplitz = False
     parser.fn = ""
     return parser

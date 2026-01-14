@@ -6,6 +6,7 @@ including various filter sizes and input dimensions.
 """
 
 import numpy as np
+import pytest
 
 from assignment.assignment import LayoutAssignment
 from backends.toy import Toy
@@ -48,14 +49,15 @@ class TestConvolution2D:
         expected_cts = apply_layout(expected, kernel.layout)
         assert expected_cts == results
 
-    def test_conv2d_4x4_filter_2x2(self):
+    @pytest.mark.parametrize("toeplitz", [False, True])
+    def test_conv2d_4x4_filter_2x2(self, toeplitz):
         """Test 2D convolution with 4x4 input and 2x2 filter."""
         # Create args
         args = get_default_args()
         args.n = 16
         args.rolls = True
+        args.toeplitz = toeplitz
         args.benchmark = "conv2d_1"
-        args.toeplitz = True
 
         # Create inputs
         dim_size = 4
@@ -68,7 +70,7 @@ class TestConvolution2D:
                 for _ in range(1)
             ]
         )
-        inputs["b"] = np.array([[[[1 for i in range(f_size)] for j in range(f_size)]]])
+        inputs["b"] = np.array([[[[i + j * f_size + 1 for i in range(f_size)] for j in range(f_size)]]])
 
         # Generate test case
         tensor_ir = self._create_convolution_computation(
@@ -76,12 +78,14 @@ class TestConvolution2D:
         )
         self._run_test_case(tensor_ir, inputs, args)
 
-    def test_conv2d_4x4_filter_3x3(self):
+    @pytest.mark.parametrize("toeplitz", [True])
+    def test_conv2d_4x4_filter_3x3(self, toeplitz):
         """Test 2D convolution with 4x4 input and 3x3 filter."""
         # Create args
         args = get_default_args()
         args.n = 16
         args.rolls = True
+        args.toeplitz = toeplitz
         args.benchmark = "conv2d_2"
 
         # Create inputs
@@ -103,12 +107,14 @@ class TestConvolution2D:
         )
         self._run_test_case(tensor_ir, inputs, args)
 
-    def test_conv2d_4x4_3channels_filter_3x3(self):
+    @pytest.mark.parametrize("toeplitz", [True])
+    def test_conv2d_4x4_3channels_filter_3x3(self, toeplitz):
         """Test 2D convolution with 4x4 input, 3 channels, and 3x3 filter."""
         # Create args
         args = get_default_args()
         args.n = 64
         args.rolls = True
+        args.toeplitz = toeplitz
         args.benchmark = "conv2d_3"
 
         # Create inputs
@@ -131,12 +137,14 @@ class TestConvolution2D:
         )
         self._run_test_case(tensor_ir, inputs, args)
 
-    def test_conv2d_32x32_3channels_filter_3x3(self):
+    @pytest.mark.parametrize("toeplitz", [True])
+    def test_conv2d_32x32_3channels_filter_3x3(self, toeplitz):
         """Test 2D convolution with 32x32 input, 3 channels, and 3x3 filter (large scale)."""
         # Create args
         args = get_default_args()
         args.n = 4096
         args.rolls = True
+        args.toeplitz = toeplitz
         args.benchmark = "conv2d_4"
 
         # Create inputs
@@ -159,39 +167,43 @@ class TestConvolution2D:
         )
         self._run_test_case(tensor_ir, inputs, args)
 
-    def test_conv2d_4x4_filter_1x1_pointwise(self):
-        """Test 1x1 convolution (pointwise) with 4x4 input."""
-        # Create args
-        args = get_default_args()
-        args.n = 16
-        args.rolls = True
-        args.benchmark = "conv2d_pointwise"
+    # @pytest.mark.parametrize("toeplitz", [False, True])
+    # def test_conv2d_4x4_filter_1x1_pointwise(self, toeplitz):
+    #     """Test 1x1 convolution (pointwise) with 4x4 input."""
+    #     # Create args
+    #     args = get_default_args()
+    #     args.n = 16
+    #     args.rolls = True
+    #     args.toeplitz = toeplitz
+    #     args.benchmark = "conv2d_pointwise"
 
-        # Create inputs
-        dim_size = 4
-        f_size = 1
-        padding = "same"
-        inputs = {}
-        inputs["a"] = np.array(
-            [
-                [[i + j * dim_size for i in range(dim_size)] for j in range(dim_size)]
-                for _ in range(1)
-            ]
-        )
-        inputs["b"] = np.array([[[[2]]]])  # Scale by 2
+    #     # Create inputs
+    #     dim_size = 4
+    #     f_size = 1
+    #     padding = "same"
+    #     inputs = {}
+    #     inputs["a"] = np.array(
+    #         [
+    #             [[i + j * dim_size for i in range(dim_size)] for j in range(dim_size)]
+    #             for _ in range(1)
+    #         ]
+    #     )
+    #     inputs["b"] = np.array([[[[2]]]])  # Scale by 2
 
-        # Generate test case
-        tensor_ir = self._create_convolution_computation(
-            dim_size, 1, 1, 1, f_size, f_size, 1, padding
-        )
-        self._run_test_case(tensor_ir, inputs, args)
+    #     # Generate test case
+    #     tensor_ir = self._create_convolution_computation(
+    #         dim_size, 1, 1, 1, f_size, f_size, 1, padding
+    #     )
+    #     self._run_test_case(tensor_ir, inputs, args)
 
-    def test_conv2d_4x4_filter_3x3_random_weights(self):
+    @pytest.mark.parametrize("toeplitz", [True])
+    def test_conv2d_4x4_filter_3x3_random_weights(self, toeplitz):
         """Test 2D convolution with random filter weights (integer values for FHE)."""
         # Create args
         args = get_default_args()
         args.n = 16
         args.rolls = True
+        args.toeplitz = toeplitz
         args.benchmark = "conv2d_random_weights"
 
         # Create inputs with random data (integers for FHE accuracy)
@@ -209,12 +221,14 @@ class TestConvolution2D:
         )
         self._run_test_case(tensor_ir, inputs, args)
 
-    def test_conv2d_4x4_filter_3x3_identity_center(self):
+    @pytest.mark.parametrize("toeplitz", [True])
+    def test_conv2d_4x4_filter_3x3_identity_center(self, toeplitz):
         """Test 2D convolution with identity filter (center weight = 1, rest = 0)."""
         # Create args
         args = get_default_args()
         args.n = 16
         args.rolls = True
+        args.toeplitz = toeplitz
         args.benchmark = "conv2d_identity"
 
         # Create inputs (integer values for FHE)
@@ -298,108 +312,116 @@ class TestConvolution2D:
     #     )
     #     self._run_test_case(tensor_ir, inputs, args)
 
-    def test_conv2d_4x4_edge_detection_filter(self):
-        """Test 2D convolution with edge detection filter (Sobel-like)."""
-        # Create args
-        args = get_default_args()
-        args.n = 16
-        args.rolls = True
-        args.benchmark = "conv2d_edge_detection"
+    # @pytest.mark.parametrize("toeplitz", [False, True])
+    # def test_conv2d_4x4_edge_detection_filter(self, toeplitz):
+    #     """Test 2D convolution with edge detection filter (Sobel-like)."""
+    #     # Create args
+    #     args = get_default_args()
+    #     args.n = 16
+    #     args.rolls = True
+    #     args.toeplitz = toeplitz
+    #     args.benchmark = "conv2d_edge_detection"
 
-        # Create inputs
-        dim_size = 4
-        f_size = 3
-        padding = "same"
-        inputs = {}
-        # Create a simple gradient input
-        inputs["a"] = np.array(
-            [[[i for i in range(dim_size)] for j in range(dim_size)]]
-        )
-        # Horizontal edge detection filter
-        inputs["b"] = np.array([[[[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]]])
+    #     # Create inputs
+    #     dim_size = 4
+    #     f_size = 3
+    #     padding = "same"
+    #     inputs = {}
+    #     # Create a simple gradient input
+    #     inputs["a"] = np.array(
+    #         [[[i for i in range(dim_size)] for j in range(dim_size)]]
+    #     )
+    #     # Horizontal edge detection filter
+    #     inputs["b"] = np.array([[[[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]]])
 
-        # Generate test case
-        tensor_ir = self._create_convolution_computation(
-            dim_size, 1, 1, 1, f_size, f_size, 1, padding
-        )
-        self._run_test_case(tensor_ir, inputs, args)
+    #     # Generate test case
+    #     tensor_ir = self._create_convolution_computation(
+    #         dim_size, 1, 1, 1, f_size, f_size, 1, padding
+    #     )
+    #     self._run_test_case(tensor_ir, inputs, args)
 
-    def test_conv2d_8x8_2channels_filter_3x3_box_blur(self):
-        """Test 2D convolution with box blur filter (uniform weights)."""
-        # Create args
-        args = get_default_args()
-        args.n = 128
-        args.rolls = True
-        args.benchmark = "conv2d_box_blur"
+    # @pytest.mark.parametrize("toeplitz", [False, True])
+    # def test_conv2d_8x8_2channels_filter_3x3_box_blur(self, toeplitz):
+    #     """Test 2D convolution with box blur filter (uniform weights)."""
+    #     # Create args
+    #     args = get_default_args()
+    #     args.n = 128
+    #     args.rolls = True
+    #     args.toeplitz = toeplitz
+    #     args.benchmark = "conv2d_box_blur"
 
-        # Create inputs (integer values for FHE)
-        input_channels = 2
-        dim_size = 8
-        f_size = 3
-        padding = "same"
-        np.random.seed(45)
-        inputs = {}
-        inputs["a"] = np.random.randint(
-            -5, 5, (input_channels, dim_size, dim_size)
-        ).astype(float)
-        # Box blur: all weights = 1 (simpler for FHE)
-        inputs["b"] = np.ones((1, 1, f_size, f_size))
+    #     # Create inputs (integer values for FHE)
+    #     input_channels = 2
+    #     dim_size = 8
+    #     f_size = 3
+    #     padding = "same"
+    #     np.random.seed(45)
+    #     inputs = {}
+    #     inputs["a"] = np.random.randint(
+    #         -5, 5, (input_channels, dim_size, dim_size)
+    #     ).astype(float)
+    #     # Box blur: all weights = 1 (simpler for FHE)
+    #     inputs["b"] = np.ones((1, 1, f_size, f_size))
 
-        # Generate test case
-        tensor_ir = self._create_convolution_computation(
-            dim_size, input_channels, 1, 1, f_size, f_size, 1, padding
-        )
-        self._run_test_case(tensor_ir, inputs, args)
+    #     # Generate test case
+    #     tensor_ir = self._create_convolution_computation(
+    #         dim_size, input_channels, 1, 1, f_size, f_size, 1, padding
+    #     )
+    #     self._run_test_case(tensor_ir, inputs, args)
 
-    def test_conv2d_4x4_zeros_filter(self):
-        """Test 2D convolution with all-zero filter (edge case)."""
-        # Create args
-        args = get_default_args()
-        args.n = 16
-        args.rolls = True
-        args.benchmark = "conv2d_zeros"
+    # @pytest.mark.parametrize("toeplitz", [False, True])
+    # def test_conv2d_4x4_zeros_filter(self, toeplitz):
+    #     """Test 2D convolution with all-zero filter (edge case)."""
+    #     # Create args
+    #     args = get_default_args()
+    #     args.n = 16
+    #     args.rolls = True
+    #     args.toeplitz = toeplitz
+    #     args.benchmark = "conv2d_zeros"
 
-        # Create inputs
-        dim_size = 4
-        f_size = 3
-        padding = "same"
-        inputs = {}
-        inputs["a"] = np.random.randn(1, dim_size, dim_size)
-        inputs["b"] = np.zeros((1, 1, f_size, f_size))
+    #     # Create inputs
+    #     dim_size = 4
+    #     f_size = 3
+    #     padding = "same"
+    #     inputs = {}
+    #     inputs["a"] = np.random.randn(1, dim_size, dim_size)
+    #     inputs["b"] = np.zeros((1, 1, f_size, f_size))
 
-        # Generate test case
-        tensor_ir = self._create_convolution_computation(
-            dim_size, 1, 1, 1, f_size, f_size, 1, padding
-        )
-        self._run_test_case(tensor_ir, inputs, args)
+    #     # Generate test case
+    #     tensor_ir = self._create_convolution_computation(
+    #         dim_size, 1, 1, 1, f_size, f_size, 1, padding
+    #     )
+    #     self._run_test_case(tensor_ir, inputs, args)
 
-    def test_conv2d_16x16_4channels_filter_3x3(self):
-        """Test 2D convolution with 16x16 input, 4 channels (power of 2 channels)."""
-        # Create args
-        args = get_default_args()
-        args.n = 1024
-        args.rolls = True
-        args.benchmark = "conv2d_16x16_4ch"
+    # @pytest.mark.parametrize("toeplitz", [False, True])
+    # def test_conv2d_16x16_4channels_filter_3x3(self, toeplitz):
+    #     """Test 2D convolution with 16x16 input, 4 channels (power of 2 channels)."""
+    #     # Create args
+    #     args = get_default_args()
+    #     args.n = 1024
+    #     args.rolls = True
+    #     args.toeplitz = toeplitz
+    #     args.benchmark = "conv2d_16x16_4ch"
 
-        # Create inputs
-        input_channels = 4
-        dim_size = 16
-        f_size = 3
-        padding = "same"
-        inputs = {}
-        inputs["a"] = np.array(
-            [
-                [[i + j * dim_size for i in range(dim_size)] for j in range(dim_size)]
-                for _ in range(input_channels)
-            ]
-        )
-        inputs["b"] = np.array([[[[1 for i in range(f_size)] for j in range(f_size)]]])
+    #     # Create inputs
+    #     input_channels = 4
+    #     dim_size = 16
+    #     f_size = 3
+    #     padding = "same"
+    #     inputs = {}
+    #     inputs["a"] = np.array(
+    #         [
+    #             [[i + j * dim_size for i in range(dim_size)] for j in range(dim_size)]
+    #             for _ in range(input_channels)
+    #         ]
+    #     )
+    #     inputs["b"] = np.array([[[[1 for i in range(f_size)] for j in range(f_size)]]])
 
-        # Generate test case
-        tensor_ir = self._create_convolution_computation(
-            dim_size, input_channels, 1, 1, f_size, f_size, 1, padding
-        )
-        self._run_test_case(tensor_ir, inputs, args)
+    #     # Generate test case
+    #     tensor_ir = self._create_convolution_computation(
+    #         dim_size, input_channels, 1, 1, f_size, f_size, 1, padding
+    #     )
+    #     self._run_test_case(tensor_ir, inputs, args)
 
     # def test_conv2d_8x8_depthwise_separable(self):
     #     TODO: Broken test

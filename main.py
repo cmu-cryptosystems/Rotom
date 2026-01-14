@@ -33,7 +33,6 @@ from benchmarks.rotom_benchmarks.matmul.matmul_128_128 import matmul_128_128
 # Import Rotom
 from frontends.tensor import TensorTerm
 from ir.dim import *
-from ir.kernel_cost import KernelCost
 from ir.layout import *
 from lower.circuit_serializer import serialize_circuit
 from lower.lower import Lower

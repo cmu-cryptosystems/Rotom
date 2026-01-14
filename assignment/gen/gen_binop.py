@@ -72,6 +72,7 @@ def get_fill_len(dims):
 def match_kernel_dims(a_kernel, b_kernel):
     if len(a_kernel) < len(b_kernel):
         diff = len(b_kernel) // len(a_kernel)
+        print("diff: ", diff)
         # find stride:
         stride = 1
         for dim in a_kernel.layout.get_dims():
@@ -80,17 +81,7 @@ def match_kernel_dims(a_kernel, b_kernel):
         dim = Dim(None, diff, stride, DimType.EMPTY)
         new_dims = a_kernel.layout.get_dims()
         new_dims.insert(0, dim)
-        new_layout = Layout(
-            a_kernel.layout.term,
-            a_kernel.layout.rolls,
-            new_dims,
-            a_kernel.layout.offset,
-            a_kernel.layout.n,
-            a_kernel.layout.secret,
-        )
-        new_a_kernel = copy(a_kernel)
-        new_a_kernel.layout = new_layout
-        a_kernel = new_a_kernel
+        return new_dims, b_kernel.layout.get_dims()
     elif len(b_kernel) < len(a_kernel):
         diff = len(a_kernel) // len(b_kernel)
 
@@ -103,28 +94,17 @@ def match_kernel_dims(a_kernel, b_kernel):
         dim = Dim(None, diff, stride, DimType.EMPTY)
         new_dims = b_kernel.layout.get_dims()
         new_dims.insert(0, dim)
-        new_layout = Layout(
-            b_kernel.layout.term,
-            b_kernel.layout.rolls,
-            new_dims,
-            b_kernel.layout.offset,
-            b_kernel.layout.n,
-            b_kernel.layout.secret,
-        )
-        new_b_kernel = copy(b_kernel)
-        new_b_kernel.layout = new_layout
-        b_kernel = new_b_kernel
-    assert len(a_kernel) == len(b_kernel)
-    return a_kernel, b_kernel
+        return a_kernel.layout.get_dims(), new_dims
+    return a_kernel.layout.get_dims(), b_kernel.layout.get_dims()
 
 
 def replicate_dimensions(a_kernel, b_kernel, shapes, alignment):
     # match kernel lengths
-    a_kernel, b_kernel = match_kernel_dims(a_kernel, b_kernel)
+    a_dims, b_dims = match_kernel_dims(a_kernel, b_kernel)
 
     # figure out how much replication is needed
-    a_fill_len = get_fill_len(a_kernel.layout.get_dims())
-    b_fill_len = get_fill_len(b_kernel.layout.get_dims())
+    a_fill_len = get_fill_len(a_dims)
+    b_fill_len = get_fill_len(b_dims)
     fill_len = max(a_fill_len, b_fill_len)
 
     # replication should be based on the alignment of the term
@@ -1376,34 +1356,6 @@ def apply_sum_rolls(term, replicated_kernels):
 def gen_binop(term, cs_kernels, shapes, roll_flag):
     # get alignment
     alignment = get_dim_alignment(term, shapes)
-
-    # TODO: remove this
-    # # fast path:
-    # if term.op == TensorOp.ADD:
-    #     replicated_kernels = []
-    #     for a in cs_kernels[0][:5]:
-    #         for b in cs_kernels[1][:5]:
-    #             a_cs_placeholder = Kernel(KernelOp.CS, [0], cs_kernels[0][0].layout)
-    #             b_cs_placeholder = Kernel(KernelOp.CS, [1], cs_kernels[1][0].layout)
-    #             replicated_kernels.append(tuple(
-    #                         replicate_dimensions(
-    #                             a_cs_placeholder, b_cs_placeholder, shapes, alignment
-    #                         )
-    #                     )
-    #                 )
-    #     output_kernels = set()
-    #     for kernels in replicated_kernels:
-    #         if check_alignment(term, alignment, kernels[0], kernels[1]):
-    #             output_kernel = output_layout(
-    #                 term, alignment, kernels[0], kernels[1]
-    #             )
-    #             # if not output_kernel.layout.rolls:
-    #                 # compacted_kernel = find_compaction(output_kernel)
-    #                 # output_kernels.add(compacted_kernel)
-    #             output_kernels.add(output_kernel)
-
-    #         if output_kernels:
-    #             return output_kernels
 
     # replicate dimensions such that tensor dimensions match in extent
     replicated_kernels = []

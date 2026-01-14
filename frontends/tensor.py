@@ -562,6 +562,8 @@ class TensorTerm:
         """
         input_shape = input_tensor.shape
         filter_shape = filter_tensor.shape
+        print("input tensor", input_tensor)
+        print("filter tensor", filter_tensor)
         if padding == "valid":
             h_o = (input_shape[1] - filter_shape[2]) // stride + 1
             w_o = (input_shape[2] - filter_shape[3]) // stride + 1
@@ -620,6 +622,7 @@ class TensorTerm:
                         output_tensor[out_c][i][j] += int(
                             np.sum(patch * filter_tensor[out_c])
                         )
+        
         return output_tensor
 
     def eval_helper(self, env, inputs):

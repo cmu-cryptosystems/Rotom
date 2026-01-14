@@ -11,6 +11,7 @@ import os
 from typing import Any, Dict
 
 from ir.he import HETerm
+from lower.layout_cts import LayoutCiphertexts
 
 
 class CircuitSerializer:
@@ -43,7 +44,7 @@ class CircuitSerializer:
         Also creates a manifest file describing all kernels.
 
         Args:
-            circuit_ir: Circuit IR from Lower.run() - dict mapping kernel_terms to {ct_idx: HETerm}
+            circuit_ir: Circuit IR from Lower.run() - dict mapping kernel_terms to LayoutCiphertexts
 
         Returns:
             Dictionary mapping kernel indices to file paths
@@ -57,7 +58,14 @@ class CircuitSerializer:
 
         # Process each kernel term from the circuit_ir
         kernel_idx = 0
-        for kernel_term, he_terms_dict in circuit_ir.items():
+        for kernel_term, layout_cts in circuit_ir.items():
+            # Extract the ciphertexts dictionary from LayoutCiphertexts
+            if isinstance(layout_cts, LayoutCiphertexts):
+                he_terms_dict = layout_cts.cts
+            else:
+                # Handle legacy format where it's already a dict
+                he_terms_dict = layout_cts
+            
             # Generate filename for this kernel
             kernel_file = f"{self.circuit_name}_kernel_{kernel_idx}.txt"
             kernel_path = os.path.join(self.output_dir, kernel_file)

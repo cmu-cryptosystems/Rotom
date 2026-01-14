@@ -259,7 +259,7 @@ class HETerm:
                             f"{idx} {term.secret}: pack ({term.cs[0].layout_str()})"
                         )
                     )
-                case HEOp.TOEPLITZ_PACKPACK:
+                case HEOp.TOEPLITZ_PACK:
                     instruction_strs.append(
                         term.format_metadata(
                             f"{idx} {term.secret}: toeplitz pack ({term.cs[0].layout_str()})"

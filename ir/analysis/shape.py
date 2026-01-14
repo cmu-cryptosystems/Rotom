@@ -84,7 +84,7 @@ class Shape:
                 return a_shape + [
                     round_to_ceiling_power_of_2(s) for s in term.cs[2].values()
                 ]
-            case TensorOp.CONV2D | TensorOp.CONV2D_TOEPLITZ:
+            case TensorOp.CONV2D:
                 a_shape = copy(self.padded_shapes[term.cs[0]])
                 b_shape = copy(self.padded_shapes[term.cs[1]])
 
@@ -181,7 +181,7 @@ class Shape:
                 a_shape = copy(self.get_shape(a))
                 assert len(a_shape) == 2
                 return [a_shape[1], a_shape[0]]
-            case TensorOp.CONV2D | TensorOp.CONV2D_TOEPLITZ:
+            case TensorOp.CONV2D:
                 a = term.cs[0]
                 b = term.cs[1]
                 a_shape = copy(self.get_shape(a))

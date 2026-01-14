@@ -31,19 +31,73 @@ def lower_toeplitz_conv2d(env, kernel):
     a_shape = get_term_shape(kernel.cs[0].layout.term)
     b_shape = get_term_shape(kernel.cs[1].layout.term)
 
-    # HACK: assume row-major packing, rotate a accordingly
-    rot_amt = []
+    pad_top = kernel.layout.term.cs[4][0]
+    pad_bottom = kernel.layout.term.cs[4][1]
+    pad_left = kernel.layout.term.cs[4][2]
+    pad_right = kernel.layout.term.cs[4][3]
+
+
+    # calculate rotation amounts for input ciphertexts
+    # assumes dim 1 and 2 are continuous and in the slot dimensions
+    rot_amts = []
+    dim_map = []
+    offset = 1 
+    for dim in kernel.cs[0].layout.get_dims()[::-1]:
+        if dim.dim == 1 or dim.dim == 2:
+            dim_map.append((dim.dim, dim.extent, offset))
+        offset *= dim.extent
+   
+    dim_map = dim_map[::-1]
+   
+    rot_amts = []
+    print(kernel.cs[0].layout)
+    print(dim_map)
+
+    # find rotational offset from padding
+    rot_offset = -pad_top * dim_map[0][2] - pad_left
+
     for i in range(b_shape[2]):
         for j in range(b_shape[3]):
-            rot_amt.append((i * a_shape[1] + j) % (a_shape[1] * a_shape[2]))
+            rot_0 = i * dim_map[0][2]
+            rot_1 = j * dim_map[1][2]
+            rot_amts.append(rot_0 + rot_1 + rot_offset)   
+    print(rot_amts)     
+    # exit(0)
+
+    masks = []
+    for i in range(b_shape[2]):
+        for j in range(b_shape[3]):
+            rot_0 = i * dim_map[0][2]
+            rot_1 = j * dim_map[1][2]
+            segment_0 = dim_map[0][1] * dim_map[0][2]
+            segment_1 = dim_map[1][1] * dim_map[1][2]
+            mask = [1] * kernel.cs[0].layout.n
+            for k in range(kernel.cs[0].layout.n // segment_0):
+                for l in range(segment_0):
+                    if not 0 <= l + rot_0 - (pad_top * dim_map[0][2]) < segment_0:
+                        mask[k * segment_0 + l] = 0
+
+            for k in range(kernel.cs[0].layout.n // segment_1):
+                for l in range(segment_1):
+                    if not 0 <= l + rot_1 - pad_left < segment_1:
+                        mask[k * segment_1 + l] = 0
+            masks.append(mask)
+
+    for mask in masks:
+        print(mask)
+
+    kernel.cs[1].layout.term.cs.append(masks)   
+    kernel.cs[1].layout.term.cs.append(rot_amts)  
     
-    assert len(rot_amt) == len(a_cs)
-    for i in range(len(a_cs)):
-        a_cs[i] = a_cs[i] << rot_amt[i]
+
+    # rotate a_cs by rot_amt
+    a_rot_cs = []
+    for i in range(len(rot_amts)):
+        a_rot_cs.append(a_cs[i] << rot_amts[i])
 
     # calculate the multiplications between ct
     cts = {}
-    for i, (a, b) in enumerate(zip(a_cs, b_cs)):
+    for i, (a, b) in enumerate(zip(a_rot_cs, b_cs[:len(a_rot_cs)])):
         mul_term = a * b
         cts[i] = mul_term
 
@@ -73,12 +127,19 @@ def lower_toeplitz_conv2d(env, kernel):
                 sum_cts[i] = base
 
             # Create new layout without the summed dimension
+            print("ct_sum_dim", ct_sum_dim)
+            print("layout_cts.layout", layout_cts.layout)
             new_layout = create_layout_without_dims(layout_cts.layout, [ct_sum_dim])
+            print("new_layout", new_layout)
             layout_cts = LayoutCiphertexts(layout=new_layout, cts=sum_cts)
 
         # sum together slot dimensions per ciphertext
+        print("slot_sum_dims", slot_sum_dims)
+        print("layout_cts.layout.slot_dims", layout_cts.layout.slot_dims)
         for slot_sum_dim in slot_sum_dims:
+            print("slot_sum_dim", slot_sum_dim)
             segment = get_segment(slot_sum_dim, layout_cts.layout.slot_dims)
+            print("segment", segment)
             extent = segment[1]
             mul_offset = segment[2]
             summed_cts = {}
@@ -87,6 +148,7 @@ def lower_toeplitz_conv2d(env, kernel):
 
             # Create new layout without the summed dimension
             new_layout = create_layout_without_dims(layout_cts.layout, [slot_sum_dim])
+            print('new_layout', new_layout)
             layout_cts = LayoutCiphertexts(layout=new_layout, cts=summed_cts)
 
     # mask out gap dimensions
@@ -102,9 +164,9 @@ def lower_toeplitz_conv2d(env, kernel):
         for index, term in layout_cts.cts.items():
             mask_term = term * mask
             masked_cts[index] = mask_term
-        layout_cts = LayoutCiphertexts(layout=kernel.layout, cts=masked_cts)
+        layout_cts = LayoutCiphertexts(layout=layout_cts.layout, cts=masked_cts)
     else:
         # Update layout to output layout if no mask needed
-        layout_cts = LayoutCiphertexts(layout=kernel.layout, cts=layout_cts.cts)
+        layout_cts = LayoutCiphertexts(layout=layout_cts.layout, cts=layout_cts.cts)
 
     return layout_cts

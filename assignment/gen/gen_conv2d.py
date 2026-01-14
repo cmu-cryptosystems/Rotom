@@ -15,7 +15,6 @@ Key functions:
 
 from copy import deepcopy as copy
 
-from ir.analysis.shape import Shape
 from ir.dim import Dim, DimType
 from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
@@ -89,8 +88,9 @@ def apply_roll(term, kernel, roll):
 
 
 def calculate_padding(input_shape, filter_shape, stride, padding):
+    # Input shape: [C_in, H_in, W_in]
     H_in, W_in = input_shape[1], input_shape[2]
-    # Filter shape is always [C_out, C_in, H_f, W_f]
+    # Filter shape: [C_out, C_in, H_f, W_f]
     K_h, K_w = filter_shape[2], filter_shape[3]
     S_h, S_w = stride, stride
 
@@ -349,14 +349,17 @@ def gen_conv2d_toeplitz(term, cs_kernels, shapes):
     term.cs.append(padding)
 
     b_term = term.cs[1]
-
-    # add a_shape, b_shape, and padding to the b_term
-    b_term.cs.append(a_shape)
-    b_term.cs.append(b_shape)
     b_term.cs.append(padding)
 
     output_kernels = set()
     for a_kernel in cs_kernels:
+        # enforce row-major layout
+        # sort dims by dim, ascending order 
+        a_dims = a_kernel.layout.get_dims().copy()
+        a_dims.sort(key=lambda x: x.dim)
+        if sorted(a_dims) != a_kernel.layout.get_dims():
+            continue
+
         # assumes that a layout does not have any rolls applied to it
         if a_kernel.layout.rolls:
             continue
@@ -374,36 +377,41 @@ def gen_conv2d_toeplitz(term, cs_kernels, shapes):
         # if a dim is None, then b should be either the channel dimension or filter dimension 
         # if a dim is >0, then b should be a repeated dimension 
         b_dims = []
-        b_dim_index = 1 if b_shape[1] > 1 else 2
+        b_index_order = []
+        for dim in a_kernel.layout.get_dims():
+            if dim.dim == 1:
+                b_index_order.append(2)
+            if dim.dim == 2:
+                b_index_order.append(3)
+        
+        b_dim_index = 0
         r_offset = 1
         # TODO: maybe use a dim_map to track extents instead
         for dim in a_kernel.layout.get_dims():
             if dim.dim is None and dim.dim_type == DimType.FILL:
-                b_dims.append(Dim(b_dim_index, dim.extent, 1))
+                b_dims.append(Dim(b_index_order[b_dim_index], dim.extent, 1))
                 b_dim_index += 1
             elif dim.dim_type == DimType.FILL:
                 b_dims.append(Dim(None, dim.extent, r_offset))
                 r_offset *= dim.extent
 
-
         b_layout = Layout(b_term, [], b_dims, {}, a_kernel.layout.n, False)
         b_kernel = Kernel(KernelOp.TOEPLITZ_TENSOR, [], b_layout)
 
-        # find output shape using Shape class
-        output_shape = get_term_shape(term)        
-        output_dim_map= {}
-        for dim, extent in enumerate(output_shape):
-            output_dim_map[dim] = Dim(dim, extent, 1)
-        
         # Output layout: 
         # - the output layout should just pass the height and width forward from the input layout 
         # - if there are gap-slots open in the layout, then we should compact the output channels 
         output_dims = []
-        for dim in a_kernel.layout.get_dims():
-            if dim.dim in output_dim_map:
-                output_dims.append(output_dim_map[dim.dim])
+        for a_dim, b_dim in zip(a_kernel.layout.get_dims(), b_kernel.layout.get_dims()):
+            if a_dim.dim is not None and a_dim.dim > 0:
+                output_dims.append(a_dim)
+            elif b_dim.dim == 0:
+                output_dims.append(b_dim)
+            elif a_dim.dim == 0: 
+                output_dims.append(Dim(None, a_dim.extent, 1, DimType.EMPTY))
+            else:
+                output_dims.append(Dim(None, a_dim.extent, 1, DimType.EMPTY))
         output_layout = Layout(term, [], output_dims, {}, a_kernel.layout.n, a_kernel.layout.secret)
-
 
         # TODO: this should work with bsgs matmul later
         kernel = Kernel(KernelOp.TOEPLITZ_CONV2D, [a_kernel, b_kernel], output_layout)
