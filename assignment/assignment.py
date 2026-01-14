@@ -23,7 +23,7 @@ from re import L
 
 from assignment.gen.gen_binop import gen_binop
 from assignment.gen.gen_block_matmul import gen_block_matmul
-from assignment.gen.gen_conv2d import gen_conv2d
+from assignment.gen.gen_conv2d import gen_conv2d, gen_conv2d_roll
 from assignment.gen.gen_index import gen_index
 from assignment.gen.gen_permute import gen_permute
 from assignment.gen.gen_rescale import gen_rescale
@@ -96,6 +96,9 @@ class LayoutAssignment:
         self.fuzz_result = (
             args.fuzz_result if args and hasattr(args, "fuzz_result") else False
         )
+        self.conv_roll = (
+            args.conv_roll if args and hasattr(args, "conv_roll") else False
+        )
         self.fuzzer = Fuzz(self.n)
         self.fn = args.fn if args and hasattr(args, "fn") else "default"
 
@@ -145,7 +148,10 @@ class LayoutAssignment:
             case TensorOp.CONV2D:
                 assert self.roll_flag
                 cs_shapes = self.get_unpadded_cs_shapes(term)
-                kernels = gen_conv2d(term, cs_kernels[0], cs_shapes)
+                if self.conv_roll:
+                    kernels = gen_conv2d_roll(term, cs_kernels[0], cs_shapes)
+                else:
+                    kernels = gen_conv2d(term, cs_kernels[0], cs_shapes)
             case TensorOp.RESHAPE:
                 kernels = gen_reshape(term, cs_kernels[0])
             case TensorOp.PERMUTE:

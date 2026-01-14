@@ -29,7 +29,7 @@ class KernelOp(Enum):
     Operation Categories:
         Tensor ops: TENSOR, CS, CONST, ADD, SUB, MUL, SUM, PRODUCT
         Matrix ops: MATMUL, BLOCK_MATMUL, BSGS_MATMUL, STRASSEN_MATMUL
-        Convolution: TOEPLITZ_CONV2D, CONV2D
+        Convolution: CONV2D, CONV2D_ROLL
         Polynomial: POLY
         Conversions: CONVERSION
         Replications: REPLICATE
@@ -40,6 +40,7 @@ class KernelOp(Enum):
 
     # tensor ops
     TENSOR = "TENSOR"
+    PUNCTURED_TENSOR = "PUNCTURED_TENSOR"
     CS = "CS"
     CONST = "CONST"
     ADD = "ADD"
@@ -51,8 +52,8 @@ class KernelOp(Enum):
     BLOCK_MATMUL = "BLOCK_MATMUL"
     BSGS_MATMUL = "BSGS_MATMUL"
     STRASSEN_MATMUL = "STRASSENS"
-    TOEPLITZ_CONV2D = "TOEPLITZ_CONV2D"
     CONV2D = "CONV2D"
+    CONV2D_ROLL = "CONV2D_ROLL"
     # poly
     POLY = "POLY"
     # conversions
@@ -110,7 +111,7 @@ class Kernel:
             str: Human-readable representation of the kernel
         """
         layout = dimension_merging(self.layout)
-        if self.op == KernelOp.TENSOR:
+        if self.op == KernelOp.TENSOR or self.op == KernelOp.PUNCTURED_TENSOR:
             return f"{self.op}: {self.layout.term.cs[0]} {layout.layout_str()}"
         else:
             return f"{self.op}: {layout.layout_str()}"
@@ -173,7 +174,12 @@ class Kernel:
         if self in seen:
             return [], seen
         match self.op:
-            case KernelOp.TENSOR | KernelOp.CONST | KernelOp.CS:
+            case (
+                KernelOp.TENSOR
+                | KernelOp.PUNCTURED_TENSOR
+                | KernelOp.CONST
+                | KernelOp.CS
+            ):
                 seen.add(self)
                 return [self], seen
             case KernelOp.SUM | KernelOp.PRODUCT | KernelOp.INDEX | KernelOp.RESCALE:

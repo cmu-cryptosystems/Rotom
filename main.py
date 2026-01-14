@@ -33,7 +33,6 @@ from benchmarks.rotom_benchmarks.matmul.matmul_128_128 import matmul_128_128
 # Import Rotom
 from frontends.tensor import TensorTerm
 from ir.dim import *
-from ir.kernel_cost import KernelCost
 from ir.layout import *
 from lower.circuit_serializer import serialize_circuit
 from lower.lower import Lower
@@ -261,6 +260,12 @@ if __name__ == "__main__":
     parser.add_argument("--mock", action=BooleanOptionalAction, default=False)
     parser.add_argument("--fuzz", action=BooleanOptionalAction, default=False)
     parser.add_argument("--fuzz_result", action=BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--conv_roll",
+        action=BooleanOptionalAction,
+        default=False,
+        help="Use roll-based convolution for conv2d operations",
+    )
     parser.add_argument(
         "--not-secure",
         action=BooleanOptionalAction,

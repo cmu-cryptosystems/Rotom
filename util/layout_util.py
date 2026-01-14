@@ -1,5 +1,7 @@
 from copy import copy as copy
 
+from _pytest._py.error import R
+
 from ir.dim import Dim, DimType
 from ir.layout import Layout
 from ir.roll import Roll
@@ -585,8 +587,22 @@ def apply_layout(pt_tensor, layout):
                         ct.append(0)
             else:
                 raise NotImplementedError("other tensor dimensions are not supported")
+
         # this places cts in row-major order
         cts.append(ct)
+    return cts
+
+
+def apply_punctured_layout(pt_tensor, layout):
+    """apply a layout to a pt tensor"""
+    cts = apply_layout(pt_tensor, layout)
+
+    # make the punctured matrix holey!
+    masks = layout.term.cs[4]
+    assert len(cts) == len(masks)
+
+    for i in range(len(cts)):
+        cts[i] = [c * m for c, m in zip(cts[i], masks[i])]
     return cts
 
 

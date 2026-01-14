@@ -5,21 +5,134 @@ import numpy as np
 from ir.analysis.shape import Shape
 from ir.dim import DimType
 from ir.he import HEOp, HETerm
-from lower.layout_cts import LayoutCiphertexts
-from lower.lower_util import rotate_and_sum
-from util.layout_util import convert_layout_to_mask, get_segment
-from util.util import split_lists
+from lower.layout_cts import LayoutCiphertexts, create_layout_without_dims
+from lower.lower_util import find_sum_dim, rotate_and_sum
+from util.layout_util import convert_layout_to_mask, get_cts_by_dim, get_segment
+from util.shape_util import get_term_shape
 
 
-def sum_slot_dim(kernel, ct, slot_sum_dims):
-    # sum together slot dimensions per ciphertext
-    slot_dims = kernel.cs[0].layout.slot_dims
-    if slot_sum_dims:
+def lower_conv2d(env, kernel):
+    """Lower CONV2D kernel to circuit IR."""
+    a_cts = env[kernel.cs[0]]
+    b_cts = env[kernel.cs[1]]
+    assert a_cts.keys() == b_cts.keys()
+
+    shape = Shape(kernel.layout.term)
+    shape.run()
+
+    # This should be a matrix-vector multiplication
+
+    # create cs pointers
+    a_cs = [HETerm(HEOp.CS, [ct], ct.secret) for ct in a_cts.values()]
+    b_cs = [HETerm(HEOp.CS, [ct], ct.secret) for ct in b_cts.values()]
+
+    # rotate a based a_shape
+    a_shape = get_term_shape(kernel.cs[0].layout.term)
+    b_shape = get_term_shape(kernel.cs[1].layout.term)
+
+    pad_top = kernel.layout.term.cs[4][0]
+    pad_bottom = kernel.layout.term.cs[4][1]
+    pad_left = kernel.layout.term.cs[4][2]
+    pad_right = kernel.layout.term.cs[4][3]
+
+    # calculate rotation amounts for input ciphertexts
+    # assumes dim 1 and 2 are continuous and in the slot dimensions
+    rot_amts = []
+    dim_map = []
+    offset = 1
+    for dim in kernel.cs[0].layout.get_dims()[::-1]:
+        if dim.dim == 1 or dim.dim == 2:
+            dim_map.append((dim.dim, dim.extent, offset))
+        offset *= dim.extent
+
+    dim_map = dim_map[::-1]
+
+    rot_amts = []
+
+    # find rotational offset from padding
+    rot_offset = -pad_top * dim_map[0][2] - pad_left
+
+    for i in range(b_shape[2]):
+        for j in range(b_shape[3]):
+            rot_0 = i * dim_map[0][2]
+            rot_1 = j * dim_map[1][2]
+            rot_amts.append(rot_0 + rot_1 + rot_offset)
+
+    masks = []
+    for i in range(b_shape[2]):
+        for j in range(b_shape[3]):
+            rot_0 = i * dim_map[0][2]
+            rot_1 = j * dim_map[1][2]
+            segment_0 = dim_map[0][1] * dim_map[0][2]
+            segment_1 = dim_map[1][1] * dim_map[1][2]
+            mask = [1] * kernel.cs[0].layout.n
+            for k in range(kernel.cs[0].layout.n // segment_0):
+                for l in range(segment_0):
+                    if not 0 <= l + rot_0 - (pad_top * dim_map[0][2]) < segment_0:
+                        mask[k * segment_0 + l] = 0
+
+            for k in range(kernel.cs[0].layout.n // segment_1):
+                for l in range(segment_1):
+                    if not 0 <= l + rot_1 - pad_left < segment_1:
+                        mask[k * segment_1 + l] = 0
+            masks.append(mask)
+
+    kernel.cs[1].layout.term.cs.append(masks)
+    kernel.cs[1].layout.term.cs.append(rot_amts)
+
+    # rotate a_cs by rot_amt
+    a_rot_cs = []
+    for i in range(len(rot_amts)):
+        a_rot_cs.append(a_cs[i] << rot_amts[i])
+
+    # calculate the multiplications between ct
+    cts = {}
+    for i, (a, b) in enumerate(zip(a_rot_cs, b_cs[: len(a_rot_cs)])):
+        mul_term = a * b
+        cts[i] = mul_term
+
+    # Create initial layout_cts with input layout
+    layout_cts = LayoutCiphertexts(layout=kernel.cs[0].layout, cts=cts)
+
+    # find summing dimension
+    # the sum dimension should be the 0th dimension of kernel.cs[0]
+    # the sum dimension also should be the 0th and 1st dimension of kernel.cs[1]
+    sum_dims = [(0, 0), (0, None)]
+    for sum_dim in sum_dims:
+        (ct_sum_dims, slot_sum_dims) = find_sum_dim(
+            kernel.cs[sum_dim[0]].layout, sum_dim[1]
+        )
+        if not ct_sum_dims and not slot_sum_dims:
+            continue
+
+        # sum together ciphertexts
+        for ct_sum_dim in ct_sum_dims:
+            ct_groups = get_cts_by_dim(layout_cts, ct_sum_dim)
+
+            # sum within group
+            sum_cts = {}
+            for i, group in enumerate(ct_groups):
+                base = group[0]
+                for j in range(1, len(group)):
+                    base = base + group[j]
+                sum_cts[i] = base
+
+            # Create new layout without the summed dimension
+            new_layout = create_layout_without_dims(layout_cts.layout, [ct_sum_dim])
+            layout_cts = LayoutCiphertexts(layout=new_layout, cts=sum_cts)
+
+        # sum together slot dimensions per ciphertext
         for slot_sum_dim in slot_sum_dims:
-            segment = get_segment(slot_sum_dim, slot_dims)
+            segment = get_segment(slot_sum_dim, layout_cts.layout.slot_dims)
             extent = segment[1]
             mul_offset = segment[2]
-            ct = rotate_and_sum(ct, extent, mul_offset)
+            summed_cts = {}
+            for index, term in layout_cts.cts.items():
+                summed_cts[index] = rotate_and_sum(term, extent, mul_offset)
+
+            # Create new layout without the summed dimension
+            new_layout = create_layout_without_dims(layout_cts.layout, [slot_sum_dim])
+            layout_cts = LayoutCiphertexts(layout=new_layout, cts=summed_cts)
 
     # mask out gap dimensions
     needs_mask = False
@@ -29,253 +142,14 @@ def sum_slot_dim(kernel, ct, slot_sum_dims):
             break
 
     if needs_mask:
-        mask = HETerm(
-            HEOp.MASK, [convert_layout_to_mask(kernel.layout)], False, "output mask"
-        )
-        mask_term = ct * mask
-        return mask_term
-    return ct
-
-
-def lower_conv2d(env, kernel):
-    """same as a normal mul, but with filtering rules"""
-    a_cts = env[kernel.cs[0]]
-    b_cts = env[kernel.cs[1]]
-    assert a_cts.keys() == b_cts.keys()
-
-    print("kernel", kernel)
-    for k in kernel.post_order():
-        print("k", k)
-
-    shape = Shape(kernel.layout.term)
-    shape.run()
-
-    # figure out filters
-    padding = kernel.layout.term.cs[4]
-    a_shape = shape.shapes[kernel.layout.term.cs[0]]
-    b_shape = shape.shapes[kernel.layout.term.cs[1]]
-    i_c = a_shape[0]
-    i_h = a_shape[1]
-    i_w = a_shape[2]
-    assert i_h == i_w
-    f_o = b_shape[0]
-    f_i = b_shape[1]
-    f_h = b_shape[2]
-    f_w = b_shape[3]
-
-    # a_cs is a list of cts
-    # Note: split_roll returns dict with list values, but LayoutCiphertexts has single HETerm values
-    a_cs = []
-    for cts_item in a_cts.values():
-        # Handle both list (from split_roll) and single HETerm (from LayoutCiphertexts)
-        if isinstance(cts_item, list):
-            cts_list = cts_item
-        else:
-            cts_list = [cts_item]
-        a_cts_list = []
-        for ct in cts_list:
-            a_cts_list.append(HETerm(HEOp.CS, [ct], ct.secret))
-        a_cs.append(a_cts_list)
-    b_cs = [HETerm(HEOp.CS, [ct], ct.secret) for ct in b_cts.values()]
-
-    split_a_cs = split_lists(a_cs, i_h)
-    split_b_cs = split_lists(b_cs, i_h)
-
-    # rotate b based on padding
-    if padding == [0, 0, 1, 1]:
-        new_splits = []
-        for split in split_b_cs:
-            rot_split = [split[(i + 1) % len(split)] for i in range(len(split))]
-            new_splits.append(rot_split)
-        split_b_cs = new_splits
-        split_b_cs = [
-            split_b_cs[(i + 1) % len(split_b_cs)] for i in range(len(split_b_cs))
-        ]
-    elif padding == [0, 1, 1, 1]:
-        # Multi-channel 3x3: bottom/left/right padding, rotate vertically only
-        split_b_cs = [
-            split_b_cs[(i + 1) % len(split_b_cs)] for i in range(len(split_b_cs))
-        ]
-    elif padding == [1, 1, 1, 1]:
-        # For symmetric padding, no rotation of b needed - filter is centered
-        pass
-
-    # cts are split rolls
-    # each ct can have either a length of 1, 2, or 4
-    # if 1: then there's no rotation applied
-    # if 2: then there's a left and right rotation applied
-    # if 4: then there's a ll, lr, rl, rr rotation applied
-    total = []
-    cts = []
-    for i in range(i_h):
-        a_splits = split_a_cs[i]
-        group = []
-        for j in range(len(a_splits)):
-            split = []
-            for k in range(len(a_splits[j])):
-                total.append(a_splits[j][k] * split_b_cs[i][j])
-                split.append(a_splits[j][k] * split_b_cs[i][j])
-            group.append(split)
-        cts.append(group)
-
-    if padding == [0, 0, 0, 0]:
-        # 1x1 convolution - no padding, single element multiplication
-        # For 1x1 filter, we only need the first element (no rotation)
-        output_cts = {}
-        output_cts[0] = cts[0][0][0]
-
-    elif padding == [0, 0, 0, 1]:
-        # 2x2 filter - asymmetric padding (0 left, 1 right)
-        # filter only relevant rotations
-        filter_cts = cts[:f_h]
-        for i in range(len(filter_cts)):
-            filter_cts[i] = filter_cts[i][:f_w]
-
-        # keep only left masks
-        left_rots = []
-        for ct in filter_cts:
-            for c in ct:
-                left_rots.append(c[0])
-
-        # flatten filtered list
-        output_cts = {}
-        for i in range(len(left_rots)):
-            output_cts[i] = left_rots[i]
-
-    elif padding == [0, 0, 1, 1]:
-        # 3x3 filter - asymmetric padding (0 top/left, 1 bottom/right)
-        # keep left masks
-        left_rots = []
-        for group in cts[: f_h - 1]:
-            for split in group[: f_w - 1]:
-                left_rots.append(split[0])
-
-        # keep right masks
-        right_rots = []
-        for group in cts[: f_h - 1]:
-            split = group[-1]
-            if len(split) == 2:
-                right_rots.append(split[-1])
-            elif len(split) == 4:
-                right_rots.append(split[-2])
-
-        group = cts[-1]
-        for i in range(f_h - 1):
-            right_rots.append(group[i][1])
-        right_rots.append(group[-1][-1])
-
-        both = left_rots + right_rots
-
-        # flatten filtered list
-        output_cts = {}
-        for i in range(len(both)):
-            output_cts[i] = both[i]
-
-    elif padding == [0, 1, 1, 1]:
-        # 3x3 filter - padding on bottom/left/right (multi-channel case)
-        # Similar to [0,0,1,1] but with bottom padding
-        # keep left masks
-        left_rots = []
-        for group in cts[:f_h]:
-            for split in group[: f_w - 1]:
-                left_rots.append(split[0])
-
-        # keep right masks
-        right_rots = []
-        for group in cts[:f_h]:
-            split = group[-1]
-            if len(split) == 2:
-                right_rots.append(split[-1])
-            elif len(split) == 4:
-                right_rots.append(split[-2])
-            else:
-                right_rots.append(split[0])
-
-        both = left_rots + right_rots
-
-        # flatten filtered list
-        output_cts = {}
-        for i in range(len(both)):
-            output_cts[i] = both[i]
-
-    elif padding == [1, 1, 1, 1]:
-        # 3x3 filter - symmetric padding (1 on all sides)
-        # Use same pattern as [0,0,1,1] asymmetric
-        # keep left masks
-        left_rots = []
-        for group in cts[: f_h - 1]:
-            for split in group[: f_w - 1]:
-                left_rots.append(split[0])
-
-        # keep right masks
-        right_rots = []
-        for group in cts[: f_h - 1]:
-            split = group[-1]
-            if len(split) == 2:
-                right_rots.append(split[-1])
-            elif len(split) == 4:
-                right_rots.append(split[-2])
-
-        group = cts[-1]
-        for i in range(f_h - 1):
-            right_rots.append(group[i][1])
-        right_rots.append(group[-1][-1])
-
-        both = left_rots + right_rots
-
-        # flatten filtered list
-        output_cts = {}
-        for i in range(len(both)):
-            output_cts[i] = both[i]
-
-    elif padding == [0, 0, 1, 2]:
-        # 4x4 filter - asymmetric padding (1 left, 2 right)
-        # Collect rotations for all 16 positions
-        all_rots = []
-
-        # First 3 rows
-        for i in range(f_h - 1):
-            # Columns 0-1: use rotation index 0
-            for j in range(2):
-                all_rots.append(cts[i][j][0])
-            # Column 2: use rotation index 1
-            split = cts[i][2]
-            all_rots.append(split[1] if len(split) > 1 else split[0])
-            # Column 3: use last rotation
-            split = cts[i][3]
-            all_rots.append(split[-1] if len(split) > 1 else split[0])
-
-        # Last row (row 3)
-        # Columns 0-1: use rotation index 1
-        for j in range(2):
-            split = cts[3][j]
-            all_rots.append(split[1] if len(split) > 1 else split[0])
-        # Column 2: use rotation index 2
-        split = cts[3][2]
-        all_rots.append(
-            split[2] if len(split) > 2 else (split[-1] if len(split) > 1 else split[0])
-        )
-        # Column 3: use last rotation
-        split = cts[3][3]
-        all_rots.append(split[-1] if len(split) > 1 else split[0])
-
-        output_cts = {}
-        for i in range(len(all_rots)):
-            output_cts[i] = all_rots[i]
+        mask = HETerm.mask([convert_layout_to_mask(kernel.layout)])
+        masked_cts = {}
+        for index, term in layout_cts.cts.items():
+            mask_term = term * mask
+            masked_cts[index] = mask_term
+        layout_cts = LayoutCiphertexts(layout=layout_cts.layout, cts=masked_cts)
     else:
-        print(padding)
-        raise NotImplementedError("different padding")
+        # Update layout to output layout if no mask needed
+        layout_cts = LayoutCiphertexts(layout=layout_cts.layout, cts=layout_cts.cts)
 
-    # sum all cts
-    sum_together = output_cts[0]
-    for i in range(1, len(output_cts)):
-        sum_together += output_cts[i]
-
-    # sum together input channels
-    slot_dims = kernel.cs[0].layout.slot_dims
-    slot_sum_dims = []
-    for dim in slot_dims:
-        if dim.dim == 0:
-            slot_sum_dims.append(dim)
-    ct = sum_slot_dim(kernel, sum_together, slot_sum_dims)
-    return LayoutCiphertexts(layout=kernel.layout, cts={0: ct})
+    return layout_cts
