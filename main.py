@@ -264,7 +264,7 @@ if __name__ == "__main__":
         "--conv_roll",
         action=BooleanOptionalAction,
         default=False,
-        help="Use roll-based convolution for conv2d operations (default: use Toeplitz-based)",
+        help="Use roll-based convolution for conv2d operations",
     )
     parser.add_argument(
         "--not-secure",
