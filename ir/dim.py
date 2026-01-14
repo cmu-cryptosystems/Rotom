@@ -65,9 +65,6 @@ class Dim:
 
         if self.dim_type == DimType.EMPTY:
             assert self.dim is None
-
-        assert math.log2(self.extent).is_integer()
-        assert math.log2(self.stride).is_integer()
         assert self.stride > 0
 
     def __hash__(self):

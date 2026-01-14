@@ -345,7 +345,7 @@ class KernelCost:
         ops["rot"] = -100000
         return ops
 
-    def conv2d_ops(self, ops):
+    def conv2d_roll_ops(self, ops):
         """Calculate 2D convolution operations.
 
         Args:
@@ -559,22 +559,15 @@ class KernelCost:
 
         return ops
 
-    def toeplitz_conv2d_ops(self, ops):
-        """Calculate Toeplitz convolution operations.
-
-        The cost of a Toeplitz conv2d is a matrix-vector multiplication with
-        BSGS enabled. The dimension size is the length of the input
-        tensor and the length of the output dimensions.
+    def conv2d_ops(self, ops):
+        """Calculate convolution operations.
 
         Args:
             ops: Dictionary of operation counts
 
         Returns:
-            dict: Updated operation counts with Toeplitz convolution costs
+            dict: Updated operation counts with convoltuion costs
         """
-        # the cost of a toeplitz conv2d is a matrix vec multiplication with
-        # BSGS enabled. the dimension size is the length of the input
-        # tensor and the length of the output dimensions.
         input_dims = self.kernel.cs[0].layout.get_dims()
         output_dims = self.kernel.layout.get_dims()
 
@@ -603,7 +596,7 @@ class KernelCost:
             return ops
 
         match self.kernel.op:
-            case KernelOp.TENSOR:
+            case KernelOp.TENSOR | KernelOp.PUNCTURED_TENSOR:
                 ops = self.tensor_ops(ops)
             case (
                 KernelOp.CS
@@ -633,6 +626,8 @@ class KernelCost:
                 ops = self.bsgs_matmul_ops(ops)
             case KernelOp.STRASSEN_MATMUL:
                 ops = self.strassen_ops(ops)
+            case KernelOp.CONV2D_ROLL:
+                ops = self.conv2d_roll_ops(ops)
             case KernelOp.CONV2D:
                 ops = self.conv2d_ops(ops)
             case KernelOp.ROLL:
@@ -653,8 +648,6 @@ class KernelCost:
                 ops = self.poly_ops(ops)
             case KernelOp.CONVERSION:
                 ops = self.conversion_ops(ops)
-            case KernelOp.TOEPLITZ_CONV2D:
-                ops = self.toeplitz_conv2d_ops(ops)
             case KernelOp.COMBINE:
                 for cs_kernel in self.kernel.cs:
                     cs_ops = KernelCost(cs_kernel, self.network).ops()
@@ -673,7 +666,9 @@ class KernelCost:
         cost_model = self.cost_model()
         total_num_ct_real = 0
         for term in self.kernel.post_order():
-            if term.op == KernelOp.TENSOR and term.layout.secret:
+            if (
+                term.op == KernelOp.TENSOR or term.op == KernelOp.PUNCTURED_TENSOR
+            ) and term.layout.secret:
                 total_num_ct_real += term.layout.num_ct_unique()
         return cost_model["comm"] * total_num_ct_real
 
@@ -685,7 +680,9 @@ class KernelCost:
         """
         total_num_ct_real = 0
         for term in self.kernel.post_order():
-            if term.op == KernelOp.TENSOR and term.layout.secret:
+            if (
+                term.op == KernelOp.TENSOR or term.op == KernelOp.PUNCTURED_TENSOR
+            ) and term.layout.secret:
                 total_num_ct_real += term.layout.num_ct_unique()
         if self.network == "lan":
             return 0.0096 * total_num_ct_real

@@ -620,6 +620,7 @@ class TensorTerm:
                         output_tensor[out_c][i][j] += int(
                             np.sum(patch * filter_tensor[out_c])
                         )
+
         return output_tensor
 
     def eval_helper(self, env, inputs):

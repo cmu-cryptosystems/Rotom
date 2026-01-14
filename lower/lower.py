@@ -13,9 +13,11 @@ from lower.lower_add import lower_add
 from lower.lower_combine import lower_combine
 from lower.lower_compact import lower_compact
 from lower.lower_conv2d import lower_conv2d
+from lower.lower_conv2d_roll import lower_conv2d_roll
 from lower.lower_conversion import lower_conversion
 from lower.lower_cs_pack import lower_cs_pack
 from lower.lower_index import lower_index
+from lower.lower_mask_tensor import lower_punctured_tensor
 from lower.lower_matmul import lower_bsgs_matmul, lower_matmul
 from lower.lower_mul import lower_mul
 from lower.lower_permute import lower_permute
@@ -50,6 +52,8 @@ class Lower:
             match term.op:
                 case KernelOp.TENSOR:
                     self.env[term] = lower_tensor(term)
+                case KernelOp.PUNCTURED_TENSOR:
+                    self.env[term] = lower_punctured_tensor(term)
                 case KernelOp.CS:
                     self.env[term] = lower_cs_pack(term)
                 case KernelOp.REPLICATE:
@@ -62,6 +66,8 @@ class Lower:
                     self.env[term] = lower_mul(self.env, term)
                 case KernelOp.CONV2D:
                     self.env[term] = lower_conv2d(self.env, term)
+                case KernelOp.CONV2D_ROLL:
+                    self.env[term] = lower_conv2d_roll(self.env, term)
                 case KernelOp.SUM:
                     self.env[term] = lower_sum(self.env, term)
                 case KernelOp.CONVERSION:

@@ -1,5 +1,6 @@
 import math
 
+from ir.dim import DimType
 from ir.he import HEOp, HETerm
 from util.layout_util import add_vec, get_dim_indices, mul
 
@@ -24,7 +25,7 @@ def rotate_and_sum(base_term, extent, mul_offset, replicate=False):
 def helper_find_sum_dim(dims, sum_dim):
     sum_dims = []
     for dim in dims:
-        if dim.dim == sum_dim:
+        if dim.dim == sum_dim and dim.dim_type == DimType.FILL:
             sum_dims.append(dim)
     return sum_dims
 
