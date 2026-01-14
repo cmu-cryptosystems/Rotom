@@ -72,7 +72,6 @@ def get_fill_len(dims):
 def match_kernel_dims(a_kernel, b_kernel):
     if len(a_kernel) < len(b_kernel):
         diff = len(b_kernel) // len(a_kernel)
-        print("diff: ", diff)
         # find stride:
         stride = 1
         for dim in a_kernel.layout.get_dims():

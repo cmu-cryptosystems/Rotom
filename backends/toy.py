@@ -202,19 +202,12 @@ class Toy:
                         self.env[ct_term] = self.eval(ct_term)
                     results.append(self.env[ct_term])
 
-            print("expected layout:", term.layout)
             # Evaluate the tensor computation to get the expected result
             eval_result = term.layout.term.eval(self.inputs)
-            print("eval_result:", eval_result)
-            print("term:", term)
-            print("term.layout:", term.layout)
             if term.op == KernelOp.PUNCTURED_TENSOR:
                 expected = apply_punctured_layout(eval_result, term.layout)
             else:
                 expected = apply_layout(eval_result, term.layout)
-
-            print("expected:", expected)
-            print("results:", results)
 
             # skip checks for split rolls
             if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE, KernelOp.INDEX]:
