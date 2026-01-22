@@ -99,7 +99,7 @@ def lower_conv2d(env, kernel):
     # the sum dimension also should be the 0th and 1st dimension of kernel.cs[1]
     sum_dims = [(0, 0), (0, None)]
     for sum_dim in sum_dims:
-        (ct_sum_dims, slot_sum_dims) = find_sum_dim(
+        ct_sum_dims, slot_sum_dims = find_sum_dim(
             kernel.cs[sum_dim[0]].layout, sum_dim[1]
         )
         if not ct_sum_dims and not slot_sum_dims:
