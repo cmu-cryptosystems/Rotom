@@ -50,6 +50,38 @@ python main.py
 python main.py --benchmark matmul --backend toy --rolls
 ```
 
+### Running FHELIPE and Viaduct Benchmarks
+
+Rotom includes wrappers for running benchmarks from FHELIPE and Viaduct compilers. These wrappers parse the compiler output and execute the circuits using Rotom's CKKS backend.
+
+#### FHELIPE Benchmarks
+
+```bash
+# Run a FHELIPE benchmark
+python main.py --fhelipe <path_to_benchmark_directory> --n <slots>
+
+# Example: Run double matrix multiplication benchmark with 16384 slots
+python main.py --fhelipe /path/to/fhelipe_benchmarks/double_matmul_128_64 --n 16384
+
+# Use --not-secure flag to allow smaller ring dimensions (for testing)
+python main.py --fhelipe /path/to/benchmark --n 4096 --not-secure
+```
+
+**Note**: For 128-bit security, `n` must be at least 16384. Use `--not-secure` for testing with smaller values.
+
+#### Viaduct Benchmarks
+
+```bash
+# Run a Viaduct benchmark
+python main.py --viaduct <path_to_benchmark_file> --n <slots>
+
+# Example: Run double matrix multiplication benchmark with 16384 slots
+python main.py --viaduct /path/to/viaduct_benchmarks/double_matmul_ct_pt_e1_o0.vhe --n 16384
+
+# Use --not-secure flag to allow smaller ring dimensions (for testing)
+python main.py --viaduct /path/to/benchmark.vhe --n 4096 --not-secure
+```
+
 ## Architecture Overview
 
 ```
