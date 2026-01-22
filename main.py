@@ -8,8 +8,6 @@ from backends.heir.heir import HEIR
 from backends.heir.mlir_interpreter import run_mlir_interpreter
 from backends.openfhe_backend import CKKS
 from backends.toy import Toy
-from wrappers.fhelipe_wrapper import FhelipeWrapper
-from wrappers.viaduct_wrapper import ViaductWrapper
 
 # Import benchmarks
 from benchmarks.microbenchmarks.conversion import conversion
@@ -39,6 +37,8 @@ from ir.layout import *
 from lower.circuit_serializer import serialize_circuit
 from lower.lower import Lower
 from util.checker import check_results
+from wrappers.fhelipe_wrapper import FhelipeWrapper
+from wrappers.viaduct_wrapper import ViaductWrapper
 
 
 def run_benchmark_or_microbenchmark(args):

@@ -1,14 +1,14 @@
 import argparse
 import os.path
-import numpy as np
 from types import SimpleNamespace
 
+import numpy as np
 
-from frontends.tensor import TensorTerm, TensorOp
-from ir.dim import Dim
-from ir.layout import Layout
-from ir.he import HETerm, HEOp
 from backends.openfhe_backend import CKKS
+from frontends.tensor import TensorOp, TensorTerm
+from ir.dim import Dim
+from ir.he import HEOp, HETerm
+from ir.layout import Layout
 from util.layout_util import convert_layout_to_mask
 
 
@@ -80,7 +80,7 @@ class FhelipeWrapper:
         name = elems[4]
         layout_file = self.args.path + f"/enc.cfg/{name}"
         layout = self.parse_layout(name, layout_file)
-        
+
         if var in self.env:
             raise KeyError
         self.env[var] = HETerm(HEOp.PACK, [layout], True, f"0 {var}")
@@ -228,7 +228,7 @@ class FhelipeWrapper:
             serialize=True,
             cache=False,
             net="lan",
-            not_secure=getattr(source_args, "not_secure", False)
+            not_secure=getattr(source_args, "not_secure", False),
         )
         return CKKS(comp, inputs, ckks_args).run_wrapper()
 

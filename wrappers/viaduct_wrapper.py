@@ -3,13 +3,12 @@ import os.path
 import re
 from types import SimpleNamespace
 
-from frontends.tensor import TensorTerm, TensorOp
-from ir.roll import Roll
-from ir.dim import Dim
-from ir.layout import Layout
-from ir.he import HETerm, HEOp
 from backends.openfhe_backend import CKKS
-
+from frontends.tensor import TensorOp, TensorTerm
+from ir.dim import Dim
+from ir.he import HEOp, HETerm
+from ir.layout import Layout
+from ir.roll import Roll
 
 
 class ViaductWrapper:
@@ -45,7 +44,7 @@ class ViaductWrapper:
 
             clean_dims = []
             for dim in dims:
-                if 'oob' in dim:
+                if "oob" in dim:
                     dim = dim.split("[")[0]
                 clean_dims.append(str(dim))
             dims = [Dim.parse(dim) for dim in clean_dims]
@@ -86,9 +85,7 @@ class ViaductWrapper:
 
     def parse_mask(self, line):
         key = line.split(":")[0].split()[-1]
-        self.env[key] = HETerm(
-                HEOp.MASK, [[1] * self.args.n], False, f"mask {key}"
-            )
+        self.env[key] = HETerm(HEOp.MASK, [[1] * self.args.n], False, f"mask {key}")
         return self.env[key]
 
     def parse_cc(self, line):
@@ -154,7 +151,8 @@ class ViaductWrapper:
         for_loop_extent = int(lines[0].split()[2])
         for i in range(for_loop_extent):
             for line in lines[1:]:
-                if not line.strip(): continue 
+                if not line.strip():
+                    continue
 
                 line = line.replace(for_loop_var, f"[{i}]").strip()
                 if line.startswith("CC:"):
@@ -172,7 +170,7 @@ class ViaductWrapper:
                     continue
                 elif line.startswith("var"):
                     continue
-                else:                    
+                else:
                     raise NotImplementedError(f"not implemented: {line}")
 
     def parse_line(self, line):
@@ -236,7 +234,7 @@ class ViaductWrapper:
             serialize=True,
             cache=False,
             net="lan",
-            not_secure=getattr(source_args, "not_secure", False)
+            not_secure=getattr(source_args, "not_secure", False),
         )
         return CKKS(comp, inputs, ckks_args).run_wrapper()
 
