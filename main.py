@@ -37,6 +37,8 @@ from ir.layout import *
 from lower.circuit_serializer import serialize_circuit
 from lower.lower import Lower
 from util.checker import check_results
+from wrappers.fhelipe_wrapper import FhelipeWrapper
+from wrappers.viaduct_wrapper import ViaductWrapper
 
 
 def run_benchmark_or_microbenchmark(args):
@@ -179,6 +181,24 @@ def run_benchmark_or_microbenchmark(args):
 def main(args):
     """Main function to run the benchmark"""
 
+    # Check if we should run fhelipe wrapper
+    if args.fhelipe:
+        args.path = args.fhelipe
+        w = FhelipeWrapper(args)
+        comp = w.create_comp()
+        # Pass args to run method so it can access not_secure flag
+        results = w.run(comp, {}, args.fhelipe, args)
+        return
+
+    # Check if we should run viaduct wrapper
+    if args.viaduct:
+        args.path = args.viaduct
+        w = ViaductWrapper(args)
+        comp = w.create_comp()
+        # Pass args to run method so it can access not_secure flag
+        results = w.run(comp, {}, args.viaduct, args)
+        return
+
     # Check if we should run microbenchmark or benchmark
     if args.microbenchmark != "main" or args.benchmark != "main":
         run_benchmark_or_microbenchmark(args)
@@ -273,6 +293,18 @@ if __name__ == "__main__":
         help="Disable 128-bit security level for OpenFHE backend",
     )
     parser.add_argument("--fn", type=str, default="main")
+    parser.add_argument(
+        "--fhelipe",
+        type=str,
+        default=None,
+        help="Path to fhelipe benchmark directory",
+    )
+    parser.add_argument(
+        "--viaduct",
+        type=str,
+        default=None,
+        help="Path to viaduct benchmark file",
+    )
     args = parser.parse_args()
 
     main(args)
