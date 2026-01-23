@@ -50,6 +50,57 @@ python main.py
 python main.py --benchmark matmul --backend toy --rolls
 ```
 
+### Downloading Benchmarks
+
+Rotom includes wrappers for running benchmarks from FHELIPE and Viaduct compilers. To use these benchmarks, you need to download them from the [rotom_benchmarks repository](https://github.com/edwjchen/rotom_benchmarks):
+
+```bash
+# Clone the benchmarks repository into the Rotom directory
+cd Rotom
+git clone https://github.com/edwjchen/rotom_benchmarks.git benchmarks
+
+# Or if you prefer a different location, you can clone it elsewhere
+# and reference it with absolute paths when running benchmarks
+```
+
+The benchmarks should be placed in `Rotom/benchmarks/` with the following structure:
+- `benchmarks/fhelipe_benchmarks/` - FHELIPE benchmarks
+- `benchmarks/viaduct_benchmarks/` - Viaduct benchmarks
+
+For more details about the available benchmarks, see the [benchmarks README](https://github.com/edwjchen/rotom_benchmarks).
+
+### Running FHELIPE and Viaduct Benchmarks
+
+Rotom includes wrappers for running benchmarks from FHELIPE and Viaduct compilers. These wrappers parse the compiler output and execute the circuits using Rotom's CKKS backend.
+
+#### FHELIPE Benchmarks
+
+```bash
+# Run a FHELIPE benchmark
+python main.py --fhelipe <path_to_benchmark_directory> --n <slots>
+
+# Example: Run double matrix multiplication benchmark with 16384 slots
+python main.py --fhelipe benchmarks/fhelipe_benchmarks/double_matmul_128_64 --n 16384
+
+# Use --not-secure flag to allow smaller ring dimensions (for testing)
+python main.py --fhelipe benchmarks/fhelipe_benchmarks/double_matmul_128_64 --n 4096 --not-secure
+```
+
+**Note**: For 128-bit security, `n` must be at least 16384. Use `--not-secure` for testing with smaller values.
+
+#### Viaduct Benchmarks
+
+```bash
+# Run a Viaduct benchmark
+python main.py --viaduct <path_to_benchmark_file> --n <slots>
+
+# Example: Run double matrix multiplication benchmark with 16384 slots
+python main.py --viaduct benchmarks/viaduct_benchmarks/double_matmul_ct_pt_e1_o0.vhe --n 16384
+
+# Use --not-secure flag to allow smaller ring dimensions (for testing)
+python main.py --viaduct benchmarks/viaduct_benchmarks/distance_e1_o0.vhe --n 4096 --not-secure
+```
+
 ## Architecture Overview
 
 ```

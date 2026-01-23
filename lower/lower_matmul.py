@@ -39,7 +39,7 @@ def lower_matmul(env, kernel):
     sum_dim = max(
         dim.dim for dim in kernel.cs[0].layout.get_dims() if dim.dim is not None
     )
-    (ct_sum_dims, slot_sum_dims) = find_sum_dim(kernel.cs[0].layout, sum_dim)
+    ct_sum_dims, slot_sum_dims = find_sum_dim(kernel.cs[0].layout, sum_dim)
 
     # sum together ciphertexts
     for ct_sum_dim in ct_sum_dims:
