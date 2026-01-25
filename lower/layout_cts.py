@@ -6,7 +6,6 @@ from typing import Dict, List
 from ir.dim import Dim, DimType
 from ir.he import HETerm
 from ir.layout import Layout
-from ir.roll import Roll
 
 
 class LayoutCiphertexts:

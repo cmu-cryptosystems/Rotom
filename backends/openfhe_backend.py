@@ -201,6 +201,22 @@ class CKKS:
             return ct
         return vector
 
+    def eval_punctured_pack(self, term):
+        layout = term.cs[0]
+        if layout not in self.input_cache:
+            fn = f"layout_cache/{self.benchmark}_{layout}.pkl"
+            if os.path.exists(fn):
+                self.input_cache[layout] = pkl.load(open(fn, "rb"))
+            else:
+                tensor = layout.term.eval(self.inputs)
+                packed_tensor = apply_punctured_layout(tensor, layout)
+                self.input_cache[layout] = packed_tensor
+
+                # pkl.dump(packed_tensor, open(fn, "wb"))
+        packing_idx = int(term.metadata.split()[0])
+        vector = self.input_cache[layout][packing_idx]
+        return vector
+
     def eval_rot(self, term):
         """positive == left rotate"""
         base = self.env[term.cs[0]]
@@ -286,6 +302,8 @@ class CKKS:
                             self.env[ct_term] = self.eval_pack(
                                 ct_term, ct_term.secret, self.cache
                             )
+                    case HEOp.PUNCTURED_PACK:
+                        self.pt_env[ct_term] = self.eval_punctured_pack(ct_term)
 
     def preprocess_pt_compute(self, cts):
         print("preprocessing pt compute...")
@@ -295,7 +313,7 @@ class CKKS:
                     continue
 
                 match ct_term.op:
-                    case HEOp.PACK:
+                    case HEOp.PACK | HEOp.PUNCTURED_PACK:
                         continue
                     case HEOp.MASK:
                         self.pt_env[ct_term] = ct_term.cs[0]
@@ -364,6 +382,7 @@ class CKKS:
                         | HEOp.INDICES
                         | HEOp.ZERO_MASK
                         | HEOp.RESCALE
+                        | HEOp.PUNCTURED_PACK
                     ):
                         continue
                     case HEOp.ADD | HEOp.SUB | HEOp.MUL:
@@ -465,7 +484,7 @@ class CKKS:
         depth = {}
         for c in ct.post_order():
             match c.op:
-                case HEOp.PACK | HEOp.MASK | HEOp.ZERO_MASK:
+                case HEOp.PACK | HEOp.MASK | HEOp.ZERO_MASK | HEOp.PUNCTURED_PACK:
                     depth[c] = 0
                 case HEOp.MUL | HEOp.ADD | HEOp.SUB:
                     depth[c] = max(depth[c.cs[0]], depth[c.cs[1]])
@@ -475,14 +494,13 @@ class CKKS:
                     depth[c] = depth[c.cs[0]] + 1
                 case _:
                     raise NotImplementedError(c.op)
-        print("depth:", max(depth.values()))
         return max(depth.values())
 
     def find_depth(self, ct):
         depth = {}
         for c in ct.post_order():
             match c.op:
-                case HEOp.PACK | HEOp.MASK | HEOp.ZERO_MASK:
+                case HEOp.PACK | HEOp.MASK | HEOp.ZERO_MASK | HEOp.PUNCTURED_PACK:
                     depth[c] = 0
                 case HEOp.MUL:
                     if c.secret:
@@ -495,7 +513,7 @@ class CKKS:
                     depth[c] = depth[c.cs[0]]
                 case _:
                     raise NotImplementedError(c.op)
-        print("depth:", max(depth.values()))
+        # print("depth:", max(depth.values()))
         return max(depth.values())
 
     def run_and_check(self, term, cts):
@@ -524,6 +542,7 @@ class CKKS:
         print("dagifying...")
         cts = self.dagify_fhe_circuit()
         rots = self.find_unique_rots(cts)
+        depth = self.find_depth(cts[0])
         try:
             depth = self.find_depth(cts[0])
         except:

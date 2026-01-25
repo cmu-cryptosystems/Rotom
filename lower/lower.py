@@ -37,6 +37,9 @@ from lower.lower_sum import lower_sum
 from lower.lower_tensor import lower_tensor
 from lower.lower_transpose import lower_transpose
 
+# replace with optimized cts
+from lower.layout_cts import LayoutCiphertexts
+
 
 class Lower:
     """
@@ -114,9 +117,6 @@ class Lower:
             opt_ct = mask_identity_opt(ct)
             opt_ct = zero_mask_identity_opt(ct)
             opt_cts[ct_idx] = opt_ct
-
-        # replace with optimized cts
-        from lower.layout_cts import LayoutCiphertexts
 
         self.env[self.kernel] = LayoutCiphertexts(layout=layout_cts.layout, cts=opt_cts)
 

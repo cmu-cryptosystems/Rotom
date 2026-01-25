@@ -21,14 +21,15 @@ from benchmarks.microbenchmarks.ttm_micro_32 import ttm_micro_32
 from benchmarks.rotom_benchmarks.bert_attention import bert_attention
 from benchmarks.rotom_benchmarks.convolution import convolution
 from benchmarks.rotom_benchmarks.convolution_32768 import convolution_32768
-from benchmarks.rotom_benchmarks.distance import distance
-from benchmarks.rotom_benchmarks.double_matmul.double_matmul_128_64 import (
-    double_matmul_128_64,
+from benchmarks.rotom_benchmarks.double_matmul.double_matmul_128_64_ct_ct import (
+    double_matmul_128_64_ct_ct,
 )
-from benchmarks.rotom_benchmarks.double_matmul.double_matmul_256_128 import (
-    double_matmul_256_128,
+from benchmarks.rotom_benchmarks.double_matmul.double_matmul_256_128_ct_ct import (
+    double_matmul_256_128_ct_ct,
 )
-from benchmarks.rotom_benchmarks.matmul.matmul_128_128 import matmul_128_128
+from benchmarks.rotom_benchmarks.matmul.matmul_128_64 import matmul_128_64
+from benchmarks.rotom_benchmarks.matmul.matmul_256_128 import matmul_256_128
+from benchmarks.rotom_benchmarks.logreg import logreg
 
 # Import Rotom
 from frontends.tensor import TensorTerm
@@ -109,19 +110,22 @@ def run_benchmark_or_microbenchmark(args):
         n = args.n
 
         match args.benchmark:
-            case "distance":
-                tensor_ir, inputs = distance()
-            case "matmul":
-                tensor_ir, inputs = matmul_128_128()
+            case "matmul_128_64":
+                tensor_ir, inputs = matmul_128_64()
+            case "matmul_256_128":
+                tensor_ir, inputs = matmul_256_128()
             case "double_matmul_128_64":
-                tensor_ir, inputs = double_matmul_128_64()
+                tensor_ir, inputs = double_matmul_128_64_ct_ct()
             case "double_matmul_256_128":
-                tensor_ir, inputs = double_matmul_256_128()
+                tensor_ir, inputs = double_matmul_256_128_ct_ct()
             case "convolution":
                 tensor_ir, inputs, n = convolution()
                 args.n = n
             case "convolution_32768":
                 tensor_ir, inputs, n = convolution_32768()
+                args.n = n
+            case "logreg":
+                tensor_ir, inputs = logreg()
                 args.n = n
             case "bert_attention":
                 tensor_ir, inputs, n = bert_attention()
