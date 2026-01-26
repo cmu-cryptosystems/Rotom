@@ -957,55 +957,68 @@ def get_aligned_dimensions(alignment, a_dims, b_dims):
     # create aligned a_dims:
     aligned_b_dims = []
     for a_dim in a_dims:
-        if a_dim.dim_type == DimType.EMPTY: continue
+        if a_dim.dim_type == DimType.EMPTY: 
+            aligned_b_dims.append(copy(a_dim))
+            continue
         extent = a_dim.extent
-        while extent > 1:
-            dim = copy(a_dim)
-            a_dim_dim = a_dim.dim
-            dim.dim = a_alignment[a_dim_dim][0]
-            if b_remaining_extents[dim.dim] <= extent:
-                dim.extent = b_remaining_extents[dim.dim]
-                dim.stride = b_stride[dim.dim] // dim.extent if dim.dim is None else a_dim.stride
-                extent //= b_remaining_extents[dim.dim]
-                del b_remaining_extents[dim.dim]
-                b_stride[dim.dim] //= dim.extent
-                a_alignment[a_dim_dim].remove(dim.dim)
-            elif b_remaining_extents[dim.dim] > extent:
-                dim.extent = extent
-                dim.stride = b_stride[dim.dim] // dim.extent if dim.dim is None else a_dim.stride
-                b_remaining_extents[dim.dim] //= extent
-                b_stride[dim.dim] //= dim.extent
-                extent = 1 
-            else: 
-                raise NotImplementedError
-            aligned_b_dims.append(dim)
+        dim = copy(a_dim)
+        a_dim_dim = a_dim.dim
+        dim.dim = a_alignment[a_dim_dim][0]
+        if b_remaining_extents[dim.dim] <= extent:
+            dim.extent = b_remaining_extents[dim.dim]
+            dim.stride = b_stride[dim.dim] // dim.extent
+            extent //= b_remaining_extents[dim.dim]
+            del b_remaining_extents[dim.dim]
+            b_stride[dim.dim] //= dim.extent
+            a_alignment[a_dim_dim].remove(dim.dim)
+        elif b_remaining_extents[dim.dim] > extent:
+            dim.extent = extent
+            dim.stride = b_stride[dim.dim] // dim.extent
+            b_remaining_extents[dim.dim] //= extent
+            b_stride[dim.dim] //= dim.extent
+            extent = 1 
+        else: 
+            raise NotImplementedError
+        aligned_b_dims.append(dim)
         
 
     # create aligned b_dims:
     aligned_a_dims = []
     for b_dim in b_dims:
-        if b_dim.dim_type == DimType.EMPTY: continue
+        if b_dim.dim_type == DimType.EMPTY: 
+            aligned_a_dims.append(copy(b_dim))
+            continue
         extent = b_dim.extent
-        while extent > 1:
-            dim = copy(b_dim)
-            b_dim_dim = b_dim.dim
-            dim.dim = b_alignment[b_dim_dim][0]
-            if a_remaining_extents[dim.dim] <= extent:
-                dim.extent = a_remaining_extents[dim.dim]
-                dim.stride = a_stride[dim.dim] // dim.extent if dim.dim is None else b_dim.stride
-                extent //= a_remaining_extents[dim.dim]
-                del a_remaining_extents[dim.dim]
-                a_stride[dim.dim] //= dim.extent
-                b_alignment[b_dim_dim].remove(dim.dim)
-            elif a_remaining_extents[dim.dim] > extent:
-                dim.extent = extent
-                dim.stride = a_stride[dim.dim] // dim.extent if dim.dim is None else b_dim.stride    
-                a_remaining_extents[dim.dim] //= extent
-                a_stride[dim.dim] //= dim.extent
-                extent = 1
-            else:
-                raise NotImplementedError
-            aligned_a_dims.append(dim)
+        dim = copy(b_dim)
+        b_dim_dim = b_dim.dim
+        dim.dim = b_alignment[b_dim_dim][0]
+        if a_remaining_extents[dim.dim] <= extent:
+            dim.extent = a_remaining_extents[dim.dim]
+            dim.stride = a_stride[dim.dim] // dim.extent
+            extent //= a_remaining_extents[dim.dim]
+            del a_remaining_extents[dim.dim]
+            a_stride[dim.dim] //= dim.extent
+            b_alignment[b_dim_dim].remove(dim.dim)
+        elif a_remaining_extents[dim.dim] > extent:
+            dim.extent = extent
+            dim.stride = a_stride[dim.dim] // dim.extent
+            a_remaining_extents[dim.dim] //= extent
+            a_stride[dim.dim] //= dim.extent
+            extent = 1
+        else:
+            raise NotImplementedError
+        aligned_a_dims.append(dim)
+
+    for a_dim, b_dim in zip(a_dims, aligned_b_dims):
+        if a_dim.dim is not None and b_dim.dim is not None:
+            b_dim.stride = a_dim.stride
+    for b_dim, a_dim in zip(b_dims, aligned_a_dims):
+        if b_dim.dim is not None and a_dim.dim is not None:
+            a_dim.stride = b_dim.stride
+
+    assert len(aligned_b_dims) == len(a_dims)
+    assert len(aligned_a_dims) == len(b_dims)
+
     return aligned_b_dims, aligned_a_dims
 
 def conv_dimensions(alignment, kernels):

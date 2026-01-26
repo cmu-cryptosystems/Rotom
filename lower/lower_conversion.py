@@ -10,6 +10,11 @@ from util.util import get_mask_from_segment
 
 
 def lower_conversion(env, kernel):
+    print("kernel:")
+    for cs in kernel.cs:
+        print(cs)
+
+
     n = kernel.layout.n
 
     # create CS cts
@@ -172,6 +177,12 @@ def lower_conversion(env, kernel):
             temp_layout_cts = LayoutCiphertexts(
                 layout=expanded_layout, cts={i: ct for i, ct in enumerate(relevant_cts)}
             )
+
+            print("expanded_layout:")
+            print(expanded_layout)
+            print("swap dim:")
+            print(swap_dim)           
+            print()
             ct_groups = get_cts_by_dim(temp_layout_cts, swap_dim)
             for ct_group in ct_groups:
                 base = ct_group[0]
