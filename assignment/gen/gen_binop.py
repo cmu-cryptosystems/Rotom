@@ -918,30 +918,85 @@ def get_aligned_dimensions(alignment, a_dims, b_dims):
     a_alignment = {}
     b_alignment = {}
     for a, b in alignment:
-        a_alignment[a] = b
-        b_alignment[b] = a
+        if a not in a_alignment:
+            a_alignment[a] = []
+        a_alignment[a].append(b)
+        if b not in b_alignment:
+            b_alignment[b] = []
+        b_alignment[b].append(a)
+    a_remaining_extents = {}
+    b_remaining_extents = {}
+    a_stride = {}
+    b_stride = {}
+    for a_dim in a_dims:
+        if a_dim.dim not in a_remaining_extents:
+            a_remaining_extents[a_dim.dim] = a_dim.extent
+            a_stride[a_dim.dim] = a_dim.extent
+        else:
+            a_remaining_extents[a_dim.dim] *= a_dim.extent
+            a_stride[a_dim.dim] *= a_dim.extent
+
+    for b_dim in b_dims:
+        if b_dim.dim not in b_remaining_extents:
+            b_remaining_extents[b_dim.dim] = b_dim.extent
+            b_stride[b_dim.dim] = b_dim.extent
+        else:
+            b_remaining_extents[b_dim.dim] *= b_dim.extent
+            b_stride[b_dim.dim] *= b_dim.extent
 
     # create aligned a_dims:
     aligned_b_dims = []
     for a_dim in a_dims:
-        dim = copy(a_dim)
-        if dim.dim in a_alignment:
-            dim.dim = a_alignment[dim.dim]
-        elif dim.dim is not None:
-            raise NotImplementedError
-        aligned_b_dims.append(dim)
+        if a_dim.dim_type == DimType.EMPTY: continue
+        extent = a_dim.extent
+        while extent > 1:
+            dim = copy(a_dim)
+            a_dim_dim = a_dim.dim
+            dim.dim = a_alignment[a_dim_dim][0]
+            if b_remaining_extents[dim.dim] <= extent:
+                dim.extent = b_remaining_extents[dim.dim]
+                dim.stride = b_stride[dim.dim] // dim.extent
+                extent //= b_remaining_extents[dim.dim]
+                del b_remaining_extents[dim.dim]
+                b_stride[dim.dim] //= dim.extent
+                a_alignment[a_dim_dim].remove(dim.dim)
+            elif b_remaining_extents[dim.dim] > extent:
+                dim.extent = extent
+                dim.stride = b_stride[dim.dim] // dim.extent
+                b_remaining_extents[dim.dim] //= extent
+                b_stride[dim.dim] //= dim.extent
+                extent = 1 
+            else: 
+                raise NotImplementedError
+            aligned_b_dims.append(dim)
+        
 
     # create aligned b_dims:
     aligned_a_dims = []
     for b_dim in b_dims:
-        dim = copy(b_dim)
-        if dim.dim in b_alignment:
-            dim.dim = b_alignment[dim.dim]
-        elif dim.dim is not None:
-            raise NotImplementedError
-        aligned_a_dims.append(dim)
+        if b_dim.dim_type == DimType.EMPTY: continue
+        extent = b_dim.extent
+        while extent > 1:
+            dim = copy(b_dim)
+            b_dim_dim = b_dim.dim
+            dim.dim = b_alignment[b_dim_dim][0]
+            if a_remaining_extents[dim.dim] <= extent:
+                dim.extent = a_remaining_extents[dim.dim]
+                dim.stride = a_stride[dim.dim] // dim.extent
+                extent //= a_remaining_extents[dim.dim]
+                del a_remaining_extents[dim.dim]
+                a_stride[dim.dim] //= dim.extent
+                b_alignment[b_dim_dim].remove(dim.dim)
+            elif a_remaining_extents[dim.dim] > extent:
+                dim.extent = extent
+                dim.stride = a_stride[dim.dim] // dim.extent    
+                a_remaining_extents[dim.dim] //= extent
+                a_stride[dim.dim] //= dim.extent
+                extent = 1
+            else:
+                raise NotImplementedError
+            aligned_a_dims.append(dim)
     return aligned_b_dims, aligned_a_dims
-
 
 def conv_dimensions(alignment, kernels):
     a_kernel = kernels[0]
@@ -1267,27 +1322,41 @@ def output_layout(term, alignment, a_kernel, b_kernel):
             a_layout = a_kernel.layout
             b_layout = b_kernel.layout
             output_dims = []
+            
+            # Get the contraction dimensions (summation dimensions)
+            a_sum_dim = get_sum_dim(term, a_kernel)
+            b_sum_dim = get_sum_dim(term, b_kernel)
 
             if len(a_layout.get_dims()) != len(b_layout.get_dims()):
+                # Process dimensions from A
                 for a_dim in a_layout.get_dims():
                     if a_dim.dim is None:
-                        output_dims.append(
-                            Dim(1, a_dim.extent, a_dim.stride, DimType.FILL)
-                        )
-                    elif a_dim.dim == 1:
+                        # Preserve replicated dimensions as-is
+                        output_dims.append(a_dim)
+                    elif a_dim.dim == a_sum_dim:
+                        # This is the contraction dimension - set to EMPTY
                         output_dims.append(
                             Dim(None, a_dim.extent, a_dim.stride, DimType.EMPTY)
                         )
-                    elif a_dim.dim == 0:
-                        output_dims.append(a_dim)
                     else:
-                        raise NotImplementedError
+                        # Keep all non-contraction dimensions from A
+                        output_dims.append(a_dim)
+                
+                # Add dimensions from B that don't have a corresponding dimension in A
+                # Find which B dimensions are not aligned with A dimensions
+                a_aligned_dims = {a for a, b in alignment if a is not None}
+                for b_dim in b_layout.get_dims():
+                    if b_dim.dim is not None and b_dim.dim not in a_aligned_dims:
+                        # This dimension from B should be in the output
+                        # Check if it aligns with None in A
+                        if (None, b_dim.dim) in alignment:
+                            output_dims.append(b_dim)
             else:
                 for a_dim, b_dim in zip(a_layout.get_dims(), b_layout.get_dims()):
                     if a_dim.dim is not None and b_dim.dim is None:
                         output_dims.append(a_dim)
                     elif a_dim.dim is None and b_dim.dim is not None:
-                        # HACK:
+                        # HACK: alignment
                         if len(alignment) == 4:
                             b_dim = copy(b_dim)
                             b_dim.dim = 2
@@ -1300,9 +1369,9 @@ def output_layout(term, alignment, a_kernel, b_kernel):
                         )
 
             # remove any rolls on the summation dimension
-            a_rolls = [roll for roll in a_layout.rolls if roll.dim_to_roll.dim != 1]
+            a_rolls = [roll for roll in a_layout.rolls if roll.dim_to_roll.dim != a_sum_dim]
             b_rolls = [
-                roll for roll in b_kernel.layout.rolls if roll.dim_to_roll.dim != 0
+                roll for roll in b_kernel.layout.rolls if roll.dim_to_roll.dim != b_sum_dim
             ]
 
             # update rolls with new output dimensions
@@ -1328,6 +1397,7 @@ def output_layout(term, alignment, a_kernel, b_kernel):
                     a_kernel.layout.secret or b_kernel.layout.secret,
                 )
             )
+            
             output_kernel = Kernel(KernelOp.MATMUL, [a_kernel, b_kernel], output_layout)
             return output_kernel
         case _:

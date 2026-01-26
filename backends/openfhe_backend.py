@@ -120,8 +120,6 @@ class CKKS:
         self.cc.EvalMultKeyGen(self.keys.secretKey)
 
         print("generating rot keys...")
-        print("len of rot keys:", len(rots))
-        print(sorted(list(rots)))
         self.cc.EvalRotateKeyGen(self.keys.secretKey, list(rots))
 
         if self.serialize:

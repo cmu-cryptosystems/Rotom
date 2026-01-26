@@ -1,5 +1,3 @@
-import random
-
 import numpy as np
 
 from frontends.tensor import TensorTerm
@@ -7,12 +5,12 @@ from frontends.tensor import TensorTerm
 
 def logreg():
     inputs = {}
-    inputs["v"] = np.array([random.choice(range(2)) for _ in range(197)])
+    inputs["v"] = np.array([np.random.randint(2) for _ in range(197)])
     inputs["m_0"] = np.array(
-        [[random.choice(range(2)) for _ in range(197)] for _ in range(1024)]
+        [[np.random.randint(2) for _ in range(197)] for _ in range(1024)]
     )
     inputs["m_1"] = np.array(
-        [[random.choice(range(2)) for _ in range(1024)] for _ in range(197)]
+        [[np.random.randint(2) for _ in range(1024)] for _ in range(197)]
     )
 
     v = TensorTerm.Tensor("v", [197], True)

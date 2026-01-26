@@ -1,5 +1,6 @@
 from copy import copy as copy
 
+import numpy as np
 from _pytest._py.error import R
 
 from ir.dim import Dim, DimType
@@ -542,51 +543,50 @@ def apply_layout(pt_tensor, layout):
             combined_cts = new_combined_cts
     base_indices_by_cts = combined_cts
 
+    # Get the actual tensor dimensionality
+    pt_tensor_ndim = np.ndim(pt_tensor)
+    
     cts = []
     for ct_index in range(len(base_indices_by_cts)):
         ct_indices = base_indices_by_cts[ct_index]
         ct = []
 
         for index in ct_indices:
-            if len(index) == 1:
-                if index[0] is None:
-                    ct.append(0)
+            # Use the tensor's actual dimensionality, not just the index length
+            # Pad index with 0s if needed for higher-dimensional tensors
+            effective_index = list(index)
+            while len(effective_index) < pt_tensor_ndim:
+                effective_index.append(0)
+            
+            # Check if any required index is None
+            if any(effective_index[i] is None for i in range(pt_tensor_ndim)):
+                ct.append(0)
+                continue
+            
+            # Access tensor using the appropriate number of indices
+            try:
+                if pt_tensor_ndim == 0:
+                    value = pt_tensor.item()
+                elif pt_tensor_ndim == 1:
+                    value = pt_tensor[effective_index[0]]
+                elif pt_tensor_ndim == 2:
+                    value = pt_tensor[effective_index[0]][effective_index[1]]
+                elif pt_tensor_ndim == 3:
+                    value = pt_tensor[effective_index[0]][effective_index[1]][effective_index[2]]
+                elif pt_tensor_ndim == 4:
+                    value = pt_tensor[effective_index[0]][effective_index[1]][effective_index[2]][effective_index[3]]
                 else:
-                    try:
-                        ct.append(pt_tensor[index[0]])
-                    except IndexError:
-                        ct.append(0)
-            elif len(index) == 2:
-                if index[0] is None or index[1] is None:
-                    ct.append(0)
-                else:
-                    try:
-                        ct.append(pt_tensor[index[0]][index[1]])
-                    except:
-                        ct.append(0)
-            elif len(index) == 3:
-                if index[0] is None or index[1] is None or index[2] is None:
-                    ct.append(0)
-                else:
-                    try:
-                        ct.append(pt_tensor[index[0]][index[1]][index[2]])
-                    except IndexError:
-                        ct.append(0)
-            elif len(index) == 4:
-                if (
-                    index[0] is None
-                    or index[1] is None
-                    or index[2] is None
-                    or index[3] is None
-                ):
-                    ct.append(0)
-                else:
-                    try:
-                        ct.append(pt_tensor[index[0]][index[1]][index[2]][index[3]])
-                    except IndexError:
-                        ct.append(0)
-            else:
-                raise NotImplementedError("other tensor dimensions are not supported")
+                    raise NotImplementedError(f"tensors with {pt_tensor_ndim} dimensions are not supported")
+                
+                # Convert single-element arrays to scalars
+                if isinstance(value, np.ndarray) and value.ndim > 0 and value.size == 1:
+                    value = value.item()
+                elif isinstance(value, np.ndarray) and value.ndim == 0:
+                    value = value.item()
+                
+                ct.append(value)
+            except (IndexError, TypeError):
+                ct.append(0)
 
         # this places cts in row-major order
         cts.append(ct)

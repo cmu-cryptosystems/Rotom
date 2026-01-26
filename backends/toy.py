@@ -134,8 +134,8 @@ class Toy:
         return [a - b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
     def eval_mul(self, term):
-        print("term.cs[0]:", self.env[term.cs[0]])
-        print("term.cs[1]:", self.env[term.cs[1]])
+        print(self.env[term.cs[0]])
+        print(self.env[term.cs[1]])
         print()
         return [a * b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
@@ -217,6 +217,20 @@ class Toy:
             all_close = True
             max_diff = 0.0
 
+            print("TERM:", term)
+            for t in term.post_order():
+                print(t)
+                print()
+
+            print("eval results:")
+            print("inputs:", self.inputs)
+            print("eval result:", term.layout.term.eval(self.inputs))
+
+            print("expected (apply layout):", expected)
+            print(term.layout)
+            print("results:", results)
+            print()
+
             for expected_vec, result_vec in zip(expected, results):
                 if not np.allclose(expected_vec, result_vec, rtol=1e-2, atol=1e-2):
                     all_close = False
@@ -239,6 +253,11 @@ class Toy:
                     print([e - r for e, r in zip(expected_vec, result_vec)])
                 print()
                 print("kernel:", term)
+                for cs in term.cs:
+                    print(cs)
+                print()
+
+                print("expected layout:", term.layout) 
 
             assert all_close, f"Values not close enough. Max diff: {max_diff}"
         return results

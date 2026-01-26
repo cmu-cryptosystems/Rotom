@@ -527,7 +527,7 @@ class LayoutAssignment:
         assert kernels
 
         new_kernels = []
-        for kernel in kernels:
+        for kernel in kernels:            
             kernel_shape_map = {}
             for dim in kernel.layout.get_dims():
                 # Skip EMPTY dimensions - they should have dim=None and shouldn't contribute to shape

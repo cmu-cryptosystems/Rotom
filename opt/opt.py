@@ -66,7 +66,7 @@ class Optimizer:
                 for opt_kernel in opt_kernels:
                     opt_kernel = run_rot_roll(opt_kernel)
                     opt_kernel = run_ct_roll_bsgs(opt_kernel)
-                    opt_kernel = run_bsgs_matmul(opt_kernel)
+                    # opt_kernel = run_bsgs_matmul(opt_kernel)
                     optimized_kernels.add(opt_kernel)
             else:
                 optimized_kernels = set(kernels)
