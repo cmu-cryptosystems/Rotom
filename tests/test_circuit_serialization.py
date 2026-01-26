@@ -12,17 +12,17 @@ from argparse import Namespace
 import numpy as np
 
 from assignment.assignment import LayoutAssignment
-from backends.toy import Toy
 from frontends.tensor import TensorTerm
 from lower.circuit_loader import load_circuit
 from lower.circuit_serializer import serialize_circuit
 from lower.lower import Lower
+from tests.conftest import run_backend
 
 
 class TestCircuitSerialization:
     """Test circuit serialization and deserialization operations."""
 
-    def test_matmul_serialization(self):
+    def test_matmul_serialization(self, backend):
         """Test serialization of a matrix-vector multiplication circuit."""
 
         print("=" * 70)
@@ -74,7 +74,8 @@ class TestCircuitSerialization:
 
         # 4. Execute original circuit
         print("\n4. Executing original circuit...")
-        original_results = Toy(circuit_ir, inputs, args).run()
+        args.backend = backend
+        original_results = run_backend(backend, circuit_ir, inputs, args)
         # Toy backend returns a list of results
         result = (
             original_results[0]
@@ -113,7 +114,7 @@ class TestCircuitSerialization:
 
         # 8. Verify instruction correctness by re-executing
         print("\n8. Re-executing with original circuit IR...")
-        reexec_results = Toy(circuit_ir, inputs, args).run()
+        reexec_results = run_backend(backend, circuit_ir, inputs, args)
 
         # 9. Compare results
         print("\n9. Comparing results...")
@@ -164,7 +165,7 @@ class TestCircuitSerialization:
             match
         ), f"Results do not match. Max difference: {np.max(np.abs(np.array(orig_result) - np.array(reexec_result)))}"
 
-    def test_multiple_operations(self):
+    def test_multiple_operations(self, backend):
         """Test serialization with multiple tensor operations."""
 
         print("\n" + "=" * 70)
@@ -214,7 +215,8 @@ class TestCircuitSerialization:
 
         # Execute and serialize
         print("\n3. Executing and serializing...")
-        original_results = Toy(circuit_ir, inputs, args).run()
+        args.backend = backend
+        original_results = run_backend(backend, circuit_ir, inputs, args)
         file_paths = serialize_circuit(circuit_ir, output_dir, circuit_name)
 
         result = (

@@ -134,9 +134,6 @@ class Toy:
         return [a - b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
     def eval_mul(self, term):
-        print("term.cs[0]:", self.env[term.cs[0]])
-        print("term.cs[1]:", self.env[term.cs[1]])
-        print()
         return [a * b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
     def eval_poly(self, term):
@@ -238,7 +235,8 @@ class Toy:
                 for expected_vec, result_vec in zip(expected, results):
                     print([e - r for e, r in zip(expected_vec, result_vec)])
                 print()
-                print("kernel:", term)
+
+                print("expected layout:", term.layout)
 
             assert all_close, f"Values not close enough. Max diff: {max_diff}"
         return results

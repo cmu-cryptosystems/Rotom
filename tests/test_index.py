@@ -8,10 +8,10 @@ in the Rotom homomorphic encryption system.
 import numpy as np
 
 from assignment.assignment import LayoutAssignment
-from backends.toy import Toy
 from frontends.tensor import TensorTerm
 from ir.dim import *
 from lower.lower import Lower
+from tests.conftest import assert_results_equal, run_backend
 from tests.test_util import get_default_args
 from util.layout_util import apply_layout
 
@@ -24,7 +24,7 @@ class TestTensorIndexing:
         a = TensorTerm.Tensor("a", list(inputs["a"].shape), True)
         return a[i]
 
-    def _run_test_case(self, tensor_ir, inputs, args):
+    def _run_test_case(self, tensor_ir, inputs, args, backend):
         """Helper method to run a test case."""
         # Generate expected result
         expected = tensor_ir.eval(inputs)
@@ -32,13 +32,13 @@ class TestTensorIndexing:
         # Run compiler
         kernel = LayoutAssignment(tensor_ir, args).run()
         circuit_ir = Lower(kernel).run()
-        results = Toy(circuit_ir, inputs, args).run()
+        results = run_backend(backend, circuit_ir, inputs, args)
 
         # Check result
         expected_cts = apply_layout(expected, kernel.layout)
-        assert expected_cts == results
+        assert_results_equal(expected_cts, results, backend)
 
-    def test_index_4x4_matrix_row_0(self):
+    def test_index_4x4_matrix_row_0(self, backend):
         """Test indexing first row of 4x4 matrix."""
         # Create args
         args = get_default_args()
@@ -54,9 +54,9 @@ class TestTensorIndexing:
 
         # Generate test case
         tensor_ir = self._create_index_computation(inputs, 0)
-        self._run_test_case(tensor_ir, inputs, args)
+        self._run_test_case(tensor_ir, inputs, args, backend)
 
-    def test_index_4x4_matrix_row_1(self):
+    def test_index_4x4_matrix_row_1(self, backend):
         """Test indexing first row of 4x4 matrix (variant 1)."""
         # Create args
         args = get_default_args()
@@ -72,9 +72,9 @@ class TestTensorIndexing:
 
         # Generate test case
         tensor_ir = self._create_index_computation(inputs, 0)
-        self._run_test_case(tensor_ir, inputs, args)
+        self._run_test_case(tensor_ir, inputs, args, backend)
 
-    def test_index_4x4_matrix_row_2(self):
+    def test_index_4x4_matrix_row_2(self, backend):
         """Test indexing first row of 4x4 matrix (variant 2)."""
         # Create args
         args = get_default_args()
@@ -90,9 +90,9 @@ class TestTensorIndexing:
 
         # Generate test case
         tensor_ir = self._create_index_computation(inputs, 0)
-        self._run_test_case(tensor_ir, inputs, args)
+        self._run_test_case(tensor_ir, inputs, args, backend)
 
-    def test_index_4x4_matrix_row_3(self):
+    def test_index_4x4_matrix_row_3(self, backend):
         """Test indexing first row of 4x4 matrix (variant 3)."""
         # Create args
         args = get_default_args()
@@ -108,9 +108,9 @@ class TestTensorIndexing:
 
         # Generate test case
         tensor_ir = self._create_index_computation(inputs, 0)
-        self._run_test_case(tensor_ir, inputs, args)
+        self._run_test_case(tensor_ir, inputs, args, backend)
 
-    def test_index_4x4_4x32_with_reshape_permute(self):
+    def test_index_4x4_4x32_with_reshape_permute(self, backend):
         """Test indexing with reshape and permute operations."""
         # Create args
         args = get_default_args()
@@ -129,4 +129,4 @@ class TestTensorIndexing:
         s2 = s.reshape(1, {1: 4, 2: 8}).permute({0: 1, 1: 0, 2: 2})
         tensor_ir = s2[0]
 
-        self._run_test_case(tensor_ir, inputs, args)
+        self._run_test_case(tensor_ir, inputs, args, backend)

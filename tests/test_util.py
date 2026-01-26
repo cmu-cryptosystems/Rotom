@@ -16,4 +16,5 @@ def get_default_args():
     parser.not_secure = False
     parser.conv_roll = False
     parser.fn = ""
+    parser.benchmark = ""
     return parser

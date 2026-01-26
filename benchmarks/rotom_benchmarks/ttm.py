@@ -1,5 +1,3 @@
-import random
-
 import numpy as np
 
 from frontends.tensor import TensorTerm
@@ -9,12 +7,12 @@ def ttm():
     inputs = {}
     inputs["t"] = np.array(
         [
-            [[random.choice(range(2)) for _ in range(64)] for _ in range(64)]
+            [[np.random.randint(0, 2) for _ in range(64)] for _ in range(64)]
             for _ in range(64)
         ]
     )
     inputs["m"] = np.array(
-        [[random.choice(range(2)) for _ in range(64)] for _ in range(64)]
+        [[np.random.randint(0, 2) for _ in range(64)] for _ in range(64)]
     )
 
     t = TensorTerm.Tensor("t", inputs["t"].shape, True)

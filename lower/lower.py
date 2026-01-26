@@ -9,6 +9,9 @@ from lower.circuit_opts.mask_opts import (
     zero_mask_opt,
 )
 from lower.circuit_opts.rot_opts import rot_zero_opt
+
+# replace with optimized cts
+from lower.layout_cts import LayoutCiphertexts
 from lower.lower_add import lower_add
 from lower.lower_combine import lower_combine
 from lower.lower_compact import lower_compact
@@ -114,9 +117,6 @@ class Lower:
             opt_ct = mask_identity_opt(ct)
             opt_ct = zero_mask_identity_opt(ct)
             opt_cts[ct_idx] = opt_ct
-
-        # replace with optimized cts
-        from lower.layout_cts import LayoutCiphertexts
 
         self.env[self.kernel] = LayoutCiphertexts(layout=layout_cts.layout, cts=opt_cts)
 

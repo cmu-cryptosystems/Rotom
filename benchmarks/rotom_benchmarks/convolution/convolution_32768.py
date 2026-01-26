@@ -1,5 +1,3 @@
-import random
-
 import numpy as np
 
 from frontends.tensor import TensorTerm
@@ -21,11 +19,16 @@ def convolution_32768():
     inputs = {}
     inputs["a"] = np.array(
         [
-            [[i + j * dim_size for i in range(dim_size)] for j in range(dim_size)]
+            [
+                [np.random.choice(range(2)) for i in range(dim_size)]
+                for j in range(dim_size)
+            ]
             for _ in range(input_channels)
         ]
     )
-    inputs["b"] = np.array([[[[1 for i in range(f_size)] for j in range(f_size)]]])
+    inputs["b"] = np.array(
+        [[[[np.random.choice(range(2)) for i in range(f_size)] for j in range(f_size)]]]
+    )
 
     tensor_ir = run_convolution(
         dim_size, input_channels, 1, 1, f_size, f_size, 1, padding

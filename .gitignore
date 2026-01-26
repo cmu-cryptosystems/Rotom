@@ -11,6 +11,7 @@ heir/
 
 # Generated circuit output files
 output/
+logs/
 
 # Documentation generated files
 docs/html/

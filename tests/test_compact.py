@@ -7,11 +7,11 @@ in the Rotom homomorphic encryption system.
 
 import numpy as np
 
-from backends.toy import Toy
 from frontends.tensor import TensorTerm
 from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
 from lower.lower import Lower
+from tests.conftest import assert_results_equal, run_backend
 from tests.test_util import get_default_args
 from util.layout_util import apply_layout
 
@@ -19,11 +19,11 @@ from util.layout_util import apply_layout
 class TestCompaction:
     """Test compaction operations."""
 
-    def _run_test_case(self, kernel, inputs, args):
+    def _run_test_case(self, kernel, inputs, args, backend):
         """Helper method to run a test case."""
         # Run compiler
         circuit_ir = Lower(kernel).run()
-        results = Toy(circuit_ir, inputs, args).run()
+        results = run_backend(backend, circuit_ir, inputs, args)
 
         # Generate expected result from the tensor term
         tensor_term = kernel.cs[0].layout.term
@@ -31,9 +31,9 @@ class TestCompaction:
 
         # Check result
         expected_cts = apply_layout(expected, kernel.layout)
-        assert expected_cts == results
+        assert_results_equal(expected_cts, results, backend)
 
-    def test_compact(self):
+    def test_compact(self, backend):
         """Test simple compaction operation"""
         # Create args
         args = get_default_args()
@@ -65,4 +65,4 @@ class TestCompaction:
         # Create compaction kernel
         compact_kernel = Kernel(KernelOp.COMPACT, [input_kernel], target_layout)
 
-        self._run_test_case(compact_kernel, inputs, args)
+        self._run_test_case(compact_kernel, inputs, args, backend)
