@@ -134,6 +134,7 @@ class Toy:
         return [a - b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
     def eval_mul(self, term):
+        print("mul:")
         print(self.env[term.cs[0]])
         print(self.env[term.cs[1]])
         print()
@@ -217,10 +218,7 @@ class Toy:
             all_close = True
             max_diff = 0.0
 
-            print("TERM:", term)
-            for t in term.post_order():
-                print(t)
-                print()
+            print("CHECKING TERM:", term)
 
             print("eval results:")
             print("inputs:", self.inputs)

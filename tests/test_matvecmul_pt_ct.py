@@ -60,7 +60,59 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
 
         self._run_test_case(inputs, args, backend)
 
-    def test_matvecmul_pt_ct_16x4_4x1(self, backend):
+    
+
+    def test_matvecmul_pt_ct_8x2_2x1(self, backend):
+        """Test ciphertext-plaintext matrix-vector multiplication with 64x64 matrix and 64x1 vector."""
+        # Create args
+        args = get_default_args()
+        args.n = 8
+        args.rolls = True
+
+        # Create inputs
+        inputs = {}
+        inputs["a"] = np.array(
+            [[i*2 + j for j in range(2)] for i in range(8)]
+        )
+        inputs["b"] = np.array([[1] for i in range(2)])
+
+        self._run_test_case(inputs, args, backend)
+
+    
+    def test_matvecmul_pt_ct_4x2_2x1(self, backend):
+        """Test ciphertext-plaintext matrix-vector multiplication with 64x64 matrix and 64x1 vector."""
+        # Create args
+        args = get_default_args()
+        args.n = 4
+        args.rolls = True
+
+        # Create inputs
+        inputs = {}
+        inputs["a"] = np.array(
+            [[i*2 + j for j in range(2)] for i in range(4)]
+        )
+        inputs["b"] = np.array([[1] for i in range(2)])
+
+        self._run_test_case(inputs, args, backend)
+
+    def test_matvecmul_pt_ct_4x2_2x1_8(self, backend):
+        """Test ciphertext-plaintext matrix-vector multiplication with 64x64 matrix and 64x1 vector."""
+        # Create args
+        args = get_default_args()
+        args.n = 8
+        args.rolls = True
+
+        # Create inputs
+        inputs = {}
+        inputs["a"] = np.array(
+            [[i*2 + j for j in range(2)] for i in range(4)]
+        )
+        inputs["b"] = np.array([[1] for i in range(2)])
+
+        self._run_test_case(inputs, args, backend)
+
+
+    def test_matvecmul_pt_ct_8x4_4x1(self, backend):
         """Test ciphertext-plaintext matrix-vector multiplication with 64x64 matrix and 64x1 vector."""
         # Create args
         args = get_default_args()
@@ -72,7 +124,24 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
         inputs["a"] = np.array(
             [[i*4 + j for j in range(4)] for i in range(8)]
         )
-        inputs["b"] = np.array([[1] for i in range(4)])
+        inputs["b"] = np.array([[i] for i in range(4)])
+
+        self._run_test_case(inputs, args, backend)
+
+
+    def test_matvecmul_pt_ct_16x4_4x1(self, backend):
+        """Test ciphertext-plaintext matrix-vector multiplication with 64x64 matrix and 64x1 vector."""
+        # Create args
+        args = get_default_args()
+        args.n = 16
+        args.rolls = True
+
+        # Create inputs
+        inputs = {}
+        inputs["a"] = np.array(
+            [[i*4 + j for j in range(4)] for i in range(16)]
+        )
+        inputs["b"] = np.array([[i] for i in range(4)])
 
         self._run_test_case(inputs, args, backend)
 

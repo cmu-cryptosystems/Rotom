@@ -675,11 +675,6 @@ class TensorTerm:
             case TensorOp.SUM:
                 return np.sum(env[self.cs[0]], axis=self.cs[1], keepdims=True)
             case TensorOp.MATMUL:
-                print("EVALUATING MATMUL")
-                print(env[self.cs[0]])
-                print(env[self.cs[1]])
-                print()
-                print(env[self.cs[0]] @ env[self.cs[1]])
                 return env[self.cs[0]] @ env[self.cs[1]]
             case TensorOp.TRANSPOSE:
                 return env[self.cs[0]].T
