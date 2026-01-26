@@ -463,6 +463,16 @@ def match_public_kernel(alignment, a_kernel, b_kernel, left):
         alignment, a_kernel.layout.get_dims(), b_kernel.layout.get_dims()
     )
 
+    print("a_kernel:")
+    print(a_kernel.layout.get_dims())
+    print(aligned_b_dims)
+    print()
+
+    print("b_kernel:")
+    print(aligned_a_dims)
+    print(b_kernel.layout.get_dims())
+    print()
+
     if left:
         roll_indices = []
         for roll in b_kernel.layout.rolls:
@@ -955,14 +965,14 @@ def get_aligned_dimensions(alignment, a_dims, b_dims):
             dim.dim = a_alignment[a_dim_dim][0]
             if b_remaining_extents[dim.dim] <= extent:
                 dim.extent = b_remaining_extents[dim.dim]
-                dim.stride = b_stride[dim.dim] // dim.extent
+                dim.stride = b_stride[dim.dim] // dim.extent if dim.dim is None else a_dim.stride
                 extent //= b_remaining_extents[dim.dim]
                 del b_remaining_extents[dim.dim]
                 b_stride[dim.dim] //= dim.extent
                 a_alignment[a_dim_dim].remove(dim.dim)
             elif b_remaining_extents[dim.dim] > extent:
                 dim.extent = extent
-                dim.stride = b_stride[dim.dim] // dim.extent
+                dim.stride = b_stride[dim.dim] // dim.extent if dim.dim is None else a_dim.stride
                 b_remaining_extents[dim.dim] //= extent
                 b_stride[dim.dim] //= dim.extent
                 extent = 1 
@@ -982,14 +992,14 @@ def get_aligned_dimensions(alignment, a_dims, b_dims):
             dim.dim = b_alignment[b_dim_dim][0]
             if a_remaining_extents[dim.dim] <= extent:
                 dim.extent = a_remaining_extents[dim.dim]
-                dim.stride = a_stride[dim.dim] // dim.extent
+                dim.stride = a_stride[dim.dim] // dim.extent if dim.dim is None else b_dim.stride
                 extent //= a_remaining_extents[dim.dim]
                 del a_remaining_extents[dim.dim]
                 a_stride[dim.dim] //= dim.extent
                 b_alignment[b_dim_dim].remove(dim.dim)
             elif a_remaining_extents[dim.dim] > extent:
                 dim.extent = extent
-                dim.stride = a_stride[dim.dim] // dim.extent    
+                dim.stride = a_stride[dim.dim] // dim.extent if dim.dim is None else b_dim.stride    
                 a_remaining_extents[dim.dim] //= extent
                 a_stride[dim.dim] //= dim.extent
                 extent = 1
