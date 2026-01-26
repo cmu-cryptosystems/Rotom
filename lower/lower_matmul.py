@@ -3,6 +3,7 @@ from copy import deepcopy as copy
 from ir.dim import DimType
 from ir.he import HEOp, HETerm
 from ir.kernel import Kernel, KernelOp
+from ir.layout import Layout
 from lower.layout_cts import LayoutCiphertexts, create_layout_without_dims
 from lower.lower_util import bsgs, find_sum_dim, rotate_and_sum
 from util.layout_util import (
@@ -15,9 +16,6 @@ from util.util import prod
 
 
 def lower_matmul(env, kernel):
-    # BUG: alignment sometimes fails
-    # KernelOp.ROT_ROLL: roll(0,2) [1:2:1][1:2:2];[2:1][0:4:1]
-    # KernelOp.ROLL: roll(0,2) [0:4:1];[1:2:1][4:1]
     a_cts = env[kernel.cs[0]]
     b_cts = env[kernel.cs[1]]
     assert a_cts.keys() == b_cts.keys()
@@ -146,12 +144,32 @@ def lower_bsgs_matmul(env, kernel):
         dim.dim for dim in kernel_cs[0].layout.get_dims() if dim.dim is not None
     )
 
+    slot_sum_dims = []
+    for a_dim, b_dim in zip(kernel.cs[1].layout.slot_dims, kernel.cs[2].layout.slot_dims):
+        if a_dim.dim is not None and b_dim.dim is not None:
+            slot_sum_dims.append(a_dim)
+
+    # recreate layout ct
+    output_dims = []
+    for ct_dim in kernel.cs[1].layout.ct_dims:
+        if ct_dim.dim != sum_dim:
+            output_dims.append(ct_dim)
+    output_dims.extend(kernel.cs[1].layout.slot_dims)
+
+    output_layout = Layout(
+        kernel.cs[1].layout.term,
+        [],
+        output_dims,
+        kernel.cs[1].layout.offset,
+        kernel.cs[1].layout.n,
+        rolled_kernel.layout.secret,
+    )
+
+    layout_cts = LayoutCiphertexts(layout=output_layout, cts=cts)
     if any(dim.dim == sum_dim for dim in replicated_kernel.layout.ct_dims):
         new_cts = {}
         for dim in replicated_kernel.layout.ct_dims:
             if dim.dim == sum_dim:
-                from util.layout_util import get_segment
-
                 segment = get_segment(dim, replicated_kernel.layout.ct_dims)
                 split_cts = [[] for _ in range(len(cts) // segment[1])]
                 for i in range(len(cts)):
@@ -164,5 +182,37 @@ def lower_bsgs_matmul(env, kernel):
                     new_cts[i] = base
 
         # Create layout without summed dimension and return LayoutCiphertexts
-        return LayoutCiphertexts(layout=kernel.layout, cts=new_cts)
-    return LayoutCiphertexts(layout=kernel.layout, cts=cts)
+        layout_cts = LayoutCiphertexts(layout=kernel.layout, cts=new_cts)
+
+    for slot_sum_dim in slot_sum_dims:
+        segment = get_segment(slot_sum_dim, layout_cts.layout.slot_dims)
+        extent = segment[1]
+        mul_offset = segment[2]
+        summed_cts = {}
+        for index, term in layout_cts.cts.items():
+            summed_cts[index] = rotate_and_sum(term, extent, mul_offset)
+
+        # Create new layout without the summed dimension
+        new_layout = create_layout_without_dims(layout_cts.layout, [slot_sum_dim])
+        layout_cts = LayoutCiphertexts(layout=new_layout, cts=summed_cts)
+
+
+    # mask out gap dimensions
+    needs_mask = False
+    for dim in layout_cts.layout.slot_dims:
+        if dim.dim_type == DimType.EMPTY:
+            needs_mask = True
+            break
+
+    if needs_mask:
+        mask = HETerm.mask([convert_layout_to_mask(layout_cts.layout)])
+        masked_cts = {}
+        for index, term in layout_cts.cts.items():
+            mask_term = term * mask
+            masked_cts[index] = mask_term
+        layout_cts = LayoutCiphertexts(layout=layout_cts.layout, cts=masked_cts)
+    else:
+        # Update layout to output layout if no mask needed
+        layout_cts = LayoutCiphertexts(layout=layout_cts.layout, cts=layout_cts.cts)
+    
+    return layout_cts

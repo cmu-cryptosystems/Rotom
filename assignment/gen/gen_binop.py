@@ -463,16 +463,6 @@ def match_public_kernel(alignment, a_kernel, b_kernel, left):
         alignment, a_kernel.layout.get_dims(), b_kernel.layout.get_dims()
     )
 
-    print("a_kernel:")
-    print(a_kernel.layout.get_dims())
-    print(aligned_b_dims)
-    print()
-
-    print("b_kernel:")
-    print(aligned_a_dims)
-    print(b_kernel.layout.get_dims())
-    print()
-
     if left:
         roll_indices = []
         for roll in b_kernel.layout.rolls:
