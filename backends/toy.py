@@ -134,10 +134,6 @@ class Toy:
         return [a - b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
     def eval_mul(self, term):
-        print("mul:")
-        print(self.env[term.cs[0]])
-        print(self.env[term.cs[1]])
-        print()
         return [a * b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
     def eval_poly(self, term):
@@ -218,17 +214,6 @@ class Toy:
             all_close = True
             max_diff = 0.0
 
-            print("CHECKING TERM:", term)
-
-            print("eval results:")
-            print("inputs:", self.inputs)
-            print("eval result:", term.layout.term.eval(self.inputs))
-
-            print("expected (apply layout):", expected)
-            print(term.layout)
-            print("results:", results)
-            print()
-
             for expected_vec, result_vec in zip(expected, results):
                 if not np.allclose(expected_vec, result_vec, rtol=1e-2, atol=1e-2):
                     all_close = False
@@ -249,10 +234,6 @@ class Toy:
                 print("diff:")
                 for expected_vec, result_vec in zip(expected, results):
                     print([e - r for e, r in zip(expected_vec, result_vec)])
-                print()
-                print("kernel:", term)
-                for cs in term.cs:
-                    print(cs)
                 print()
 
                 print("expected layout:", term.layout)

@@ -914,7 +914,43 @@ def roll_dimensions(term, alignment, kernels):
 
 
 def get_aligned_dimensions(alignment, a_dims, b_dims):
-    # map alignment
+    """Align two dimension lists based on a specified dimension mapping.
+
+    This function takes two lists of dimensions and an alignment specification,
+    then produces aligned dimension lists where corresponding dimensions are
+    matched according to the alignment mapping. The alignment process handles
+    dimensions with different extents by splitting them appropriately while
+    preserving stride information.
+
+    Args:
+        alignment: List of tuples (a_dim, b_dim) specifying which dimensions
+            from a_dims align with which dimensions from b_dims.
+        a_dims: List of dimension objects for tensor A, where each dimension
+            has attributes: dim (dimension identifier), extent (size),
+            stride, and dim_type.
+        b_dims: List of dimension objects for tensor B, with the same
+            attributes as a_dims.
+
+    Returns:
+        tuple: A pair (aligned_b_dims, aligned_a_dims) where:
+            - aligned_b_dims: List of dimension objects parallel to a_dims,
+              containing the corresponding aligned dimensions from B.
+            - aligned_a_dims: List of dimension objects parallel to b_dims,
+              containing the corresponding aligned dimensions from A.
+
+    Notes:
+        - The function handles dimension splitting when aligned dimensions
+          have different extents, creating multiple sub-dimensions as needed.
+        - EMPTY dimension types are copied directly without alignment.
+        - Strides are adjusted to reflect the splitting of dimensions and
+          are synchronized between aligned dimension pairs.
+        - The returned lists maintain the same length as their corresponding
+          input dimension lists.
+
+    Raises:
+        NotImplementedError: If an unexpected alignment case is encountered
+            during dimension extent matching.
+    """
     a_alignment = {}
     b_alignment = {}
     for a, b in alignment:
