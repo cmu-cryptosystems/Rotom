@@ -9,10 +9,10 @@ import numpy as np
 import pytest
 
 from assignment.assignment import LayoutAssignment
-from backends.toy import Toy
 from frontends.tensor import TensorTerm
 from ir.dim import *
 from lower.lower import Lower
+from tests.conftest import assert_results_equal, run_backend
 from tests.test_util import get_default_args
 from util.layout_util import apply_layout
 
@@ -35,7 +35,7 @@ class TestConvolution2D:
         output_Tensor = TensorTerm.conv2d(input_Tensor, weight_Tensor, stride, padding)
         return output_Tensor
 
-    def _run_test_case(self, tensor_ir, inputs, args):
+    def _run_test_case(self, tensor_ir, inputs, args, backend):
         """Helper method to run a test case."""
         # Generate expected result
         expected = tensor_ir.eval(inputs)
@@ -43,14 +43,14 @@ class TestConvolution2D:
         # Run compiler
         kernel = LayoutAssignment(tensor_ir, args).run()
         circuit_ir = Lower(kernel).run()
-        results = Toy(circuit_ir, inputs, args).run()
+        results = run_backend(backend, circuit_ir, inputs, args)
 
         # Check result
         expected_cts = apply_layout(expected, kernel.layout)
-        assert expected_cts == results
+        assert_results_equal(expected_cts, results, backend)
 
     @pytest.mark.parametrize("conv_roll", [False, True])
-    def test_conv2d_4x4_filter_2x2(self, conv_roll):
+    def test_conv2d_4x4_filter_2x2(self, conv_roll, backend):
         """Test 2D convolution with 4x4 input and 2x2 filter."""
         # Create args
         args = get_default_args()
@@ -78,10 +78,10 @@ class TestConvolution2D:
         tensor_ir = self._create_convolution_computation(
             dim_size, 1, 1, 1, f_size, f_size, 1, padding
         )
-        self._run_test_case(tensor_ir, inputs, args)
+        self._run_test_case(tensor_ir, inputs, args, backend)
 
     @pytest.mark.parametrize("conv_roll", [False])
-    def test_conv2d_4x4_filter_3x3(self, conv_roll):
+    def test_conv2d_4x4_filter_3x3(self, conv_roll, backend):
         """Test 2D convolution with 4x4 input and 3x3 filter."""
         # Create args
         args = get_default_args()
@@ -107,10 +107,10 @@ class TestConvolution2D:
         tensor_ir = self._create_convolution_computation(
             dim_size, 1, 1, 1, f_size, f_size, 1, padding
         )
-        self._run_test_case(tensor_ir, inputs, args)
+        self._run_test_case(tensor_ir, inputs, args, backend)
 
     @pytest.mark.parametrize("conv_roll", [False])
-    def test_conv2d_4x4_3channels_filter_3x3(self, conv_roll):
+    def test_conv2d_4x4_3channels_filter_3x3(self, conv_roll, backend):
         """Test 2D convolution with 4x4 input, 3 channels, and 3x3 filter."""
         # Create args
         args = get_default_args()
@@ -137,10 +137,10 @@ class TestConvolution2D:
         tensor_ir = self._create_convolution_computation(
             dim_size, input_channels, 1, 1, f_size, f_size, 1, padding
         )
-        self._run_test_case(tensor_ir, inputs, args)
+        self._run_test_case(tensor_ir, inputs, args, backend)
 
     @pytest.mark.parametrize("conv_roll", [False])
-    def test_conv2d_32x32_3channels_filter_3x3(self, conv_roll):
+    def test_conv2d_32x32_3channels_filter_3x3(self, conv_roll, backend):
         """Test 2D convolution with 32x32 input, 3 channels, and 3x3 filter (large scale)."""
         # Create args
         args = get_default_args()
@@ -167,7 +167,7 @@ class TestConvolution2D:
         tensor_ir = self._create_convolution_computation(
             dim_size, input_channels, 1, 1, f_size, f_size, 1, padding
         )
-        self._run_test_case(tensor_ir, inputs, args)
+        self._run_test_case(tensor_ir, inputs, args, backend)
 
     # @pytest.mark.parametrize("conv_roll", [False, True])
     # def test_conv2d_4x4_filter_1x1_pointwise(self, conv_roll):
@@ -199,7 +199,7 @@ class TestConvolution2D:
     #     self._run_test_case(tensor_ir, inputs, args)
 
     @pytest.mark.parametrize("conv_roll", [False])
-    def test_conv2d_4x4_filter_3x3_random_weights(self, conv_roll):
+    def test_conv2d_4x4_filter_3x3_random_weights(self, conv_roll, backend):
         """Test 2D convolution with random filter weights (integer values for FHE)."""
         # Create args
         args = get_default_args()
@@ -221,10 +221,10 @@ class TestConvolution2D:
         tensor_ir = self._create_convolution_computation(
             dim_size, 1, 1, 1, f_size, f_size, 1, padding
         )
-        self._run_test_case(tensor_ir, inputs, args)
+        self._run_test_case(tensor_ir, inputs, args, backend)
 
     @pytest.mark.parametrize("conv_roll", [False])
-    def test_conv2d_4x4_filter_3x3_identity_center(self, conv_roll):
+    def test_conv2d_4x4_filter_3x3_identity_center(self, conv_roll, backend):
         """Test 2D convolution with identity filter (center weight = 1, rest = 0)."""
         # Create args
         args = get_default_args()
@@ -248,7 +248,7 @@ class TestConvolution2D:
         tensor_ir = self._create_convolution_computation(
             dim_size, 1, 1, 1, f_size, f_size, 1, padding
         )
-        self._run_test_case(tensor_ir, inputs, args)
+        self._run_test_case(tensor_ir, inputs, args, backend)
 
     # def test_conv2d_8x8_filter_4x4(self):
     #     TODO: Broken test

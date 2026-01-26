@@ -8,10 +8,10 @@ in the Rotom homomorphic encryption system.
 import numpy as np
 
 from assignment.assignment import LayoutAssignment
-from backends.toy import Toy
 from frontends.tensor import TensorTerm
 from ir.dim import *
 from lower.lower import Lower
+from tests.conftest import assert_results_equal, run_backend
 from tests.test_util import get_default_args
 from util.layout_util import apply_layout
 
@@ -25,7 +25,7 @@ class TestTensorAddition:
         b = TensorTerm.Tensor("b", list(inputs["b"].shape), False)
         return a + b, inputs["a"] + inputs["b"]
 
-    def _run_test_case(self, inputs, args):
+    def _run_test_case(self, inputs, args, backend):
         """Helper method to run a test case."""
         # Generate test case
         tensor_ir, expected = self._create_add_computation(inputs)
@@ -33,13 +33,13 @@ class TestTensorAddition:
         # Run compiler
         kernel = LayoutAssignment(tensor_ir, args).run()
         circuit_ir = Lower(kernel).run()
-        results = Toy(circuit_ir, inputs, args).run()
+        results = run_backend(backend, circuit_ir, inputs, args)
 
         # Check result
         expected_cts = apply_layout(expected, kernel.layout)
-        assert expected_cts == results
+        assert_results_equal(expected_cts, results, backend)
 
-    def test_add_ciphertext_plaintext_1(self):
+    def test_add_ciphertext_plaintext_1(self, backend):
         """Test addition: ciphertext + plaintext (test case 1)."""
         # Create args
         args = get_default_args()
@@ -54,9 +54,9 @@ class TestTensorAddition:
         )
         inputs["b"] = np.array(list(range(size)))
 
-        self._run_test_case(inputs, args)
+        self._run_test_case(inputs, args, backend)
 
-    def test_add_ciphertext_plaintext_2(self):
+    def test_add_ciphertext_plaintext_2(self, backend):
         """Test addition: ciphertext + plaintext (test case 2)."""
         # Create args
         args = get_default_args()
@@ -71,4 +71,4 @@ class TestTensorAddition:
         )
         inputs["b"] = np.array(list(range(size)))
 
-        self._run_test_case(inputs, args)
+        self._run_test_case(inputs, args, backend)

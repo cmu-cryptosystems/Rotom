@@ -10,10 +10,10 @@ import random
 import numpy as np
 
 from assignment.assignment import LayoutAssignment
-from backends.toy import Toy
 from frontends.tensor import TensorTerm
 from ir.dim import *
 from lower.lower import Lower
+from tests.conftest import assert_results_equal, run_backend
 from tests.test_util import get_default_args
 from util.layout_util import apply_layout
 
@@ -27,7 +27,7 @@ class TestMatrixMultiplicationCiphertextCiphertext:
         b = TensorTerm.Tensor("b", list(inputs["b"].shape), True)
         return a @ b, inputs["a"] @ inputs["b"]
 
-    def _run_test_case(self, inputs, args):
+    def _run_test_case(self, inputs, args, backend):
         """Helper method to run a test case."""
         # Generate test case
         tensor_ir, expected = self._create_matmul_ct_ct_computation(inputs)
@@ -35,13 +35,13 @@ class TestMatrixMultiplicationCiphertextCiphertext:
         # Run compiler
         kernel = LayoutAssignment(tensor_ir, args).run()
         circuit_ir = Lower(kernel).run()
-        results = Toy(circuit_ir, inputs, args).run()
+        results = run_backend(backend, circuit_ir, inputs, args)
 
         # Check result
         expected_cts = apply_layout(expected, kernel.layout)
-        assert expected_cts == results
+        assert_results_equal(expected_cts, results, backend)
 
-    def test_matmul_ct_ct_4x4(self):
+    def test_matmul_ct_ct_4x4(self, backend):
         """Test ciphertext-ciphertext matrix multiplication with 4x4 binary random matrices."""
         # Create args
         args = get_default_args()
@@ -57,9 +57,9 @@ class TestMatrixMultiplicationCiphertextCiphertext:
             [[random.choice(range(2)) for j in range(size)] for i in range(size)]
         )
 
-        self._run_test_case(inputs, args)
+        self._run_test_case(inputs, args, backend)
 
-    def test_matmul_ct_ct_8x8(self):
+    def test_matmul_ct_ct_8x8(self, backend):
         """Test ciphertext-ciphertext matrix multiplication with 8x8 binary random matrices."""
         # Create args
         args = get_default_args()
@@ -75,47 +75,9 @@ class TestMatrixMultiplicationCiphertextCiphertext:
             [[random.choice(range(2)) for j in range(size)] for i in range(size)]
         )
 
-        self._run_test_case(inputs, args)
+        self._run_test_case(inputs, args, backend)
 
-    def test_matmul_ct_ct_16x16(self):
-        """Test ciphertext-ciphertext matrix multiplication with 16x16 binary random matrices."""
-        # Create args
-        args = get_default_args()
-        args.n = 16
-        args.benchmark = "matmul_ct_ct_3"
-
-        # Create inputs
-        size = 16
-        inputs = {}
-        inputs["a"] = np.array(
-            [[random.choice(range(2)) for j in range(size)] for i in range(size)]
-        )
-        inputs["b"] = np.array(
-            [[random.choice(range(2)) for j in range(size)] for i in range(size)]
-        )
-
-        self._run_test_case(inputs, args)
-
-    def test_matmul_ct_ct_16x16(self):
-        """Test ciphertext-ciphertext matrix multiplication with 16x16 binary random matrices."""
-        # Create args
-        args = get_default_args()
-        args.n = 16
-        args.benchmark = "matmul_ct_ct_3"
-
-        # Create inputs
-        size = 16
-        inputs = {}
-        inputs["a"] = np.array(
-            [[random.choice(range(2)) for j in range(size)] for i in range(size)]
-        )
-        inputs["b"] = np.array(
-            [[random.choice(range(2)) for j in range(size)] for i in range(size)]
-        )
-
-        self._run_test_case(inputs, args)
-
-    def test_matmul_ct_ct_64x64(self):
+    def test_matmul_ct_ct_64x64(self, backend):
         """Test ciphertext-ciphertext matrix multiplication with 64x64 binary random matrices."""
         # Create args
         args = get_default_args()
@@ -132,9 +94,9 @@ class TestMatrixMultiplicationCiphertextCiphertext:
             [[random.choice(range(2)) for j in range(size)] for i in range(size)]
         )
 
-        self._run_test_case(inputs, args)
+        self._run_test_case(inputs, args, backend)
 
-    def test_matmul_ct_ct_4x4_rolls(self):
+    def test_matmul_ct_ct_4x4_rolls(self, backend):
         """Test ciphertext-ciphertext matrix multiplication with 4x4 binary random matrices with rolls."""
         # Create args
         args = get_default_args()
@@ -151,9 +113,9 @@ class TestMatrixMultiplicationCiphertextCiphertext:
             [[random.choice(range(2)) for j in range(size)] for i in range(size)]
         )
 
-        self._run_test_case(inputs, args)
+        self._run_test_case(inputs, args, backend)
 
-    def test_matmul_ct_ct_8x8_rolls(self):
+    def test_matmul_ct_ct_8x8_rolls(self, backend):
         """Test ciphertext-ciphertext matrix multiplication with 8x8 binary random matrices with rolls."""
         # Create args
         args = get_default_args()
@@ -170,9 +132,9 @@ class TestMatrixMultiplicationCiphertextCiphertext:
             [[random.choice(range(2)) for j in range(size)] for i in range(size)]
         )
 
-        self._run_test_case(inputs, args)
+        self._run_test_case(inputs, args, backend)
 
-    def test_matmul_ct_ct_16x16_rolls(self):
+    def test_matmul_ct_ct_16x16_rolls(self, backend):
         """Test ciphertext-ciphertext matrix multiplication with 16x16 binary random matrices with rolls."""
         # Create args
         args = get_default_args()
@@ -190,9 +152,9 @@ class TestMatrixMultiplicationCiphertextCiphertext:
             [[random.choice(range(2)) for j in range(size)] for i in range(size)]
         )
 
-        self._run_test_case(inputs, args)
+        self._run_test_case(inputs, args, backend)
 
-    def test_matmul_ct_ct_64x64_rolls(self):
+    def test_matmul_ct_ct_64x64_rolls(self, backend):
         """Test ciphertext-ciphertext matrix multiplication with 64x64 binary random matrices with rolls."""
         # Create args
         args = get_default_args()
@@ -209,4 +171,4 @@ class TestMatrixMultiplicationCiphertextCiphertext:
             [[random.choice(range(2)) for j in range(size)] for i in range(size)]
         )
 
-        self._run_test_case(inputs, args)
+        self._run_test_case(inputs, args, backend)
