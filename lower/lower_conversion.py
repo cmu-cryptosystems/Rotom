@@ -14,7 +14,6 @@ def lower_conversion(env, kernel):
     for cs in kernel.cs:
         print(cs)
 
-
     n = kernel.layout.n
 
     # create CS cts
@@ -181,7 +180,7 @@ def lower_conversion(env, kernel):
             print("expanded_layout:")
             print(expanded_layout)
             print("swap dim:")
-            print(swap_dim)           
+            print(swap_dim)
             print()
             ct_groups = get_cts_by_dim(temp_layout_cts, swap_dim)
             for ct_group in ct_groups:

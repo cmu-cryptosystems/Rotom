@@ -947,7 +947,7 @@ def get_aligned_dimensions(alignment, a_dims, b_dims):
     # create aligned a_dims:
     aligned_b_dims = []
     for a_dim in a_dims:
-        if a_dim.dim_type == DimType.EMPTY: 
+        if a_dim.dim_type == DimType.EMPTY:
             aligned_b_dims.append(copy(a_dim))
             continue
         extent = a_dim.extent
@@ -966,16 +966,15 @@ def get_aligned_dimensions(alignment, a_dims, b_dims):
             dim.stride = b_stride[dim.dim] // dim.extent
             b_remaining_extents[dim.dim] //= extent
             b_stride[dim.dim] //= dim.extent
-            extent = 1 
-        else: 
+            extent = 1
+        else:
             raise NotImplementedError
         aligned_b_dims.append(dim)
-        
 
     # create aligned b_dims:
     aligned_a_dims = []
     for b_dim in b_dims:
-        if b_dim.dim_type == DimType.EMPTY: 
+        if b_dim.dim_type == DimType.EMPTY:
             aligned_a_dims.append(copy(b_dim))
             continue
         extent = b_dim.extent
@@ -1010,6 +1009,7 @@ def get_aligned_dimensions(alignment, a_dims, b_dims):
     assert len(aligned_a_dims) == len(b_dims)
 
     return aligned_b_dims, aligned_a_dims
+
 
 def conv_dimensions(alignment, kernels):
     a_kernel = kernels[0]
@@ -1335,7 +1335,7 @@ def output_layout(term, alignment, a_kernel, b_kernel):
             a_layout = a_kernel.layout
             b_layout = b_kernel.layout
             output_dims = []
-            
+
             # Get the contraction dimensions (summation dimensions)
             a_sum_dim = get_sum_dim(term, a_kernel)
             b_sum_dim = get_sum_dim(term, b_kernel)
@@ -1354,7 +1354,7 @@ def output_layout(term, alignment, a_kernel, b_kernel):
                     else:
                         # Keep all non-contraction dimensions from A
                         output_dims.append(a_dim)
-                
+
                 # Add dimensions from B that don't have a corresponding dimension in A
                 # Find which B dimensions are not aligned with A dimensions
                 a_aligned_dims = {a for a, b in alignment if a is not None}
@@ -1382,9 +1382,13 @@ def output_layout(term, alignment, a_kernel, b_kernel):
                         )
 
             # remove any rolls on the summation dimension
-            a_rolls = [roll for roll in a_layout.rolls if roll.dim_to_roll.dim != a_sum_dim]
+            a_rolls = [
+                roll for roll in a_layout.rolls if roll.dim_to_roll.dim != a_sum_dim
+            ]
             b_rolls = [
-                roll for roll in b_kernel.layout.rolls if roll.dim_to_roll.dim != b_sum_dim
+                roll
+                for roll in b_kernel.layout.rolls
+                if roll.dim_to_roll.dim != b_sum_dim
             ]
 
             # update rolls with new output dimensions
@@ -1410,7 +1414,7 @@ def output_layout(term, alignment, a_kernel, b_kernel):
                     a_kernel.layout.secret or b_kernel.layout.secret,
                 )
             )
-            
+
             output_kernel = Kernel(KernelOp.MATMUL, [a_kernel, b_kernel], output_layout)
             return output_kernel
         case _:

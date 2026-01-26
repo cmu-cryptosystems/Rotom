@@ -6,6 +6,7 @@ and plaintext vectors in the Rotom homomorphic encryption system.
 """
 
 import random
+
 import numpy as np
 import pytest
 

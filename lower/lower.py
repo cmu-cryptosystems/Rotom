@@ -9,6 +9,9 @@ from lower.circuit_opts.mask_opts import (
     zero_mask_opt,
 )
 from lower.circuit_opts.rot_opts import rot_zero_opt
+
+# replace with optimized cts
+from lower.layout_cts import LayoutCiphertexts
 from lower.lower_add import lower_add
 from lower.lower_combine import lower_combine
 from lower.lower_compact import lower_compact
@@ -36,9 +39,6 @@ from lower.lower_sub import lower_sub
 from lower.lower_sum import lower_sum
 from lower.lower_tensor import lower_tensor
 from lower.lower_transpose import lower_transpose
-
-# replace with optimized cts
-from lower.layout_cts import LayoutCiphertexts
 
 
 class Lower:

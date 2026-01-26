@@ -6,6 +6,7 @@ and plaintext vectors in the Rotom homomorphic encryption system.
 """
 
 import random
+
 import numpy as np
 import pytest
 
@@ -60,8 +61,6 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
 
         self._run_test_case(inputs, args, backend)
 
-    
-
     def test_matvecmul_pt_ct_8x2_2x1(self, backend):
         """Test ciphertext-plaintext matrix-vector multiplication with 64x64 matrix and 64x1 vector."""
         # Create args
@@ -71,14 +70,11 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
 
         # Create inputs
         inputs = {}
-        inputs["a"] = np.array(
-            [[i*2 + j for j in range(2)] for i in range(8)]
-        )
+        inputs["a"] = np.array([[i * 2 + j for j in range(2)] for i in range(8)])
         inputs["b"] = np.array([[1] for i in range(2)])
 
         self._run_test_case(inputs, args, backend)
 
-    
     def test_matvecmul_pt_ct_4x2_2x1(self, backend):
         """Test ciphertext-plaintext matrix-vector multiplication with 64x64 matrix and 64x1 vector."""
         # Create args
@@ -88,9 +84,7 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
 
         # Create inputs
         inputs = {}
-        inputs["a"] = np.array(
-            [[i*2 + j for j in range(2)] for i in range(4)]
-        )
+        inputs["a"] = np.array([[i * 2 + j for j in range(2)] for i in range(4)])
         inputs["b"] = np.array([[1] for i in range(2)])
 
         self._run_test_case(inputs, args, backend)
@@ -104,13 +98,10 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
 
         # Create inputs
         inputs = {}
-        inputs["a"] = np.array(
-            [[i*2 + j for j in range(2)] for i in range(4)]
-        )
+        inputs["a"] = np.array([[i * 2 + j for j in range(2)] for i in range(4)])
         inputs["b"] = np.array([[1] for i in range(2)])
 
         self._run_test_case(inputs, args, backend)
-
 
     def test_matvecmul_pt_ct_8x4_4x1(self, backend):
         """Test ciphertext-plaintext matrix-vector multiplication with 64x64 matrix and 64x1 vector."""
@@ -121,13 +112,10 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
 
         # Create inputs
         inputs = {}
-        inputs["a"] = np.array(
-            [[i*4 + j for j in range(4)] for i in range(8)]
-        )
+        inputs["a"] = np.array([[i * 4 + j for j in range(4)] for i in range(8)])
         inputs["b"] = np.array([[i] for i in range(4)])
 
         self._run_test_case(inputs, args, backend)
-
 
     def test_matvecmul_pt_ct_16x4_4x1(self, backend):
         """Test ciphertext-plaintext matrix-vector multiplication with 64x64 matrix and 64x1 vector."""
@@ -138,14 +126,11 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
 
         # Create inputs
         inputs = {}
-        inputs["a"] = np.array(
-            [[i*4 + j for j in range(4)] for i in range(16)]
-        )
+        inputs["a"] = np.array([[i * 4 + j for j in range(4)] for i in range(16)])
         inputs["b"] = np.array([[i] for i in range(4)])
 
         self._run_test_case(inputs, args, backend)
 
-    
     def test_matvecmul_pt_ct_1024x256_256x1(self, backend):
         """Test ciphertext-plaintext matrix-vector multiplication with 64x64 matrix and 64x1 vector."""
         # Create args

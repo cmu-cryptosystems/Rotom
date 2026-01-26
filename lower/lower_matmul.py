@@ -145,7 +145,9 @@ def lower_bsgs_matmul(env, kernel):
     )
 
     slot_sum_dims = []
-    for a_dim, b_dim in zip(kernel.cs[1].layout.slot_dims, kernel.cs[2].layout.slot_dims):
+    for a_dim, b_dim in zip(
+        kernel.cs[1].layout.slot_dims, kernel.cs[2].layout.slot_dims
+    ):
         if a_dim.dim is not None and b_dim.dim is not None:
             slot_sum_dims.append(a_dim)
 
@@ -196,7 +198,6 @@ def lower_bsgs_matmul(env, kernel):
         new_layout = create_layout_without_dims(layout_cts.layout, [slot_sum_dim])
         layout_cts = LayoutCiphertexts(layout=new_layout, cts=summed_cts)
 
-
     # mask out gap dimensions
     needs_mask = False
     for dim in layout_cts.layout.slot_dims:
@@ -214,5 +215,5 @@ def lower_bsgs_matmul(env, kernel):
     else:
         # Update layout to output layout if no mask needed
         layout_cts = LayoutCiphertexts(layout=layout_cts.layout, cts=layout_cts.cts)
-    
+
     return layout_cts

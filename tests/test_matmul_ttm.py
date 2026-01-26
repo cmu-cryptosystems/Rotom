@@ -50,7 +50,10 @@ class TestMatrixMultiplicationTTM:
         size = 4
         inputs = {}
         inputs["a"] = np.array(
-            [[[i * size + j for j in range(size)] for i in range(size)] for k in range(size)]
+            [
+                [[i * size + j for j in range(size)] for i in range(size)]
+                for k in range(size)
+            ]
         )
         inputs["b"] = np.array(
             [[i * size + j for j in range(size)] for i in range(size)]
@@ -58,8 +61,7 @@ class TestMatrixMultiplicationTTM:
 
         self._run_test_case(inputs, args, backend)
 
-
-    # BUG: flaky test 
+    # BUG: flaky test
     # def test_matmul_ttm_4x4_32(self, backend):
     #     """Test matrix multiplication + addition with 4x4 matrices (test case 1)."""
     #     # Create args

@@ -25,9 +25,9 @@ from benchmarks.rotom_benchmarks.double_matmul.double_matmul_128_64_ct_ct import
 from benchmarks.rotom_benchmarks.double_matmul.double_matmul_256_128_ct_ct import (
     double_matmul_256_128_ct_ct,
 )
+from benchmarks.rotom_benchmarks.logreg import logreg
 from benchmarks.rotom_benchmarks.matmul.matmul_128_64 import matmul_128_64
 from benchmarks.rotom_benchmarks.matmul.matmul_256_128 import matmul_256_128
-from benchmarks.rotom_benchmarks.logreg import logreg
 from benchmarks.rotom_benchmarks.ttm import ttm
 
 # Import Rotom

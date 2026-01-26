@@ -255,7 +255,7 @@ class Toy:
                     print(cs)
                 print()
 
-                print("expected layout:", term.layout) 
+                print("expected layout:", term.layout)
 
             assert all_close, f"Values not close enough. Max diff: {max_diff}"
         return results
