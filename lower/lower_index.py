@@ -9,7 +9,6 @@ def lower_index(env, kernel):
     # map kernel dims to layout indices
     dim_map = get_dim_indices_by_dim(kernel.cs[0].layout.get_dims())
     ct_indices = split_lists(dim_map[0], kernel.cs[0].layout.num_ct())
-    
 
     # Get the index value from the term
     # For INDEX operations, kernel.layout.term.cs[1] contains the index value
@@ -19,7 +18,11 @@ def lower_index(env, kernel):
         if isinstance(index_value, slice):
             index_value = index_value.start if index_value.start is not None else 0
         elif isinstance(index_value, tuple):
-            index_value = index_value[0] if len(index_value) > 0 and isinstance(index_value[0], int) else 0
+            index_value = (
+                index_value[0]
+                if len(index_value) > 0 and isinstance(index_value[0], int)
+                else 0
+            )
         else:
             index_value = 0
 

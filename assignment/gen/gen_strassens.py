@@ -26,6 +26,7 @@ from util.layout_util import dimension_merging
 def layout_to_str(layout):
     return str(layout.rolls) + " " + str(layout.get_dims())
 
+
 def get_shape(kernel):
     """Extracts shape information from a kernel layout.
 
@@ -41,7 +42,8 @@ def get_shape(kernel):
     """
     shapes = {}
     for dim in kernel.layout.get_dims():
-        if dim.dim is None: continue
+        if dim.dim is None:
+            continue
         if dim.dim not in shapes:
             shapes[dim.dim] = dim.extent
         else:
@@ -96,13 +98,20 @@ def traverse_ct_dims(ct_dims):
                         new_indices.append(new_index)
                 indices = new_indices
 
-    step_size = 1 
+    step_size = 1
     for steps in offsets.values():
         step_size = max(step_size, max(steps))
-    
+
     output_offsets = []
     for offset in indices:
-        output_offsets.append([offset[0], (offset[0]//step_size + 1) * step_size, offset[1], (offset[1]//step_size + 1) * step_size])
+        output_offsets.append(
+            [
+                offset[0],
+                (offset[0] // step_size + 1) * step_size,
+                offset[1],
+                (offset[1] // step_size + 1) * step_size,
+            ]
+        )
 
     return output_offsets
 
@@ -160,7 +169,7 @@ def add_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
         b_kernel = b_kernels[layout_str]
         a_kernel = copy(a_kernel)
         b_kernel = copy(b_kernel)
-    
+
         term = a_kernel.layout.term + b_kernel.layout.term
         term.offset = {}
         add_kernels = gen_binop(
@@ -185,6 +194,7 @@ def add_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
                 output_kernels[layout_str] = add_kernel
                 output_kernel_costs[layout_str] = cost
     return output_kernels
+
 
 def sub_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
     output_kernels = {}
@@ -219,6 +229,7 @@ def sub_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
                 output_kernel_costs[layout_str] = cost
     return output_kernels
 
+
 def matmul_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
     output_kernels = {}
     output_kernel_costs = {}
@@ -249,7 +260,7 @@ def matmul_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
                     output_kernels[layout_str] = matmul_kernel
                     output_kernel_costs[layout_str] = cost
     return output_kernels
-    
+
 
 def strassens_opt(kernel_map, a_tiles, b_tiles, roll_flag, network):
     # perform addition and matmul
@@ -310,14 +321,24 @@ def strassens_opt(kernel_map, a_tiles, b_tiles, roll_flag, network):
     M7 = matmul_tiles(kernel_map, T9, T10, roll_flag, network)
 
     output_kernels = []
-    C1 = add_tiles(kernel_map, sub_tiles(kernel_map, add_tiles(kernel_map, M1, M4, roll_flag, network), M5, roll_flag, network), M7, roll_flag, network)
-    
-    
+    C1 = add_tiles(
+        kernel_map,
+        sub_tiles(
+            kernel_map,
+            add_tiles(kernel_map, M1, M4, roll_flag, network),
+            M5,
+            roll_flag,
+            network,
+        ),
+        M7,
+        roll_flag,
+        network,
+    )
+
     C2 = add_tiles(kernel_map, M3, M5, roll_flag, network)
-        # C3 = add_tiles(kernel_map, M2[layout_str], M4[layout_str], roll_flag, network)
-        # C4 = add_tiles(kernel_map, sub_tiles(kernel_map, add_tiles(kernel_map, M1[layout_str], M2[layout_str], roll_flag, network), M3[layout_str], roll_flag, network), M6[layout_str], roll_flag, network)
-        
-        
+    # C3 = add_tiles(kernel_map, M2[layout_str], M4[layout_str], roll_flag, network)
+    # C4 = add_tiles(kernel_map, sub_tiles(kernel_map, add_tiles(kernel_map, M1[layout_str], M2[layout_str], roll_flag, network), M3[layout_str], roll_flag, network), M6[layout_str], roll_flag, network)
+
     return [C2]
 
     # # match on layouts
@@ -361,7 +382,9 @@ def gen_strassens(term, cs_kernels, roll_flag, network):
                     for i, offset in enumerate(a_ct_offsets):
                         # create indexed term:
                         term = copy(a_kernel.layout.term)
-                        indexed_term = term[offset[0]:offset[1], offset[2]:offset[3]]
+                        indexed_term = term[
+                            offset[0] : offset[1], offset[2] : offset[3]
+                        ]
                         indexed_a_layout = Layout(
                             indexed_term,
                             a_kernel.layout.rolls,
@@ -377,7 +400,7 @@ def gen_strassens(term, cs_kernels, roll_flag, network):
                             indexed_a_layout,
                         )
                         indexed_a_kernels.append(indexed_a_kernel)
-                        
+
                         if indexed_term not in kernel_map:
                             kernel_map[indexed_term] = []
                         kernel_map[indexed_term].append(indexed_a_kernel)
@@ -386,7 +409,9 @@ def gen_strassens(term, cs_kernels, roll_flag, network):
                     for i, offset in enumerate(b_ct_offsets):
                         # create indexed term:
                         term = copy(b_kernel.layout.term)
-                        indexed_term = term[offset[0]:offset[1], offset[2]:offset[3]]
+                        indexed_term = term[
+                            offset[0] : offset[1], offset[2] : offset[3]
+                        ]
                         indexed_b_layout = Layout(
                             indexed_term,
                             b_kernel.layout.rolls,
@@ -405,7 +430,11 @@ def gen_strassens(term, cs_kernels, roll_flag, network):
                         kernel_map[indexed_term].append(indexed_b_kernel)
 
                     strassens_opt(
-                        kernel_map, indexed_a_kernels, indexed_b_kernels, roll_flag, network
+                        kernel_map,
+                        indexed_a_kernels,
+                        indexed_b_kernels,
+                        roll_flag,
+                        network,
                     )
-                    
+
     return kernel_map
