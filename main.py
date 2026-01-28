@@ -129,8 +129,7 @@ def run_benchmark_or_microbenchmark(args):
                 tensor_ir, inputs = ttm()
                 args.n = n
             case "bert_attention":
-                tensor_ir, inputs, n = bert_attention()
-                args.n = n
+                tensor_ir, inputs = bert_attention()
             case "strassens":
                 tensor_ir, inputs = strassens_matmul()
             case _:

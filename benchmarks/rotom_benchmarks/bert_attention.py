@@ -67,8 +67,6 @@ def bert_attention():
     blocked_kt = k.reshape(1, {1: num_heads, 2: head_dim}).permute({0: 2, 1: 0, 2: 1})
     blocked_v = v.reshape(1, {1: num_heads, 2: head_dim}).permute({0: 1, 1: 0, 2: 2})
 
-    return blocked_q[0], inputs, 8192
-
     head_results = None
     for h_idx in range(num_heads):
         q_h = blocked_q[h_idx, :, :]
@@ -84,4 +82,4 @@ def bert_attention():
             head_results = head_results + out_h
 
     # Return the TensorTerm computation, inputs, and a recommended ring dimension.
-    return head_results, inputs, 8192
+    return head_results, inputs
