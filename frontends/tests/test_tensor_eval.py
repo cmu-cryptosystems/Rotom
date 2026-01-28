@@ -295,6 +295,42 @@ class TestIndexingEvaluation:
 
         np.testing.assert_array_equal(result, expected)
 
+    def test_slice_indexing_rows(self):
+        """Test slice indexing along the first dimension (rows)."""
+        a = TensorTerm.Tensor("a", [2, 3], True)
+        b = a[0:1]  # slice first row (keep dimension)
+
+        inputs = {"a": np.array([[1, 2, 3], [4, 5, 6]])}
+
+        result = b.eval(inputs)
+        # Input gets padded to (2,4), then sliced
+        expected = np.array([[1, 2, 3, 0]])
+        np.testing.assert_array_equal(result, expected)
+
+    def test_slice_indexing_cols(self):
+        """Test slice indexing along the second dimension (columns)."""
+        a = TensorTerm.Tensor("a", [2, 3], True)
+        b = a[:, 1:3]  # take columns 1 and 2
+
+        inputs = {"a": np.array([[1, 2, 3], [4, 5, 6]])}
+
+        result = b.eval(inputs)
+        # Input gets padded to (2,4), then sliced
+        expected = np.array([[2, 3], [5, 6]])
+        np.testing.assert_array_equal(result, expected)
+
+    def test_mixed_index_and_slice(self):
+        """Test mixed integer indexing + slice (e.g., a[1, :])."""
+        a = TensorTerm.Tensor("a", [2, 3], True)
+        b = a[1, :]  # second row
+
+        inputs = {"a": np.array([[1, 2, 3], [4, 5, 6]])}
+
+        result = b.eval(inputs)
+        # Input gets padded to (2,4), then indexed
+        expected = np.array([4, 5, 6, 0])
+        np.testing.assert_array_equal(result, expected)
+
 
 class TestConvolutionEvaluation:
     """Test convolution operation evaluation."""

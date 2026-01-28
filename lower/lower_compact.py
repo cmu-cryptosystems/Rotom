@@ -24,7 +24,6 @@ def lower_compact(env, kernel):
         kernel.cs[0].layout.term,
         kernel.cs[0].layout.rolls,
         cs_dims,
-        kernel.cs[0].layout.offset,
         n,
         kernel.cs[0].layout.secret,
     )
@@ -64,7 +63,6 @@ def lower_compact(env, kernel):
             expanded_layout.term,
             expanded_layout.rolls,
             new_ct_dims + new_slot_dims,
-            expanded_layout.offset,
             n,
             expanded_layout.secret,
         )

@@ -500,19 +500,26 @@ class CKKS:
             match c.op:
                 case HEOp.PACK | HEOp.MASK | HEOp.ZERO_MASK | HEOp.PUNCTURED_PACK:
                     depth[c] = 0
+                case HEOp.CS:
+                    if len(c.cs) > 0 and isinstance(c.cs[0], HETerm):
+                        depth[c] = depth.get(c.cs[0], 0)
+                    else:
+                        depth[c] = 0
                 case HEOp.MUL:
                     if c.secret:
-                        depth[c] = max(depth[c.cs[0]], depth[c.cs[1]]) + 1
+                        depth[c] = max(depth.get(c.cs[0], 0), depth.get(c.cs[1], 0)) + 1
                     else:
-                        depth[c] = max(depth[c.cs[0]], depth[c.cs[1]])
+                        depth[c] = max(depth.get(c.cs[0], 0), depth.get(c.cs[1], 0))
                 case HEOp.ADD | HEOp.SUB:
-                    depth[c] = max(depth[c.cs[0]], depth[c.cs[1]])
+                    depth[c] = max(depth.get(c.cs[0], 0), depth.get(c.cs[1], 0))
                 case HEOp.ROT:
-                    depth[c] = depth[c.cs[0]]
+                    depth[c] = depth.get(c.cs[0], 0)
                 case _:
-                    raise NotImplementedError(c.op)
-        # print("depth:", max(depth.values()))
-        return max(depth.values())
+                    raise NotImplementedError(
+                        f"Unhandled operation in depth calculation: {c.op}"
+                    )
+        max_depth = max(depth.values()) if depth else 0
+        return max_depth + 1
 
     def run_and_check(self, term, cts):
         self.preprocess_packing(cts)

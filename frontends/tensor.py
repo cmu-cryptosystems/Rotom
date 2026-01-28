@@ -166,7 +166,7 @@ class TensorTerm:
                 case TensorOp.CONST:
                     self._str_cache = str(self.cs[0])
                 case TensorOp.INDEX:
-                    self._str_cache = f"([{self.cs[1]}] {self.cs[0]})"
+                    self._str_cache = f"({self.cs[0]}[{self.cs[1]}])"
                 case TensorOp.CONV2D:
                     self._str_cache = f"(conv2d {str(self.cs[0])} {str(self.cs[1])})"
                 case _:
@@ -685,7 +685,33 @@ class TensorTerm:
             case TensorOp.CONST:
                 return self.cs[0]
             case TensorOp.INDEX:
-                return env[self.cs[0]][self.cs[1]]
+                # Support Python-style indexing and slicing.
+                #
+                # `self.cs[1]` is whatever was passed to `__getitem__`, which can be:
+                # - int
+                # - slice
+                # - tuple of (int | slice | Ellipsis | None)
+                # Additionally, for some serialization / interop use-cases, we accept:
+                # - list of [start, stop] or [start, stop, step] (interpreted as slice)
+                # - dict {"start": .., "stop": .., "step": ..} (interpreted as slice)
+                def _to_slice(obj):
+                    if isinstance(obj, slice) or obj is Ellipsis or obj is None:
+                        return obj
+                    # Allow list-based slice specs: [start, stop] or [start, stop, step]
+                    if isinstance(obj, list) and len(obj) in (2, 3):
+                        return slice(*obj)
+                    # Allow dict-based slice specs
+                    if isinstance(obj, dict) and ("start" in obj or "stop" in obj):
+                        return slice(obj.get("start"), obj.get("stop"), obj.get("step"))
+                    return obj
+
+                item = self.cs[1]
+                if isinstance(item, tuple):
+                    item = tuple(_to_slice(x) for x in item)
+                else:
+                    item = _to_slice(item)
+
+                return env[self.cs[0]][item]
             case TensorOp.RESHAPE:
                 tensor = env[self.cs[0]]
                 shape = {}

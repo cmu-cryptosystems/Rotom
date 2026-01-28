@@ -5,8 +5,6 @@ This module tests indexed matrix multiplication operations with reshaping and pe
 in the Rotom homomorphic encryption system.
 """
 
-import random
-
 import numpy as np
 import pytest
 

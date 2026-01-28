@@ -47,7 +47,7 @@ class FhelipeWrapper:
             dim = int(dim_index)
         dims.append(Dim(dim, extent))
         layout = Layout(
-            TensorTerm(TensorOp.TENSOR, [name]), [], dims, {}, self.args.n, True
+            TensorTerm(TensorOp.TENSOR, [name]), [], dims, self.args.n, True
         )
         return layout
 

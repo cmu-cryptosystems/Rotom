@@ -604,6 +604,7 @@ class KernelCost:
                 | KernelOp.RESHAPE
                 | KernelOp.PERMUTE
                 | KernelOp.INDEX
+                | KernelOp.SELECT
                 | KernelOp.REORDER
                 | KernelOp.RESCALE
             ):
@@ -752,6 +753,7 @@ class KernelCost:
                         | KernelOp.SUB
                         | KernelOp.SUM
                         | KernelOp.PRODUCT
+                        | KernelOp.COMBINE
                     ):
                         pass
                     case KernelOp.MUL | KernelOp.ROLL | KernelOp.CONVERSION:

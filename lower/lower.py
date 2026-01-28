@@ -35,6 +35,7 @@ from lower.lower_roll import (
     lower_rot_roll,
     lower_split_roll,
 )
+from lower.lower_select import lower_select
 from lower.lower_sub import lower_sub
 from lower.lower_sum import lower_sum
 from lower.lower_tensor import lower_tensor
@@ -101,6 +102,8 @@ class Lower:
                     self.env[term] = lower_compact(self.env, term)
                 case KernelOp.INDEX:
                     self.env[term] = lower_index(self.env, term)
+                case KernelOp.SELECT:
+                    self.env[term] = lower_select(self.env, term)
                 case KernelOp.COMBINE:
                     self.env[term] = lower_combine(self.env, term)
                 case KernelOp.RESCALE:

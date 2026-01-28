@@ -10,14 +10,14 @@ from ..roll import Roll
 # Dimensions
 def test_layout_dims_1():
     n = 4
-    A_layout = Layout(None, [], [Dim.parse("[0:4:1]")], {}, n)
+    A_layout = Layout(None, [], [Dim.parse("[0:4:1]")], n)
     assert A_layout.layout_str() == "[0:4:1]"
 
 
 def test_layout_dims_2():
     n = 4
     A_layout = Layout(
-        None, [], [Dim.parse("[0:4:1]"), Dim.parse("[4]"), Dim.parse("[1:4:1]")], {}, n
+        None, [], [Dim.parse("[0:4:1]"), Dim.parse("[4]"), Dim.parse("[1:4:1]")], n
     )
     assert A_layout.layout_str() == "[0:4:1][R:4:1];[1:4:1]"
 
@@ -25,7 +25,7 @@ def test_layout_dims_2():
 def test_layout_dims_3():
     n = 16
     A_layout = Layout(
-        None, [], [Dim.parse("[0:4:1]"), Dim.parse("[4]"), Dim.parse("[1:4:1]")], {}, n
+        None, [], [Dim.parse("[0:4:1]"), Dim.parse("[4]"), Dim.parse("[1:4:1]")], n
     )
     assert A_layout.layout_str() == "[0:4:1];[R:4:1][1:4:1]"
 
@@ -33,7 +33,7 @@ def test_layout_dims_3():
 def test_layout_dims_4():
     n = 16
     A_layout = Layout(
-        None, [], [Dim.parse("[0:8:1]"), Dim.parse("[8]"), Dim.parse("[1:8:1]")], {}, n
+        None, [], [Dim.parse("[0:8:1]"), Dim.parse("[8]"), Dim.parse("[1:8:1]")], n
     )
     assert A_layout.layout_str() == "[0:8:1][R:4:2];[R:2:1][1:8:1]"
 
@@ -41,14 +41,11 @@ def test_layout_dims_4():
 # Replication
 def test_cost_replication_1():
     n = 4
-    A_layout = Layout(
-        TensorTerm.Tensor("a", [], True), [], [Dim.parse("[0:4:1]")], {}, n
-    )
+    A_layout = Layout(TensorTerm.Tensor("a", [], True), [], [Dim.parse("[0:4:1]")], n)
     B_layout = Layout(
         TensorTerm.Tensor("a", [], True),
         [],
         [Dim.parse("[4]"), Dim.parse("[0:4:1]")],
-        {},
         n,
     )
 
@@ -64,14 +61,11 @@ def test_cost_replication_1():
 
 def test_cost_replication_2():
     n = 4
-    A_layout = Layout(
-        TensorTerm.Tensor("a", [], True), [], [Dim.parse("[0:4:1]")], {}, n
-    )
+    A_layout = Layout(TensorTerm.Tensor("a", [], True), [], [Dim.parse("[0:4:1]")], n)
     B_layout = Layout(
         TensorTerm.Tensor("a", [], True),
         [],
         [Dim.parse("[0:4:1]"), Dim.parse("[4]")],
-        {},
         n,
     )
 
@@ -90,14 +84,12 @@ def test_cost_replication_3():
         TensorTerm.Tensor("a", [], True),
         [],
         [Dim.parse("[0:4:1]"), Dim.parse("[1:4:1]")],
-        {},
         n,
     )
     B_layout = Layout(
         TensorTerm.Tensor("a", [], True),
         [],
         [Dim.parse("[0:4:1]"), Dim.parse("[1:4:1]"), Dim.parse("[16]")],
-        {},
         n,
     )
 
@@ -112,14 +104,11 @@ def test_cost_replication_3():
 
 def test_cost_replication_4():
     n = 16
-    A_layout = Layout(
-        TensorTerm.Tensor("a", [], True), [], [Dim.parse("[0:4:1]")], {}, n
-    )
+    A_layout = Layout(TensorTerm.Tensor("a", [], True), [], [Dim.parse("[0:4:1]")], n)
     B_layout = Layout(
         TensorTerm.Tensor("a", [], True),
         [],
         [Dim.parse("[4]"), Dim.parse("[0:4:1]")],
-        {},
         n,
     )
 
@@ -141,21 +130,18 @@ def test_cost_matvecmul_1():
         TensorTerm.Tensor("a", [], True),
         [],
         [Dim.parse("[0:4:1]"), Dim.parse("[1:4:1]")],
-        {},
         n,
     )
     V_layout = Layout(
         TensorTerm.Tensor("a", [], True),
         [],
         [Dim.parse("[4]"), Dim.parse("[0:4:1]")],
-        {},
         n,
     )
     R_layout = Layout(
         TensorTerm.Tensor("a", [], True),
         [],
         [Dim.parse("[0:4:1]"), Dim.parse("[4]")],
-        {},
         n,
     )
 
@@ -180,21 +166,18 @@ def test_cost_matvecmul_2():
         TensorTerm.Tensor("a", [], True),
         [],
         [Dim.parse("[0:4:1]"), Dim.parse("[1:4:1]")],
-        {},
         n,
     )
     V_layout = Layout(
         TensorTerm.Tensor("a", [], True),
         [],
         [Dim.parse("[4]"), Dim.parse("[0:4:1]")],
-        {},
         n,
     )
     R_layout = Layout(
         TensorTerm.Tensor("a", [], True),
         [],
         [Dim.parse("[0:4:1]"), Dim.parse("[4]")],
-        {},
         n,
     )
 
@@ -219,21 +202,18 @@ def test_cost_matmul_1():
         TensorTerm.Tensor("a", [], True),
         [],
         [Dim.parse("[1:4:1]"), Dim.parse("[0:4:1]"), Dim.parse("[4]")],
-        {},
         n,
     )
     B_layout = Layout(
         TensorTerm.Tensor("a", [], True),
         [],
         [Dim.parse("[0:4:1]"), Dim.parse("[4]"), Dim.parse("[1:4:1]")],
-        {},
         n,
     )
     C_layout = Layout(
         TensorTerm.Tensor("a", [], True),
         [],
         [Dim.parse("[4]"), Dim.parse("[0:4:1]"), Dim.parse("[1:4:1]")],
-        {},
         n,
     )
 
@@ -258,21 +238,18 @@ def test_cost_matmul_2():
         TensorTerm.Tensor("a", [], True),
         [],
         [Dim.parse("[1:4:1]"), Dim.parse("[0:4:1]"), Dim.parse("[4]")],
-        {},
         n,
     )
     B_layout = Layout(
         TensorTerm.Tensor("a", [], True),
         [],
         [Dim.parse("[0:4:1]"), Dim.parse("[4]"), Dim.parse("[1:4:1]")],
-        {},
         n,
     )
     C_layout = Layout(
         TensorTerm.Tensor("a", [], True),
         [],
         [Dim.parse("[4]"), Dim.parse("[0:4:1]"), Dim.parse("[1:4:1]")],
-        {},
         n,
     )
 
@@ -297,21 +274,18 @@ def test_cost_matmul_3():
         TensorTerm.Tensor("a", [], True),
         [],
         [Dim.parse("[0:4:1]"), Dim.parse("[4]"), Dim.parse("[1:4:1]")],
-        {},
         n,
     )
     B_layout = Layout(
         TensorTerm.Tensor("a", [], True),
         [],
         [Dim.parse("[4]"), Dim.parse("[1:4:1]"), Dim.parse("[0:4:1]")],
-        {},
         n,
     )
     C_layout = Layout(
         TensorTerm.Tensor("a", [], True),
         [],
         [Dim.parse("[0:4:1]"), Dim.parse("[1:4:1]"), Dim.parse("[4]")],
-        {},
         n,
     )
 
@@ -417,7 +391,7 @@ def test_layout_from_string_parsing_accuracy():
     layout_str = "[0:4:1][1:4:1]"
     parsed_layout = Layout.from_string(layout_str, 16)
     manual_layout = Layout(
-        None, [], [Dim.parse("[0:4:1]"), Dim.parse("[1:4:1]")], {}, 16, False
+        None, [], [Dim.parse("[0:4:1]"), Dim.parse("[1:4:1]")], 16, False
     )
 
     assert parsed_layout.layout_str() == manual_layout.layout_str()
@@ -429,7 +403,7 @@ def test_layout_from_string_parsing_accuracy():
     parsed_layout = Layout.from_string(layout_str, 16)
     # The roll indices refer to positions in the dimension list
     dims = [Dim.parse("[1:4:1]"), Dim.parse("[0:4:1]")]
-    manual_layout = Layout(None, [Roll(dims[0], dims[1])], dims, {}, 16, False)
+    manual_layout = Layout(None, [Roll(dims[0], dims[1])], dims, 16, False)
 
     assert parsed_layout.layout_str() == manual_layout.layout_str()
     assert len(parsed_layout.rolls) == len(manual_layout.rolls)

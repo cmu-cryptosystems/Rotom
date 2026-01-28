@@ -45,7 +45,6 @@ def roll_reordering(kernel):
             kernel.layout.term,
             [second_roll],
             kernel.layout.get_dims(),
-            kernel.layout.offset,
             kernel.layout.n,
             kernel.layout.secret,
         )
@@ -57,7 +56,6 @@ def roll_reordering(kernel):
             kernel.layout.term,
             [second_roll, first_roll],
             kernel.layout.get_dims(),
-            kernel.layout.offset,
             kernel.layout.n,
             kernel.layout.secret,
         )

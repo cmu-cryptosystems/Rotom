@@ -86,6 +86,4 @@ def dimension_merging(layout):
             assert r in merged_dims
             new_rolls.append(Roll(k, r))
 
-    return Layout(
-        layout.term, new_rolls, merged_dims, layout.offset, layout.n, layout.secret
-    )
+    return Layout(layout.term, new_rolls, merged_dims, layout.n, layout.secret)

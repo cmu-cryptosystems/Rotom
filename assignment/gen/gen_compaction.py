@@ -212,7 +212,6 @@ def find_compaction(kernel):
                     layout.term,
                     layout.rolls,
                     new_ct_dims + new_slot_dims,
-                    layout.offset,
                     layout.n,
                     layout.secret,
                 )

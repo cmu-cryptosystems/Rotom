@@ -103,7 +103,6 @@ def roll_propogation(kernel):
             cs_kernel.layout.term,
             cs_kernel.layout.rolls,
             matched_replicate_kernel_dims,
-            cs_kernel.layout.offset,
             cs_kernel.layout.n,
             cs_kernel.layout.secret,
         ),
@@ -121,7 +120,6 @@ def roll_propogation(kernel):
             replicate_kernel.cs[0].layout.term,
             replicate_kernel.cs[0].layout.rolls,
             matched_base_kernel_dims,
-            replicate_kernel.cs[0].layout.offset,
             replicate_kernel.cs[0].layout.n,
             replicate_kernel.cs[0].layout.secret,
         ),
@@ -161,7 +159,6 @@ def roll_propogation(kernel):
         base_kernel.layout.term,
         base_kernel.layout.rolls + [new_roll],
         dims,
-        base_kernel.layout.offset,
         base_kernel.layout.n,
         base_kernel.layout.secret,
     )
@@ -190,7 +187,6 @@ def roll_propogation(kernel):
         new_roll_kernel.layout.term,
         replicated_rolls,
         replicate_kernel_dims,
-        new_roll_kernel.layout.offset,
         new_roll_kernel.layout.n,
         new_roll_kernel.layout.secret,
     )
@@ -225,7 +221,6 @@ def roll_propogation(kernel):
             cs_kernel.layout.term,
             new_rolls + [cs_roll],
             cs_dims,
-            cs_kernel.layout.offset,
             cs_kernel.layout.n,
             cs_kernel.layout.secret,
         )

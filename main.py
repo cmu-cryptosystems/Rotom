@@ -16,6 +16,7 @@ from benchmarks.microbenchmarks.rot_roll import rot_roll
 from benchmarks.microbenchmarks.slot_bsgs_roll import slot_bsgs_roll
 from benchmarks.microbenchmarks.slot_conversion import slot_conversion
 from benchmarks.microbenchmarks.slot_roll import slot_roll
+from benchmarks.microbenchmarks.strassens.strassens_matmul import strassens_matmul
 from benchmarks.rotom_benchmarks.bert_attention import bert_attention
 from benchmarks.rotom_benchmarks.convolution.convolution import convolution
 from benchmarks.rotom_benchmarks.convolution.convolution_32768 import convolution_32768
@@ -130,6 +131,8 @@ def run_benchmark_or_microbenchmark(args):
             case "bert_attention":
                 tensor_ir, inputs, n = bert_attention()
                 args.n = n
+            case "strassens":
+                tensor_ir, inputs = strassens_matmul()
             case _:
                 raise NotImplementedError("unknown benchmark")
 
@@ -225,7 +228,6 @@ def main(args):
     )
 
     kernel = LayoutAssignment(tensor_ir, args).run()
-
     for k in kernel.post_order():
         print(k)
     print()

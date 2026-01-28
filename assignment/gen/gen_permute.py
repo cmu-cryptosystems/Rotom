@@ -51,7 +51,6 @@ def gen_permute(term, kernels):
             term,
             copy(kernel.layout.rolls),
             new_dims,
-            kernel.layout.offset,
             kernel.layout.n,
             kernel.layout.secret,
         )

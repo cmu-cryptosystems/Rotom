@@ -59,7 +59,6 @@ def run_replication_hoisting(candidate):
                         cs_kernel.layout.term,
                         cs_kernel.layout.rolls,
                         copy(replicated_slot_dims),
-                        cs_kernel.layout.offset,
                         cs_kernel.layout.n,
                         cs_kernel.layout.secret,
                     )

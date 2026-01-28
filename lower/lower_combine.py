@@ -9,4 +9,5 @@ def lower_combine(env, kernel):
         for ct in input_cts.values():
             cts[ct_idx] = ct
             ct_idx += 1
+
     return LayoutCiphertexts(layout=kernel.layout, cts=cts)

@@ -37,11 +37,6 @@ def gen_index(term, kernels):
     for kernel in kernels:
         # no rolls
         if not kernel.layout.rolls:
-            # create next offset
-            next_dim = len(kernel.layout.offset)
-            next_offset = copy(kernel.layout.offset)
-            next_offset[next_dim] = term.cs[1]
-
             # adjust dimensions
             new_dims = []
             for dim in kernel.layout.get_dims():
@@ -61,7 +56,6 @@ def gen_index(term, kernels):
                     term,
                     copy(kernel.layout.rolls),
                     new_dims,
-                    next_offset,
                     kernel.layout.n,
                     kernel.layout.secret,
                 )

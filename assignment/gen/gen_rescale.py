@@ -40,7 +40,6 @@ def gen_rescale(term, kernels):
             term,  # Use the rescale term
             kernel.layout.rolls,
             kernel.layout.get_dims(),
-            kernel.layout.offset,
             kernel.layout.n,
             kernel.layout.secret,
         )

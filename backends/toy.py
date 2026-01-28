@@ -2,7 +2,6 @@ import numpy as np
 
 np.set_printoptions(legacy="1.25")
 
-
 from frontends.tensor import TensorOp
 from ir.he import HEOp
 from ir.kernel import KernelOp
@@ -207,7 +206,7 @@ class Toy:
                 expected = apply_layout(eval_result, term.layout)
 
             # skip checks for split rolls
-            if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE, KernelOp.INDEX]:
+            if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE]:
                 continue
 
             # Check if values are close instead of exact equality

@@ -130,9 +130,11 @@ class LayoutAssignment:
                 if self.strassens and term.op in [
                     TensorOp.MATMUL,
                 ]:
-                    kernels = gen_strassens(
+                    kernel_map = gen_strassens(
                         term, cs_kernels, self.roll_flag, self.network
                     )
+                    for term, kernels in kernel_map.items():
+                        self.update_kernels(term, kernels)
                 else:
                     cs_shapes = self.get_cs_shapes(term)
                     kernels = gen_binop(
@@ -205,7 +207,7 @@ class LayoutAssignment:
             kernels = Optimizer(self.roll_flag).run(candidate_kernels)
 
             # prune the search space
-            kernels = self.shape_check(self.shape.padded_shapes[term], kernels)
+            kernels = self.shape_check(kernels)
             # kernels = self.prune_tiles(kernels)
             kernels = self.add_equivalent_kernels(kernels)
 
@@ -261,7 +263,6 @@ class LayoutAssignment:
                         kernel.layout.term,
                         kernel.layout.rolls,
                         aligned_dims,
-                        kernel.layout.offset,
                         kernel.layout.n,
                         kernel.layout.secret,
                     )
@@ -453,7 +454,6 @@ class LayoutAssignment:
                         kernel.layout.term,
                         [new_roll],
                         new_dims,
-                        kernel.layout.offset,
                         kernel.layout.n,
                         kernel.layout.secret,
                     )
@@ -509,7 +509,7 @@ class LayoutAssignment:
         assert new_kernels
         return new_kernels
 
-    def shape_check(self, shape, kernels):
+    def shape_check(self, kernels):
         """Checks if the kernel layouts match the expected shape of the tensor.
 
         This method filters kernels based on whether their layout dimensions match the
@@ -528,6 +528,7 @@ class LayoutAssignment:
 
         new_kernels = []
         for kernel in kernels:
+            shape = self.shape.padded_shapes[kernel.layout.term]
             kernel_shape_map = {}
             for dim in kernel.layout.get_dims():
                 # Skip EMPTY dimensions - they should have dim=None and shouldn't contribute to shape

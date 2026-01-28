@@ -165,7 +165,6 @@ def lower_conversion(env, kernel):
                 kernel.cs[2].layout.term,
                 kernel.cs[2].layout.rolls,
                 expanded_dims,
-                kernel.cs[2].layout.offset,
                 n,
                 kernel.cs[2].layout.secret,
             )
