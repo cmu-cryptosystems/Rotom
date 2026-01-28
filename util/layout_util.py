@@ -525,8 +525,6 @@ def apply_layout(pt_tensor, layout):
         for i, index in enumerate(indices):
             base_indices[i][dim] = index
 
-    print("base indices:", base_indices)
-
     # split by cts
     base_indices_by_cts = [
         base_indices[i * layout.n : (i + 1) * layout.n]

@@ -152,71 +152,117 @@ def check_strassens(a_kernel, b_kernel):
     )
 
 
-def add_tiles(kernel_map, a_kernel, b_kernel, roll_flag, network):
-    a_kernel = copy(a_kernel)
-    b_kernel = copy(b_kernel)
-    term = a_kernel.layout.term + b_kernel.layout.term
-    add_kernels = gen_binop(
-        term,
-        [[a_kernel], [b_kernel]],
-        [get_shape(a_kernel), get_shape(b_kernel)],
-        roll_flag,
-    )
-    optimizer = Optimizer(roll_flag)
-    add_kernels = optimizer.run(add_kernels)
+def add_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
+    output_kernels = {}
+    output_kernel_costs = {}
+    for layout_str in a_kernels.keys():
+        a_kernel = a_kernels[layout_str]
+        b_kernel = b_kernels[layout_str]
+        a_kernel = copy(a_kernel)
+        b_kernel = copy(b_kernel)
+    
+        term = a_kernel.layout.term + b_kernel.layout.term
+        term.offset = {}
+        add_kernels = gen_binop(
+            term,
+            [[a_kernel], [b_kernel]],
+            [get_shape(a_kernel), get_shape(b_kernel)],
+            roll_flag,
+        )
+        optimizer = Optimizer(roll_flag)
+        add_kernels = optimizer.run(add_kernels)
+        if term not in kernel_map:
+            kernel_map[term] = []
+        kernel_map[term] += add_kernels
+        for add_kernel in add_kernels:
+            layout = add_kernel.layout
+            layout_str = layout_to_str(layout)
+            cost = KernelCost(add_kernel, network).total_cost()
+            if layout_str not in output_kernels:
+                output_kernels[layout_str] = add_kernel
+                output_kernel_costs[layout_str] = cost
+            elif cost < output_kernel_costs[layout_str]:
+                output_kernels[layout_str] = add_kernel
+                output_kernel_costs[layout_str] = cost
+    return output_kernels
 
-    return list(add_kernels)[0]
+def sub_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
+    output_kernels = {}
+    output_kernel_costs = {}
+    for layout_str in a_kernels.keys():
+        a_kernel = a_kernels[layout_str]
+        b_kernel = b_kernels[layout_str]
+        a_kernel = copy(a_kernel)
+        b_kernel = copy(b_kernel)
 
-def sub_tiles(kernel_map, a_kernel, b_kernel, roll_flag, network):
-    a_kernel = copy(a_kernel)
-    b_kernel = copy(b_kernel)
-    term = a_kernel.layout.term - b_kernel.layout.term
-    sub_kernels = gen_binop(
-        term,
-        [[a_kernel], [b_kernel]],
-        [get_shape(a_kernel), get_shape(b_kernel)],
-        roll_flag,
-    )
-    optimizer = Optimizer(roll_flag)
-    sub_kernels = optimizer.run(sub_kernels)
+        term = a_kernel.layout.term - b_kernel.layout.term
+        term.offset = {}
+        sub_kernels = gen_binop(
+            term,
+            [[a_kernel], [b_kernel]],
+            [get_shape(a_kernel), get_shape(b_kernel)],
+            roll_flag,
+        )
+        optimizer = Optimizer(roll_flag)
+        sub_kernels = optimizer.run(sub_kernels)
+        if term not in kernel_map:
+            kernel_map[term] = []
+        kernel_map[term] += sub_kernels
+        for sub_kernel in sub_kernels:
+            layout = sub_kernel.layout
+            layout_str = layout_to_str(layout)
+            cost = KernelCost(sub_kernel, network).total_cost()
+            if layout_str not in output_kernels:
+                output_kernels[layout_str] = sub_kernel
+                output_kernel_costs[layout_str] = cost
+            elif cost < output_kernel_costs[layout_str]:
+                output_kernels[layout_str] = sub_kernel
+                output_kernel_costs[layout_str] = cost
+    return output_kernels
 
-    return list(sub_kernels)[0]
-
-def matmul_tiles(kernel_map, a_kernel, b_kernel, roll_flag, network):
-    term = a_kernel.layout.term @ b_kernel.layout.term
-    matmul_kernels = gen_binop(
-        term,
-        [[a_kernel], [b_kernel]],
-        [get_shape(a_kernel), get_shape(b_kernel)],
-        roll_flag,
-    )
-    optimizer = Optimizer(roll_flag)
-    matmul_kernels = optimizer.run(matmul_kernels)
-
-    kernel_map = {}
-    kernel_costs = {}
-    for kernel in matmul_kernels:
-        layout = kernel.layout
-        layout_str = layout_to_str(layout)
-        cost = KernelCost(kernel, network).total_cost()
-        if layout_str not in kernel_map:
-            kernel_map[layout_str] = kernel
-            kernel_costs[layout_str] = cost
-        elif cost < kernel_costs[layout_str]:
-            kernel_map[layout_str] = kernel
-            kernel_costs[layout_str] = cost
-    return kernel_map
+def matmul_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
+    output_kernels = {}
+    output_kernel_costs = {}
+    for a_kernel in a_kernels.values():
+        for b_kernel in b_kernels.values():
+            a_kernel = copy(a_kernel)
+            b_kernel = copy(b_kernel)
+            term = a_kernel.layout.term @ b_kernel.layout.term
+            term.offset = {}
+            matmul_kernels = gen_binop(
+                term,
+                [[a_kernel], [b_kernel]],
+                [get_shape(a_kernel), get_shape(b_kernel)],
+                roll_flag,
+            )
+            optimizer = Optimizer(roll_flag)
+            matmul_kernels = optimizer.run(matmul_kernels)
+            if term not in kernel_map:
+                kernel_map[term] = []
+            kernel_map[term] += matmul_kernels
+            for matmul_kernel in matmul_kernels:
+                layout = matmul_kernel.layout
+                layout_str = layout_to_str(layout)
+                cost = KernelCost(matmul_kernel, network).total_cost()
+                if layout_str not in output_kernels:
+                    output_kernels[layout_str] = matmul_kernel
+                    output_kernel_costs[layout_str] = cost
+                elif cost < output_kernel_costs[layout_str]:
+                    output_kernels[layout_str] = matmul_kernel
+                    output_kernel_costs[layout_str] = cost
+    return output_kernels
+    
 
 def strassens_opt(kernel_map, a_tiles, b_tiles, roll_flag, network):
     # perform addition and matmul
-    A1 = a_tiles[0]
-    A2 = a_tiles[1]
-    A3 = a_tiles[2]
-    A4 = a_tiles[3]
-    B1 = b_tiles[0]
-    B2 = b_tiles[1]
-    B3 = b_tiles[2]
-    B4 = b_tiles[3]
+    A1 = {layout_to_str(a_tiles[0].layout): a_tiles[0]}
+    A2 = {layout_to_str(a_tiles[1].layout): a_tiles[1]}
+    A3 = {layout_to_str(a_tiles[2].layout): a_tiles[2]}
+    A4 = {layout_to_str(a_tiles[3].layout): a_tiles[3]}
+    B1 = {layout_to_str(b_tiles[0].layout): b_tiles[0]}
+    B2 = {layout_to_str(b_tiles[1].layout): b_tiles[1]}
+    B3 = {layout_to_str(b_tiles[2].layout): b_tiles[2]}
+    B4 = {layout_to_str(b_tiles[3].layout): b_tiles[3]}
 
     # T1 = A1 + A4
     T1 = add_tiles(kernel_map, A1, A4, roll_flag, network)
@@ -265,18 +311,16 @@ def strassens_opt(kernel_map, a_tiles, b_tiles, roll_flag, network):
     # M7 = T9 @ T10
     M7 = matmul_tiles(kernel_map, T9, T10, roll_flag, network)
 
-
     output_kernels = []
-    for layout_str in M1.keys():
-        C1 = add_tiles(kernel_map, sub_tiles(kernel_map, add_tiles(kernel_map, M1[layout_str], M4[layout_str], roll_flag, network), M5[layout_str], roll_flag, network), M7[layout_str], roll_flag, network)
-        # C2 = add_tiles(kernel_map, M3[layout_str], M5[layout_str], roll_flag, network)
+    C1 = add_tiles(kernel_map, sub_tiles(kernel_map, add_tiles(kernel_map, M1, M4, roll_flag, network), M5, roll_flag, network), M7, roll_flag, network)
+    
+    
+    C2 = add_tiles(kernel_map, M3, M5, roll_flag, network)
         # C3 = add_tiles(kernel_map, M2[layout_str], M4[layout_str], roll_flag, network)
         # C4 = add_tiles(kernel_map, sub_tiles(kernel_map, add_tiles(kernel_map, M1[layout_str], M2[layout_str], roll_flag, network), M3[layout_str], roll_flag, network), M6[layout_str], roll_flag, network)
         
         
-        # create a combined output kernel
-        output_kernels.append(C1)
-    return output_kernels
+    return [C2]
 
     # # match on layouts
     # output_kernels = []

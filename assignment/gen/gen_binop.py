@@ -1337,25 +1337,28 @@ def output_layout(term, alignment, a_kernel, b_kernel):
 
             print("a_kernel.layout.offset:", a_kernel.layout.offset)
             print("b_kernel.layout.offset:", b_kernel.layout.offset)
-            update_offset = copy(a_kernel.layout.offset)
-            for k, v in b_kernel.layout.offset.items():
-                if not isinstance(v, list):
-                    if isinstance(update_offset[k], list):
-                        update_offset[k].append(v)
-                    else:
-                        update_offset[k] = [update_offset[k], v]
-                else:
-                    if k in update_offset:
-                        update_offset[k] += v
-                    else:
-                        update_offset[k] = [v]
+            # update_offset = copy(a_kernel.layout.offset)
+            # print("update_offset:", update_offset)
+            # for k, v in b_kernel.layout.offset.items():
+            #     print("k:", k)
+            #     print("v:", v)
+            #     if not isinstance(v, list):
+            #         if isinstance(update_offset[k], list):
+            #             update_offset[k].append(v)
+            #         else:
+            #             update_offset[k] = [update_offset[k], v]
+            #     else:
+            #         if k in update_offset:
+            #             update_offset[k] += v
+            #         else:
+            #             update_offset[k] = [v]
 
             output_layout = dimension_merging(
                 Layout(
                     term,
                     a_kernel.layout.rolls,
                     output_dims,
-                    update_offset,
+                    copy(a_kernel.layout.offset),
                     a_kernel.layout.n,
                     a_kernel.layout.secret or b_kernel.layout.secret,
                 )
