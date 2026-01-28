@@ -67,6 +67,8 @@ def bert_attention():
     blocked_kt = k.reshape(1, {1: num_heads, 2: head_dim}).permute({0: 2, 1: 0, 2: 1})
     blocked_v = v.reshape(1, {1: num_heads, 2: head_dim}).permute({0: 1, 1: 0, 2: 2})
 
+    return blocked_q[0], inputs, 8192
+
     head_results = None
     for h_idx in range(num_heads):
         q_h = blocked_q[h_idx, :, :]
@@ -74,9 +76,7 @@ def bert_attention():
         v_h = blocked_v[h_idx, :, :]
 
         qk_h = q_h @ k_h
-        return qk_h, inputs, 8192
         out_h = qk_h @ v_h
-        return out_h, inputs, 8192
 
         if head_results is None:
             head_results = out_h

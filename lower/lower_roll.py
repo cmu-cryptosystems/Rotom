@@ -54,6 +54,19 @@ def lower_roll(env, kernel):
         global_base_map = _build_global_base_map(base_indices_by_cts)
 
         input_cts = env[kernel.cs[1]]
+        # Normalize input_cts to sequential keys starting from 0, since
+        # _build_global_base_map uses 0-based indices
+        input_cts_list = list(input_cts.values())
+        if len(input_cts_list) == 0:
+            # Empty input - check if layout expects ciphertexts
+            if len(rolled_indices_by_cts) > 0:
+                raise ValueError(
+                    f"lower_roll: input_cts is empty but {len(rolled_indices_by_cts)} output ciphertexts expected. "
+                    f"This suggests a bug in the previous lowering step."
+                )
+            # Empty input and no output expected - return empty ciphertexts
+            return LayoutCiphertexts(layout=kernel.layout, cts={})
+        
         out_cts = {}
         for out_ct_index in range(len(rolled_indices_by_cts)):
             # Group contributions by (source_ct, rot_amt) -> output slot indices.
@@ -70,17 +83,25 @@ def lower_roll(env, kernel):
             # Fast path: one source ciphertext and one rotation => pure rotation.
             if len(contribs) == 1:
                 (src_ct_index, rot_amt), _indices = next(iter(contribs.items()))
-                out_cts[out_ct_index] = input_cts[src_ct_index] << rot_amt
+                if src_ct_index >= len(input_cts_list):
+                    raise IndexError(
+                        f"src_ct_index {src_ct_index} out of range for input_cts (len={len(input_cts_list)})"
+                    )
+                out_cts[out_ct_index] = input_cts_list[src_ct_index] << rot_amt
                 continue
 
             # General (correct) path: masked rotated contributions summed together.
             terms_to_sum = []
             for (src_ct_index, rot_amt), out_indices in contribs.items():
+                if src_ct_index >= len(input_cts_list):
+                    raise IndexError(
+                        f"src_ct_index {src_ct_index} out of range for input_cts (len={len(input_cts_list)})"
+                    )
                 mask = [0] * n
                 for idx in out_indices:
                     mask[idx] = 1
                 mask_term = HETerm(HEOp.MASK, [mask], False, "roll mask")
-                rot_term = input_cts[src_ct_index] << rot_amt
+                rot_term = input_cts_list[src_ct_index] << rot_amt
                 terms_to_sum.append(rot_term * mask_term)
 
             sum_term = terms_to_sum[0]
