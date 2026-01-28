@@ -126,7 +126,6 @@ class TestMatrixMultiplicationAddition:
 
         self._run_test_case(inputs, args, backend)
 
-
     def test_matmul_add_size_16(self, backend):
         """Test matrix multiplication + addition with 16x16 matrices (test case 2 with rolls)."""
         # Create args
@@ -147,4 +146,3 @@ class TestMatrixMultiplicationAddition:
         inputs["c"] = np.array([j for j in range(size)])
 
         self._run_test_case(inputs, args, backend)
-

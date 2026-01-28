@@ -1519,7 +1519,7 @@ def gen_binop(term, cs_kernels, shapes, roll_flag):
     # if the roll_flag is set, apply rolls to move summation dimensions the vector dimensions
     if roll_flag and term.op == TensorOp.MATMUL:
         replicated_kernels += apply_sum_rolls(term, replicated_kernels)
-    
+
     output_kernels = set()
     for kernels in replicated_kernels:
         # add conversions or rolls to align layouts

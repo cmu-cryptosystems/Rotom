@@ -66,7 +66,7 @@ def lower_roll(env, kernel):
                 )
             # Empty input and no output expected - return empty ciphertexts
             return LayoutCiphertexts(layout=kernel.layout, cts={})
-        
+
         out_cts = {}
         for out_ct_index in range(len(rolled_indices_by_cts)):
             # Group contributions by (source_ct, rot_amt) -> output slot indices.
