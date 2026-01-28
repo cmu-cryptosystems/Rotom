@@ -1,7 +1,5 @@
 import numpy as np
-
 np.set_printoptions(legacy="1.25")
-
 
 from frontends.tensor import TensorOp
 from ir.he import HEOp
@@ -187,7 +185,6 @@ class Toy:
     def run(self):
         results = []
         for term, cts in self.circuit_ir.items():
-            print("testing term:", term)
             results = []
             for _, ct in cts.items():
                 if isinstance(ct, list):
@@ -206,11 +203,7 @@ class Toy:
                 expected = apply_punctured_layout(eval_result, term.layout)
             else:
                 expected = apply_layout(eval_result, term.layout)
-
-            print("expected:", expected)
-            print("results:", results)
-            print()
-
+          
             # skip checks for split rolls
             if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE]:
                 continue

@@ -474,9 +474,6 @@ def apply_layout(pt_tensor, layout):
     """apply a layout to a pt tensor"""
     layout_len = max(len(layout), layout.n)
 
-    print("pt tensor:", pt_tensor)
-    print("layout:", layout)
-
     # get base_term indices
     dims = layout.get_dims()
     dim_indices = get_dim_indices(dims)
@@ -597,10 +594,6 @@ def apply_layout(pt_tensor, layout):
 
         # this places cts in row-major order
         cts.append(ct)
-
-    for ct in cts:
-        print("ct:", ct)
-    print()
     return cts
 
 

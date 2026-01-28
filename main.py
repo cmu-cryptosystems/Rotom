@@ -26,6 +26,7 @@ from benchmarks.rotom_benchmarks.double_matmul.double_matmul_256_128_ct_ct impor
     double_matmul_256_128_ct_ct,
 )
 from benchmarks.rotom_benchmarks.logreg import logreg
+from benchmarks.microbenchmarks.strassens.strassens_matmul import strassens_matmul
 from benchmarks.rotom_benchmarks.matmul.matmul_128_64 import matmul_128_64
 from benchmarks.rotom_benchmarks.matmul.matmul_256_128 import matmul_256_128
 from benchmarks.rotom_benchmarks.ttm import ttm
@@ -130,6 +131,8 @@ def run_benchmark_or_microbenchmark(args):
             case "bert_attention":
                 tensor_ir, inputs, n = bert_attention()
                 args.n = n
+            case "strassens":
+                tensor_ir, inputs = strassens_matmul()
             case _:
                 raise NotImplementedError("unknown benchmark")
 
@@ -225,7 +228,6 @@ def main(args):
     )
 
     kernel = LayoutAssignment(tensor_ir, args).run()
-
     for k in kernel.post_order():
         print(k)
     print()

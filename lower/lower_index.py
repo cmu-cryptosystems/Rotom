@@ -32,7 +32,7 @@ def lower_index(env, kernel):
         # create mask - match the index value from the term
         # TODO: this is the issue
         mask = [1 if c == index_value else 0 for c in ct_index]
-        if any(mask):
+        if any(mask) and not all(mask):
             rot_align = mask.index(1)
             cts[cts_index] = (input_cts[i] * HETerm.mask([mask])) << rot_align
             cts_index += 1

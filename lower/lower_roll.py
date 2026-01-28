@@ -28,9 +28,6 @@ def lower_roll(env, kernel):
         return LayoutCiphertexts(layout=kernel.layout, cts=new_cts)
     else:
         base_indices_by_cts, rolled_indices_by_cts = get_rots_per_ct(kernel)
-
-        print("base_indices_by_cts:", base_indices_by_cts)
-        print("rolled_indices_by_cts:", rolled_indices_by_cts)
         cts = {}
         for ct_index in range(len(base_indices_by_cts)):
             # create base mapping
