@@ -1055,8 +1055,6 @@ def conv_dimensions(alignment, kernels):
     a_kernel = kernels[0]
     b_kernel = kernels[1]
 
-    print("a child: ", a_kernel.cs)
-    print("b child: ", b_kernel.cs)
     print("a layout: ", a_kernel.layout.layout_str())
     print("b layout: ", b_kernel.layout.layout_str())
     print()
@@ -1463,6 +1461,7 @@ def apply_sum_rolls(term, replicated_kernels):
 
 
 def gen_binop(term, cs_kernels, shapes, roll_flag):
+    print("term: ", term)
     # get alignment
     alignment = get_dim_alignment(term, shapes)
 
@@ -1484,8 +1483,7 @@ def gen_binop(term, cs_kernels, shapes, roll_flag):
     # if the roll_flag is set, apply rolls to move summation dimensions the vector dimensions
     if roll_flag and term.op == TensorOp.MATMUL:
         replicated_kernels += apply_sum_rolls(term, replicated_kernels)
-
-    print("term: ", term)
+    
     output_kernels = set()
     for kernels in replicated_kernels:
         # add conversions or rolls to align layouts
@@ -1502,5 +1500,11 @@ def gen_binop(term, cs_kernels, shapes, roll_flag):
                 output_kernels.add(compacted_kernel)
             else:
                 output_kernels.add(output_kernel)
+    for kernel in output_kernels:
+        print(kernel.cs[0])
+        if len(kernel.cs) > 1:
+            print(kernel.cs[1])
+        print("output kernel: ", kernel)
+        print()
     # print("len output:", len(output_kernels))
     return output_kernels

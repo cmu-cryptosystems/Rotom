@@ -33,6 +33,9 @@ class TestMatrixMultiplicationAddition:
 
         # Run compiler
         kernel = LayoutAssignment(tensor_ir, args).run()
+        for k in kernel.post_order():
+            print(k)
+        print()
         circuit_ir = Lower(kernel).run()
         results = run_backend(backend, circuit_ir, inputs, args)
 
@@ -121,3 +124,26 @@ class TestMatrixMultiplicationAddition:
         inputs["c"] = np.array([j for j in range(size)])
 
         self._run_test_case(inputs, args, backend)
+
+
+    def test_matmul_add_size_16(self, backend):
+        """Test matrix multiplication + addition with 16x16 matrices (test case 2 with rolls)."""
+        # Create args
+        args = get_default_args()
+        args.n = 256
+        args.benchmark = "matmul_add_5"
+        args.rolls = True
+
+        # Create inputs
+        size = 16
+        inputs = {}
+        inputs["a"] = np.array(
+            [[i * size + j for j in range(size)] for i in range(size)]
+        )
+        inputs["b"] = np.array(
+            [[i * size + j for j in range(size)] for i in range(size)]
+        )
+        inputs["c"] = np.array([j for j in range(size)])
+
+        self._run_test_case(inputs, args, backend)
+
