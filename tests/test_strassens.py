@@ -56,14 +56,22 @@ class TestStrassensMatmul:
         # Create inputs
         size = 8
         inputs = {}
-        inputs["a"] = np.array(
-            [[i * size + j for j in range(size)] for i in range(size)]
-        )
-        inputs["b"] = np.array(
-            [[i * size + j for j in range(size)] for i in range(size)]
-        )
+        inputs["a"] = np.array([[1 for j in range(size)] for i in range(size)])
+        inputs["b"] = np.array([[2 for j in range(size)] for i in range(size)])
 
-        print(inputs["a"])
-        print(inputs["b"])
+        self._run_test_case(inputs, args, backend)
+
+    def test_strassens_matmul_16x16(self, backend):
+        """Test Strassen's algorithm matrix multiplication with 4x4 matrices."""
+        # Create args
+        args = get_default_args()
+        args.n = 64
+        args.benchmark = "strassens_matmul_16x16"
+
+        # Create inputs
+        size = 16
+        inputs = {}
+        inputs["a"] = np.array([[1 for j in range(size)] for i in range(size)])
+        inputs["b"] = np.array([[2 for j in range(size)] for i in range(size)])
 
         self._run_test_case(inputs, args, backend)

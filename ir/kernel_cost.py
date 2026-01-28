@@ -753,6 +753,7 @@ class KernelCost:
                         | KernelOp.SUB
                         | KernelOp.SUM
                         | KernelOp.PRODUCT
+                        | KernelOp.COMBINE
                     ):
                         pass
                     case KernelOp.MUL | KernelOp.ROLL | KernelOp.CONVERSION:
