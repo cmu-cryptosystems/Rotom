@@ -528,15 +528,7 @@ class LayoutAssignment:
 
         new_kernels = []
         for kernel in kernels:
-            # Some kernels (e.g., Strassen tiles) have layout terms that are
-            # auxiliary INDEX / ADD TensorTerms not present in the original
-            # computation graph. In that case, we don't have a recorded padded
-            # shape and should skip strict shape checking for them.
-            try:
-                shape = self.shape.padded_shapes[kernel.layout.term]
-            except KeyError:
-                new_kernels.append(kernel)
-                continue
+            shape = self.shape.padded_shapes[kernel.layout.term]
             kernel_shape_map = {}
             for dim in kernel.layout.get_dims():
                 # Skip EMPTY dimensions - they should have dim=None and shouldn't contribute to shape
