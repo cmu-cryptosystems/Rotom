@@ -43,8 +43,7 @@ def find_bsgs_interval(n):
     return baby_step, giant_step
 
 
-def bsgs(ct, pts, dim_size, stride, left):
-    # 3. find bsgs interval
+def bsgs(ct, pts, dim_size, stride, left):    # 3. find bsgs interval
     baby_step, giant_step = find_bsgs_interval(dim_size)
 
     # 4. apply bsgs

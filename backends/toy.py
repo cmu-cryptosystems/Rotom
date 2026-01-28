@@ -205,7 +205,7 @@ class Toy:
             else:
                 expected = apply_layout(eval_result, term.layout)
 
-            # skip checks for split rolls
+            # skip checks for split rolls, replicate
             if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE]:
                 continue
 
@@ -234,7 +234,6 @@ class Toy:
                 for expected_vec, result_vec in zip(expected, results):
                     print([e - r for e, r in zip(expected_vec, result_vec)])
                 print()
-
                 print("expected layout:", term.layout)
 
             assert all_close, f"Values not close enough. Max diff: {max_diff}"

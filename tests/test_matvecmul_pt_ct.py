@@ -5,10 +5,7 @@ This module tests matrix-vector multiplication operations between ciphertext mat
 and plaintext vectors in the Rotom homomorphic encryption system.
 """
 
-import random
-
 import numpy as np
-import pytest
 
 from assignment.assignment import LayoutAssignment
 from frontends.tensor import TensorTerm
