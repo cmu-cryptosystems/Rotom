@@ -501,10 +501,7 @@ class CKKS:
                 case HEOp.PACK | HEOp.MASK | HEOp.ZERO_MASK | HEOp.PUNCTURED_PACK:
                     depth[c] = 0
                 case HEOp.CS:
-                    # CS is a reference to a child term, pass through its depth
-                    # In post-order, the wrapped term should already be processed
                     if len(c.cs) > 0 and isinstance(c.cs[0], HETerm):
-                        # Get depth of wrapped term, default to 0 if not found
                         depth[c] = depth.get(c.cs[0], 0)
                     else:
                         depth[c] = 0
@@ -522,8 +519,6 @@ class CKKS:
                         f"Unhandled operation in depth calculation: {c.op}"
                     )
         max_depth = max(depth.values()) if depth else 0
-        # Add a small safety margin (1 level) to account for any edge cases or rounding
-        # This helps prevent decode failures due to insufficient depth
         return max_depth + 1
 
     def run_and_check(self, term, cts):
