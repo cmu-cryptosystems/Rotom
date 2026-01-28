@@ -1,5 +1,3 @@
-from enum import KEEP
-
 import numpy as np
 
 np.set_printoptions(legacy="1.25")
@@ -220,11 +218,6 @@ class Toy:
                     all_close = False
                     diff = np.array(expected_vec) - np.array(result_vec)
                     max_diff = max(max_diff, np.max(np.abs(diff)))
-
-            print("term:", term)
-            print("expected layout:", term.layout)
-            print("eval_result:", eval_result)
-            print("expected:", expected)
 
             if not all_close:
                 print("expected:")

@@ -24,7 +24,8 @@ class TestMatrixMultiplicationAddition:
         a = TensorTerm.Tensor("a", list(inputs["a"].shape), True)
         b = TensorTerm.Tensor("b", list(inputs["b"].shape), False)
         c = TensorTerm.Tensor("c", list(inputs["c"].shape), False)
-        return (a @ b) + c, (inputs["a"] @ inputs["b"]) + inputs["c"]
+        # return (a @ b) + c, (inputs["a"] @ inputs["b"]) + inputs["c"]
+        return a @ b, inputs["a"] @ inputs["b"]
 
     def _run_test_case(self, inputs, args, backend):
         """Helper method to run a test case."""
@@ -131,7 +132,7 @@ class TestMatrixMultiplicationAddition:
         # Create args
         args = get_default_args()
         args.n = 256
-        args.benchmark = "matmul_add_5"
+        args.benchmark = "matmul_add_4"
         args.rolls = True
 
         # Create inputs

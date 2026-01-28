@@ -206,25 +206,10 @@ class LayoutAssignment:
             candidate_kernels = self.generate_candidate_kernels(term)            
             kernels = Optimizer(self.roll_flag).run(candidate_kernels)
 
-            for kernel in kernels:
-                print("opt kernel: ", kernel)
-                for k in kernel.post_order():
-                    print(k)
-                print()
-            print()
-
             # prune the search space
             kernels = self.shape_check(kernels)
             # kernels = self.prune_tiles(kernels)
             kernels = self.add_equivalent_kernels(kernels)
-
-            for kernel in kernels:
-                print("final kernel: ", kernel)
-                print( "cost: ", KernelCost(kernel, self.network).total_cost())
-                for k in kernel.post_order():
-                    print(k)
-                print()
-            print()
 
             # update kernel map
             self.update_kernels(term, kernels)

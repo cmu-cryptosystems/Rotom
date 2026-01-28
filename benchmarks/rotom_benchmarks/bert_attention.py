@@ -15,8 +15,8 @@ def bert_attention():
     """
 
     seq_len = 128
-    hidden_dim = 1024
-    num_heads = 16
+    hidden_dim = 768
+    num_heads = 12
     head_dim = hidden_dim // num_heads
 
     inputs = {}
@@ -74,6 +74,7 @@ def bert_attention():
         v_h = blocked_v[h_idx, :, :]
 
         qk_h = q_h @ k_h
+        return qk_h, inputs, 8192
         out_h = qk_h @ v_h
         return out_h, inputs, 8192
 

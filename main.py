@@ -150,7 +150,6 @@ def run_benchmark_or_microbenchmark(args):
 
         # Lower to circuit IR
         circuit_ir = Lower(kernel).run()
-        exit(0)
 
         # Serialize circuit if requested
         if args.serialize:
