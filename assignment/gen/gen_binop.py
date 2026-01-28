@@ -19,7 +19,6 @@ from assignment.gen.gen_compaction import find_compaction
 from frontends.tensor import TensorOp
 from ir.dim import Dim, DimType
 from ir.kernel import Kernel, KernelOp
-from ir.kernel_cost import KernelCost
 from ir.layout import Layout
 from ir.roll import Roll
 from util.layout_util import (
