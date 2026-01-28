@@ -460,8 +460,10 @@ class LayoutAssignment:
                     new_kernel = copy(kernel)
                     new_kernel.layout = new_layout
                     eq_kernels.add(new_kernel)
+
+        # Return a deterministic, sorted list of kernels
         assert eq_kernels
-        return eq_kernels
+        return sorted(eq_kernels, key=lambda k: k.layout.layout_str())
 
     def prune(self, kernels):
         layouts = {}

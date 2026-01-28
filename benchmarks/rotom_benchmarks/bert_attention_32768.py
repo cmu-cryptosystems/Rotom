@@ -1,46 +1,80 @@
-import random
-
 import numpy as np
 
 from frontends.tensor import TensorTerm
 
 
 def bert_attention_32768():
+    """
+    BERT-style attention benchmark targeting n=32768, with the same
+    TensorTerm structure as ``bert_attention`` / the small unit test.
+    """
+
+    seq_len = 128
+    hidden_dim = 768
+    num_heads = 12
+    head_dim = hidden_dim // num_heads
+
     inputs = {}
     inputs["h"] = np.array(
-        [[random.choice(range(2)) for _ in range(768)] for _ in range(128)]
+        [
+            [np.random.choice(range(2)) for _ in range(hidden_dim)]
+            for _ in range(seq_len)
+        ]
     )
     inputs["wq"] = np.array(
-        [[random.choice(range(2)) for _ in range(768)] for _ in range(768)]
+        [
+            [np.random.choice(range(2)) for _ in range(hidden_dim)]
+            for _ in range(hidden_dim)
+        ]
     )
-    inputs["bq"] = np.array([random.choice(range(2)) for _ in range(768)])
+    inputs["bq"] = np.array([np.random.choice(range(2)) for _ in range(hidden_dim)])
     inputs["wk"] = np.array(
-        [[random.choice(range(2)) for _ in range(768)] for _ in range(768)]
+        [
+            [np.random.choice(range(2)) for _ in range(hidden_dim)]
+            for _ in range(hidden_dim)
+        ]
     )
-    inputs["bk"] = np.array([random.choice(range(2)) for _ in range(768)])
+    inputs["bk"] = np.array([np.random.choice(range(2)) for _ in range(hidden_dim)])
     inputs["wv"] = np.array(
-        [[random.choice(range(2)) for _ in range(768)] for _ in range(768)]
+        [
+            [np.random.choice(range(2)) for _ in range(hidden_dim)]
+            for _ in range(hidden_dim)
+        ]
     )
-    inputs["bv"] = np.array([random.choice(range(2)) for _ in range(768)])
+    inputs["bv"] = np.array([np.random.choice(range(2)) for _ in range(hidden_dim)])
 
-    h = TensorTerm.Tensor("h", [128, 768], True)
-    wq = TensorTerm.Tensor("wq", [768, 768], False)
-    bq = TensorTerm.Tensor("bq", [768], False)
-    wk = TensorTerm.Tensor("wk", [768, 768], False)
-    bk = TensorTerm.Tensor("bk", [768], False)
-    wv = TensorTerm.Tensor("wv", [768, 768], False)
-    bv = TensorTerm.Tensor("bv", [768], False)
+    # Define TensorTerms matching the numpy input shapes.
+    h = TensorTerm.Tensor("h", [seq_len, hidden_dim], True)
+    wq = TensorTerm.Tensor("wq", [hidden_dim, hidden_dim], False)
+    bq = TensorTerm.Tensor("bq", [hidden_dim], False)
+    wk = TensorTerm.Tensor("wk", [hidden_dim, hidden_dim], False)
+    bk = TensorTerm.Tensor("bk", [hidden_dim], False)
+    wv = TensorTerm.Tensor("wv", [hidden_dim, hidden_dim], False)
+    bv = TensorTerm.Tensor("bv", [hidden_dim], False)
 
-    q = (h @ wq) + bq
-    k = (h @ wk) + bk
-    v = (h @ wv) + bv
+    # Linear projections
+    q = h @ wq + bq
+    k = h @ wk + bk
+    v = h @ wv + bv
 
-    # reshape q and k
-    blocked_q = q.reshape(1, {1: 12, 2: 64}).permute({0: 1, 1: 0, 2: 2})
-    blocked_kt = k.reshape(1, {1: 12, 2: 64}).permute({0: 2, 1: 0, 2: 1})
-    blocked_v = v.reshape(1, {1: 12, 2: 64}).permute({0: 1, 1: 0, 2: 2})
+    # Reshape / permute into [num_heads, seq_len, head_dim] exactly like bert_attention.
+    blocked_q = q.reshape(1, {1: num_heads, 2: head_dim}).permute({0: 1, 1: 0, 2: 2})
+    blocked_kt = k.reshape(1, {1: num_heads, 2: head_dim}).permute({0: 2, 1: 0, 2: 1})
+    blocked_v = v.reshape(1, {1: num_heads, 2: head_dim}).permute({0: 1, 1: 0, 2: 2})
 
-    q_kt = blocked_q.block_matmul(blocked_kt)
+    head_results = None
+    for h_idx in range(num_heads):
+        q_h = blocked_q[h_idx, :, :]
+        k_h = blocked_kt[h_idx, :, :]
+        v_h = blocked_v[h_idx, :, :]
 
-    q_kt_v = q_kt.block_matmul(blocked_v)
-    return q_kt_v, inputs
+        qk_h = q_h @ k_h
+        out_h = qk_h @ v_h
+
+        if head_results is None:
+            head_results = out_h
+        else:
+            head_results = head_results + out_h
+
+    # Return just the TensorTerm and inputs; the caller will set args.n ≈ 32768.
+    return head_results, inputs

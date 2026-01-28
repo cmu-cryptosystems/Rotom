@@ -13,6 +13,7 @@ Key functions:
 """
 
 from copy import deepcopy as copy
+from traceback import print_tb
 
 from assignment.alignment import get_dim_alignment
 from assignment.gen.gen_compaction import find_compaction
@@ -368,6 +369,19 @@ def check_roll_alignment(term, alignment, a_kernel, b_kernel):
     for b_roll in b_kernel.layout.rolls:
         b_roll_idx_set.add(b_roll.roll_index(b_dims))
 
+    for a_roll_idx in a_roll_idx_set:
+        if (
+            a_roll_idx in b_roll_idx_set
+            and a_dims[a_roll_idx[0]].extent != b_dims[a_roll_idx[1]].extent
+        ):
+            return False
+    for b_roll_idx in b_roll_idx_set:
+        if (
+            b_roll_idx in a_roll_idx_set
+            and b_dims[b_roll_idx[0]].extent != a_dims[b_roll_idx[1]].extent
+        ):
+            return False
+
     # check that aligned dimensions have aligned rolls
     # this only applies to dimensions that will be summed together
     for a_roll in a_kernel.layout.rolls:
@@ -427,7 +441,6 @@ def match_layout(term, kernels, alignment, roll_flag):
         # assert that dimensions are aligned
         matched = []
         for a_kernel, b_kernel in matched_layouts:
-
             if not check_alignment(term, alignment, a_kernel, b_kernel):
                 print("failed match:")
                 print(a_kernel)
@@ -1466,6 +1479,7 @@ def gen_binop(term, cs_kernels, shapes, roll_flag):
     if roll_flag and term.op == TensorOp.MATMUL:
         replicated_kernels += apply_sum_rolls(term, replicated_kernels)
 
+    print("term: ", term)
     output_kernels = set()
     for kernels in replicated_kernels:
         # add conversions or rolls to align layouts

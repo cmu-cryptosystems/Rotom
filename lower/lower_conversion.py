@@ -99,9 +99,8 @@ def lower_conversion(env, kernel):
 
     relevant_ct_indices = list(set(relevant_ct_indices))
     relevant_ct_indices.sort()
-    relevant_cts = []
-    for index in relevant_ct_indices:
-        relevant_cts.append(cts[index])
+    # Track only the relevant ciphertexts (those that participate in the conversion)
+    relevant_cts = [cts[index] for index in relevant_ct_indices]
 
     # decompaction, slot to ct transformations
     if slot_ct or slot_slot:
@@ -153,25 +152,34 @@ def lower_conversion(env, kernel):
     if ct_slot or slot_slot:
         # compaction
         swaps = ct_slot + slot_slot
+
+        # Build an initial layout that matches the relevant ciphertexts we are tracking:
+        # ct dimensions are the non-repeated relevant_ct_dims, followed by the slot dims.
+        expanded_layout = Layout(
+            kernel.cs[2].layout.term,
+            kernel.cs[2].layout.rolls,
+            relevant_ct_dims + relevant_slot_dims,
+            n,
+            kernel.cs[2].layout.secret,
+        )
+        layout_cts = LayoutCiphertexts(
+            layout=expanded_layout,
+            cts={i: ct for i, ct in enumerate(relevant_cts)},
+        )
+
         for swap_slot in swaps:
             swap_dim = swap_slot[0]
             if swap_dim.dim is None:
+                # Nothing to compact for purely empty dimensions
                 continue
+
             swap_to_dim_index = swap_slot[1]
-            new_relevant_cts = []
-            # Create expanded layout with split dimensions for get_cts_by_dim
-            expanded_dims = split_ct_dims + split_slot_dims
-            expanded_layout = Layout(
-                kernel.cs[2].layout.term,
-                kernel.cs[2].layout.rolls,
-                expanded_dims,
-                n,
-                kernel.cs[2].layout.secret,
-            )
-            temp_layout_cts = LayoutCiphertexts(
-                layout=expanded_layout, cts={i: ct for i, ct in enumerate(relevant_cts)}
-            )
-            ct_groups = get_cts_by_dim(temp_layout_cts, swap_dim)
+
+            # Use the current LayoutCiphertexts to group ciphertexts by the swap dimension
+            ct_groups = get_cts_by_dim(layout_cts, swap_dim)
+
+            # Perform compaction by rotating and adding ciphertexts within each group
+            new_relevant_cts_list = []
             for ct_group in ct_groups:
                 base = ct_group[0]
                 for i in range(1, len(ct_group)):
@@ -180,14 +188,16 @@ def lower_conversion(env, kernel):
                         HEOp.ROT,
                         [ct_group[i], -offset],
                         ct_group[i].secret,
-                        f"compaction",
+                        "compaction",
                     )
                     base = base + rot_term
-                new_relevant_cts.append(base)
+                new_relevant_cts_list.append(base)
 
-            relevant_cts = new_relevant_cts
+            # Update tracked ciphertexts
+            relevant_cts = new_relevant_cts_list
+            new_cts_dict = {i: ct for i, ct in enumerate(relevant_cts)}
 
-            # HACK:
+            # Update layout bookkeeping to reflect the move of swap_dim from ct to slot
             if relevant_slot_dims[swap_to_dim_index].extent == swap_dim.extent:
                 relevant_slot_dims[swap_to_dim_index] = swap_dim
                 relevant_ct_dims.remove(swap_dim)
@@ -199,6 +209,16 @@ def lower_conversion(env, kernel):
                 relevant_ct_dims.remove(swap_dim)
             else:
                 raise NotImplementedError("sizes mismatch")
+
+            # Keep the LayoutCiphertexts in sync with these dimension/layout changes
+            expanded_layout = Layout(
+                layout_cts.layout.term,
+                layout_cts.layout.rolls,
+                relevant_ct_dims + relevant_slot_dims,
+                n,
+                layout_cts.layout.secret,
+            )
+            layout_cts = LayoutCiphertexts(layout=expanded_layout, cts=new_cts_dict)
 
     # find places for slot replication
     slot_dims = kernel.layout.slot_dims
