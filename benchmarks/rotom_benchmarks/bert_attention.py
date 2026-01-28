@@ -75,6 +75,7 @@ def bert_attention():
 
         qk_h = q_h @ k_h
         out_h = qk_h @ v_h
+        return out_h, inputs
 
         if head_results is None:
             head_results = out_h

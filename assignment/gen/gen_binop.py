@@ -1519,7 +1519,6 @@ def apply_sum_rolls(term, replicated_kernels):
 
 
 def gen_binop(term, cs_kernels, shapes, roll_flag):
-    print("term: ", term)
     # get alignment
     alignment = get_dim_alignment(term, shapes)
 
