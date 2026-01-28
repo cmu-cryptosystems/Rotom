@@ -20,7 +20,6 @@ from lower.lower_conv2d_roll import lower_conv2d_roll
 from lower.lower_conversion import lower_conversion
 from lower.lower_cs_pack import lower_cs_pack
 from lower.lower_index import lower_index
-from lower.lower_select import lower_select
 from lower.lower_mask_tensor import lower_punctured_tensor
 from lower.lower_matmul import lower_bsgs_matmul, lower_matmul
 from lower.lower_mul import lower_mul
@@ -36,6 +35,7 @@ from lower.lower_roll import (
     lower_rot_roll,
     lower_split_roll,
 )
+from lower.lower_select import lower_select
 from lower.lower_sub import lower_sub
 from lower.lower_sum import lower_sum
 from lower.lower_tensor import lower_tensor

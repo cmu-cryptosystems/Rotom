@@ -16,6 +16,7 @@ from benchmarks.microbenchmarks.rot_roll import rot_roll
 from benchmarks.microbenchmarks.slot_bsgs_roll import slot_bsgs_roll
 from benchmarks.microbenchmarks.slot_conversion import slot_conversion
 from benchmarks.microbenchmarks.slot_roll import slot_roll
+from benchmarks.microbenchmarks.strassens.strassens_matmul import strassens_matmul
 from benchmarks.rotom_benchmarks.bert_attention import bert_attention
 from benchmarks.rotom_benchmarks.convolution.convolution import convolution
 from benchmarks.rotom_benchmarks.convolution.convolution_32768 import convolution_32768
@@ -26,7 +27,6 @@ from benchmarks.rotom_benchmarks.double_matmul.double_matmul_256_128_ct_ct impor
     double_matmul_256_128_ct_ct,
 )
 from benchmarks.rotom_benchmarks.logreg import logreg
-from benchmarks.microbenchmarks.strassens.strassens_matmul import strassens_matmul
 from benchmarks.rotom_benchmarks.matmul.matmul_128_64 import matmul_128_64
 from benchmarks.rotom_benchmarks.matmul.matmul_256_128 import matmul_256_128
 from benchmarks.rotom_benchmarks.ttm import ttm
