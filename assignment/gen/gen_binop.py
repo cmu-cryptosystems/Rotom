@@ -1055,8 +1055,8 @@ def conv_dimensions(alignment, kernels):
     a_kernel = kernels[0]
     b_kernel = kernels[1]
 
-    print("a child: ", a_kernel.cs[0])
-    print("b child: ", b_kernel.cs[0])
+    print("a child: ", a_kernel.cs)
+    print("b child: ", b_kernel.cs)
     print("a layout: ", a_kernel.layout.layout_str())
     print("b layout: ", b_kernel.layout.layout_str())
     print()

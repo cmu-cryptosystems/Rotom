@@ -69,14 +69,13 @@ def bert_attention():
 
     head_results = None
     for h_idx in range(num_heads):
-        # After permute, each slice is [seq_len, head_dim].
         q_h = blocked_q[h_idx, :, :]
         k_h = blocked_kt[h_idx, :, :]
         v_h = blocked_v[h_idx, :, :]
 
-        # Simple (unnormalized) attention: (Q K^T) V
         qk_h = q_h @ k_h
         out_h = qk_h @ v_h
+        return out_h, inputs, 8192
 
         if head_results is None:
             head_results = out_h
