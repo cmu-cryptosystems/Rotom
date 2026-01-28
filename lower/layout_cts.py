@@ -115,6 +115,4 @@ def create_layout_without_dims(layout: Layout, dims_to_remove: List[Dim]) -> Lay
                 new_rolls.append(roll)
 
     # Create new layout with filtered dimensions and rolls
-    return Layout(
-        layout.term, new_rolls, new_dims, layout.offset, layout.n, layout.secret
-    )
+    return Layout(layout.term, new_rolls, new_dims, layout.n, layout.secret)

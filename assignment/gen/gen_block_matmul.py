@@ -200,7 +200,6 @@ def conv_dimensions(alignment, kernels):
             a_kernel.layout.term,
             a_kernel.layout.rolls,
             extent_a_dims,
-            a_kernel.layout.offset,
             a_kernel.layout.n,
             a_kernel.layout.secret,
         )
@@ -214,7 +213,6 @@ def conv_dimensions(alignment, kernels):
             b_kernel.layout.term,
             b_kernel.layout.rolls,
             aligned_b_dims,
-            b_kernel.layout.offset,
             b_kernel.layout.n,
             b_kernel.layout.secret,
         )
@@ -230,7 +228,6 @@ def conv_dimensions(alignment, kernels):
             b_kernel.layout.term,
             b_kernel.layout.rolls,
             extent_b_dims,
-            b_kernel.layout.offset,
             b_kernel.layout.n,
             b_kernel.layout.secret,
         )
@@ -243,7 +240,6 @@ def conv_dimensions(alignment, kernels):
             a_kernel.layout.term,
             a_kernel.layout.rolls,
             aligned_a_dims,
-            a_kernel.layout.offset,
             a_kernel.layout.n,
             a_kernel.layout.secret,
         )
@@ -309,7 +305,6 @@ def match_public_kernel(alignment, a_kernel, b_kernel, left):
             a_kernel.layout.term,
             new_rolls,
             aligned_a_dims,
-            a_kernel.layout.offset,
             a_kernel.layout.n,
             a_kernel.layout.secret,
         )
@@ -338,7 +333,6 @@ def match_public_kernel(alignment, a_kernel, b_kernel, left):
             b_kernel.layout.term,
             new_rolls,
             aligned_b_dims,
-            b_kernel.layout.offset,
             b_kernel.layout.n,
             b_kernel.layout.secret,
         )
@@ -400,7 +394,6 @@ def roll_perm_alignment(term, a_kernel, b_kernel):
             b_kernel.layout.term,
             b_kernel.layout.rolls + b_rolls,
             b_dims,
-            b_kernel.layout.offset,
             b_kernel.layout.n,
             b_kernel.layout.secret,
         )
@@ -417,7 +410,6 @@ def roll_perm_alignment(term, a_kernel, b_kernel):
             a_kernel.layout.term,
             a_kernel.layout.rolls + a_rolls,
             a_dims,
-            a_kernel.layout.offset,
             a_kernel.layout.n,
             a_kernel.layout.secret,
         )
@@ -532,7 +524,6 @@ def roll_dim_alignment(term, alignment, a_kernel, b_kernel):
             b_kernel.layout.term,
             b_rolls,
             b_dims,
-            a_kernel.layout.offset,
             b_kernel.layout.n,
             b_kernel.layout.secret,
         )
@@ -583,7 +574,6 @@ def roll_dim_alignment(term, alignment, a_kernel, b_kernel):
                 a_kernel.layout.term,
                 a_rolls,
                 a_dims,
-                a_kernel.layout.offset,
                 a_kernel.layout.n,
                 a_kernel.layout.secret,
             )
@@ -597,7 +587,6 @@ def roll_dim_alignment(term, alignment, a_kernel, b_kernel):
                 a_kernel.layout.term,
                 a_rolls,
                 a_dims,
-                a_kernel.layout.offset,
                 a_kernel.layout.n,
                 a_kernel.layout.secret,
             )
@@ -763,7 +752,6 @@ def apply_sum_roll(term, kernel):
                 kernel.layout.term,
                 updated_rolls,
                 new_dims,
-                kernel.layout.offset,
                 kernel.layout.n,
                 kernel.layout.secret,
             )
@@ -775,7 +763,6 @@ def apply_sum_roll(term, kernel):
                 kernel.layout.term,
                 updated_rolls + [new_roll],
                 new_dims,
-                kernel.layout.offset,
                 kernel.layout.n,
                 kernel.layout.secret,
             )
@@ -852,7 +839,6 @@ def match_kernel_dims(a_kernel, b_kernel):
             a_kernel.layout.term,
             a_kernel.layout.rolls,
             new_dims,
-            a_kernel.layout.offset,
             a_kernel.layout.n,
             a_kernel.layout.secret,
         )
@@ -875,7 +861,6 @@ def match_kernel_dims(a_kernel, b_kernel):
             b_kernel.layout.term,
             b_kernel.layout.rolls,
             new_dims,
-            b_kernel.layout.offset,
             b_kernel.layout.n,
             b_kernel.layout.secret,
         )
@@ -918,7 +903,6 @@ def replicate_dimensions(kernel, fill_len):
             kernel.layout.term,
             kernel.layout.rolls,
             new_dims,
-            kernel.layout.offset,
             kernel.layout.n,
             kernel.layout.secret,
         )
@@ -975,7 +959,6 @@ def output_layout(term, alignment, a_kernel, b_kernel):
                     term,
                     new_rolls,
                     output_dims,
-                    a_kernel.layout.offset,
                     a_kernel.layout.n,
                     a_kernel.layout.secret or b_kernel.layout.secret,
                 )
@@ -1032,7 +1015,6 @@ def gen_block_matmul(term, cs_kernels):
                 a.layout.term,
                 [Roll(dims[0], dims[4]), new_roll],
                 dims,
-                a.layout.offset,
                 a.layout.n,
                 a.layout.secret,
             )
@@ -1043,7 +1025,6 @@ def gen_block_matmul(term, cs_kernels):
                 a.layout.term,
                 roll_layout.rolls,
                 [Dim(None, 2, 1)] + copy(dims),
-                a.layout.offset,
                 a.layout.n,
                 a.layout.secret,
             )
@@ -1056,7 +1037,6 @@ def gen_block_matmul(term, cs_kernels):
                 a.layout.term,
                 roll_layout.rolls,
                 dims,
-                a.layout.offset,
                 a.layout.n,
                 a.layout.secret,
             )
@@ -1077,7 +1057,6 @@ def gen_block_matmul(term, cs_kernels):
                 [Dim(None, 2, 1)]
                 + b.layout.dims[: len(b.layout.dims) - 1]
                 + [Dim(2, 2, 64), Dim(2, 64, 1)],
-                b.layout.offset,
                 b.layout.n,
                 b.layout.secret,
             )
@@ -1097,7 +1076,6 @@ def gen_block_matmul(term, cs_kernels):
                 b.layout.term,
                 [Roll(dims[0], dims[4]), new_roll],
                 dims,
-                b.layout.offset,
                 b.layout.n,
                 b.layout.secret,
             )
@@ -1108,7 +1086,6 @@ def gen_block_matmul(term, cs_kernels):
                 b.layout.term,
                 roll_layout.rolls,
                 [Dim(None, 2, 1)] + copy(dims),
-                b.layout.offset,
                 b.layout.n,
                 b.layout.secret,
             )
@@ -1121,7 +1098,6 @@ def gen_block_matmul(term, cs_kernels):
                 b.layout.term,
                 roll_layout.rolls,
                 dims,
-                b.layout.offset,
                 b.layout.n,
                 b.layout.secret,
             )
@@ -1142,7 +1118,6 @@ def gen_block_matmul(term, cs_kernels):
                 [Dim(None, 2, 1)]
                 + a.layout.dims[: len(a.layout.dims) - 1]
                 + [Dim(1, 2, 64), Dim(1, 64, 1)],
-                a.layout.offset,
                 a.layout.n,
                 a.layout.secret,
             )

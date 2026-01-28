@@ -71,6 +71,7 @@ class KernelOp(Enum):
     PERMUTE = "PERMUTE"
     # index
     INDEX = "INDEX"
+    SELECT = "SELECT"
     COMBINE = "COMBINE"
     REORDER = "REORDER"
     RESCALE = "RESCALE"
@@ -218,6 +219,14 @@ class Kernel:
                     _res, _seen = term.helper_post_order(seen)
                     res += _res
                     seen |= _seen
+                seen.add(self)
+                res.append(self)
+                return res, seen
+            case KernelOp.SELECT:
+                res = []
+                _res, _seen = self.cs[0].helper_post_order(seen)
+                res += _res
+                seen |= _seen
                 seen.add(self)
                 res.append(self)
                 return res, seen

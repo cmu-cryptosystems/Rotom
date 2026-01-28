@@ -12,13 +12,12 @@ class Layout:
     """Layout class for packing tensor elements into HE vectors.
 
     The Layout class defines how tensor elements are packed into HE vectors.
-    It handles dimensions, rolls, and offsets.
+    It handles dimensions and rolls.
 
     Attributes:
         term: The tensor term this layout is associated with
         rolls: List of Roll permutations applied to the layout
         dims: List of Dim objects defining the dimensions and their order in the layout
-        offset: Dictionary mapping dimensions to slot offsets
         n: Number of slots in the HE vector
         secret: Boolean indicating if this is a ciphertext (True) or plaintext (False)
         alignment: Dictionary storing dimension alignments
@@ -27,7 +26,7 @@ class Layout:
 
     """
 
-    def __init__(self, term, rolls, dims, offset, n, secret=True):
+    def __init__(self, term, rolls, dims, n, secret=True):
         """Create a Layout
 
         Args:
@@ -39,7 +38,6 @@ class Layout:
         """
         self.term = term
         self.rolls = rolls
-        self.offset = offset
         self.dims = dims
         self.n = n
         self.secret = secret
@@ -49,10 +47,6 @@ class Layout:
 
         # check that there are no duplicate permutations
         assert len(rolls) == len(set(rolls))
-
-        # offset is a dictionary of the form {dim: offset}
-        # where offset is the number of slots to shift the dimension by
-        assert isinstance(self.offset, dict)
 
         # # filter dimensions with extent <= 1
         # dims = [dim for dim in dims if dim.extent > 1]
@@ -143,12 +137,9 @@ class Layout:
                 f"roll({dims.index(perm.dim_to_roll)},{dims.index(perm.dim_to_roll_by)})"
             )
         rolls = " ".join(rolls)
-        offset = " ".join([f"{k}:{v}" for k, v in self.offset.items()])
         layout = f"{ct_dims};{slot_dims}" if ct_dims else f"{slot_dims}"
         if rolls:
             layout = f"{rolls} {layout}"
-        if offset:
-            layout = f"{layout} {offset}"
         return layout
 
     def __repr__(self):
@@ -266,4 +257,4 @@ class Layout:
                 rolls.append(Roll(dims[from_idx], dims[to_idx]))
 
         # Create and return the layout
-        return Layout(None, rolls, dims, {}, n, secret)
+        return Layout(None, rolls, dims, n, secret)
