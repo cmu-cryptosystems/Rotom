@@ -16,7 +16,7 @@ Key Concepts:
 from copy import deepcopy as copy
 
 from frontends.tensor import TensorOp
-from util.util import prod, round_to_ceiling_power_of_2
+from util.util import round_to_ceiling_power_of_2
 
 
 class Shape:
@@ -24,6 +24,72 @@ class Shape:
         self.comp = comp
         self.shapes = {}
         self.padded_shapes = {}
+
+    def _index_shape(self, base_shape, index_spec):
+        """Compute the output shape of an INDEX operation.
+
+        Args:
+            base_shape (list[int]): Input tensor shape.
+            index_spec: Indexing object from TensorTerm (int, slice, or tuple).
+
+        Returns:
+            list[int]: Resulting shape after applying the index.
+        """
+
+        def _slice_len(dim_len, slc: slice) -> int:
+            start = 0 if slc.start is None else slc.start
+            stop = dim_len if slc.stop is None else slc.stop
+            step = 1 if slc.step is None else slc.step
+            if step <= 0:
+                raise NotImplementedError(
+                    "Shape analysis for INDEX does not yet support non-positive slice steps"
+                )
+            if stop < start:
+                return 0
+            return (stop - start + step - 1) // step
+
+        shape = list(base_shape)
+
+        # Simple integer index: drop the first dimension
+        if isinstance(index_spec, int):
+            return shape[1:]
+
+        # Single slice applied to the first dimension
+        if isinstance(index_spec, slice):
+            if not shape:
+                return []
+            new_dim = _slice_len(shape[0], index_spec)
+            return [new_dim] + shape[1:]
+
+        # Tuple of indices/slices: apply sequentially across dimensions
+        if isinstance(index_spec, tuple):
+            new_shape = []
+            dim_i = 0
+            for idx in index_spec:
+                if isinstance(idx, int):
+                    # Integer index removes this dimension
+                    dim_i += 1
+                elif isinstance(idx, slice):
+                    if dim_i >= len(shape):
+                        raise IndexError("INDEX spec has more dimensions than tensor rank")
+                    dim_len = shape[dim_i]
+                    new_dim = _slice_len(dim_len, idx)
+                    new_shape.append(new_dim)
+                    dim_i += 1
+                else:
+                    raise NotImplementedError(
+                        f"Unsupported INDEX component type in shape analysis: {type(idx)}"
+                    )
+
+            # Any remaining dimensions are carried over unchanged
+            if dim_i < len(shape):
+                new_shape.extend(shape[dim_i:])
+            return new_shape
+
+        # Fallback for unsupported index types
+        raise NotImplementedError(
+            f"Unsupported INDEX spec in shape analysis: {type(index_spec)}"
+        )
 
     def get_padded_shape(self, term):
         match term.op:
@@ -112,7 +178,7 @@ class Shape:
                 return c_shape
             case TensorOp.INDEX:
                 a_shape = copy(self.padded_shapes[term.cs[0]])
-                return a_shape[1:]
+                return self._index_shape(a_shape, term.cs[1])
             case TensorOp.PERMUTE:
                 a_shape = copy(self.padded_shapes[term.cs[0]])
                 permuted_shape = [0] * len(a_shape)
@@ -212,7 +278,7 @@ class Shape:
             case TensorOp.INDEX:
                 a = term.cs[0]
                 a_shape = copy(self.get_shape(a))
-                return a_shape[1:]
+                return self._index_shape(a_shape, term.cs[1])
             case TensorOp.RESHAPE:
                 a = term.cs[0]
                 a_shape = copy(self.get_shape(a))

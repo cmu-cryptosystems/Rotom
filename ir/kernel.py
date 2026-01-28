@@ -71,6 +71,7 @@ class KernelOp(Enum):
     PERMUTE = "PERMUTE"
     # index
     INDEX = "INDEX"
+    SELECT = "SELECT"
     COMBINE = "COMBINE"
     REORDER = "REORDER"
     RESCALE = "RESCALE"

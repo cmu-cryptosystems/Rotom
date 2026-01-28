@@ -57,5 +57,5 @@ def strassens():
     # return C1 + C2 + C3 + C4, inputs
     # return C1 + C2 + C3 + C4, inputs
     # return C1, inputs
-    return C2 + C3, inputs
+    return C1 + C2 + C3 + C4, inputs
     # return a1 @ b1, inputs

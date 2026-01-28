@@ -604,6 +604,7 @@ class KernelCost:
                 | KernelOp.RESHAPE
                 | KernelOp.PERMUTE
                 | KernelOp.INDEX
+                | KernelOp.SELECT
                 | KernelOp.REORDER
                 | KernelOp.RESCALE
             ):

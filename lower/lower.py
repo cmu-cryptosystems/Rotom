@@ -20,6 +20,7 @@ from lower.lower_conv2d_roll import lower_conv2d_roll
 from lower.lower_conversion import lower_conversion
 from lower.lower_cs_pack import lower_cs_pack
 from lower.lower_index import lower_index
+from lower.lower_select import lower_select
 from lower.lower_mask_tensor import lower_punctured_tensor
 from lower.lower_matmul import lower_bsgs_matmul, lower_matmul
 from lower.lower_mul import lower_mul
@@ -101,6 +102,8 @@ class Lower:
                     self.env[term] = lower_compact(self.env, term)
                 case KernelOp.INDEX:
                     self.env[term] = lower_index(self.env, term)
+                case KernelOp.SELECT:
+                    self.env[term] = lower_select(self.env, term)
                 case KernelOp.COMBINE:
                     self.env[term] = lower_combine(self.env, term)
                 case KernelOp.RESCALE:

@@ -187,6 +187,7 @@ class Toy:
     def run(self):
         results = []
         for term, cts in self.circuit_ir.items():
+            print("testing term:", term)
             results = []
             for _, ct in cts.items():
                 if isinstance(ct, list):
@@ -206,8 +207,28 @@ class Toy:
             else:
                 expected = apply_layout(eval_result, term.layout)
 
+            print("expected:", expected)
+            print("results:", results)
+            print()
+
+            print("term:", term)
+            for _, ct in cts.items():
+                for ct_term in ct.post_order():
+                    print(ct_term)
+                    print()
+                print()
+
+
+            print("term.cs:")
+            for cs in term.cs:
+                print(cs)
+                print()
+                
+            
+        
+
             # skip checks for split rolls
-            if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE, KernelOp.INDEX]:
+            if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE]:
                 continue
 
             # Check if values are close instead of exact equality

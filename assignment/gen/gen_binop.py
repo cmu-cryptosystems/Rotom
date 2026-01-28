@@ -1335,6 +1335,8 @@ def output_layout(term, alignment, a_kernel, b_kernel):
                         )
                     )
 
+            print("a_kernel.layout.offset:", a_kernel.layout.offset)
+            print("b_kernel.layout.offset:", b_kernel.layout.offset)
             update_offset = copy(a_kernel.layout.offset)
             for k, v in b_kernel.layout.offset.items():
                 if not isinstance(v, list):

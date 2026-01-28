@@ -145,6 +145,7 @@ def run_benchmark_or_microbenchmark(args):
             print(k)
         print()
 
+
         # Lower to circuit IR
         circuit_ir = Lower(kernel).run()
 
