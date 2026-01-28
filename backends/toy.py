@@ -187,7 +187,9 @@ class Toy:
         results = []
         for term, cts in self.circuit_ir.items():
             results = []
-            for _, ct in cts.items():
+            # Sort by ciphertext index to ensure consistent ordering
+            for ct_idx in sorted(cts.keys()):
+                ct = cts[ct_idx]
                 if isinstance(ct, list):
                     for c in ct:
                         for ct_term in c.post_order():
@@ -243,7 +245,9 @@ class Toy:
         results = []
         for term, cts in self.circuit_ir.items():
             results = []
-            for _, ct in cts.items():
+            # Sort by ciphertext index to ensure consistent ordering
+            for ct_idx in sorted(cts.keys()):
+                ct = cts[ct_idx]
                 if isinstance(ct, list):
                     for c in ct:
                         for ct_term in c.post_order():
