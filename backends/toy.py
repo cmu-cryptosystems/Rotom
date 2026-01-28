@@ -211,22 +211,6 @@ class Toy:
             print("results:", results)
             print()
 
-            print("term:", term)
-            for _, ct in cts.items():
-                for ct_term in ct.post_order():
-                    print(ct_term)
-                    print()
-                print()
-
-
-            print("term.cs:")
-            for cs in term.cs:
-                print(cs)
-                print()
-                
-            
-        
-
             # skip checks for split rolls
             if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE]:
                 continue

@@ -167,7 +167,6 @@ def replicate_dimensions(a_kernel, b_kernel, shapes, alignment):
                 kernel.layout.term,
                 kernel.layout.rolls,
                 new_dims,
-                kernel.layout.offset,
                 kernel.layout.n,
                 kernel.layout.secret,
             )
@@ -478,7 +477,6 @@ def match_public_kernel(alignment, a_kernel, b_kernel, left):
             a_kernel.layout.term,
             new_rolls,
             aligned_a_dims,
-            a_kernel.layout.offset,
             a_kernel.layout.n,
             a_kernel.layout.secret,
         )
@@ -507,7 +505,6 @@ def match_public_kernel(alignment, a_kernel, b_kernel, left):
             b_kernel.layout.term,
             new_rolls,
             aligned_b_dims,
-            b_kernel.layout.offset,
             b_kernel.layout.n,
             b_kernel.layout.secret,
         )
@@ -663,7 +660,6 @@ def roll_dim_alignment(term, alignment, a_kernel, b_kernel):
             b_kernel.layout.term,
             b_rolls,
             b_dims,
-            a_kernel.layout.offset,
             b_kernel.layout.n,
             b_kernel.layout.secret,
         )
@@ -714,7 +710,6 @@ def roll_dim_alignment(term, alignment, a_kernel, b_kernel):
                 a_kernel.layout.term,
                 a_rolls,
                 a_dims,
-                a_kernel.layout.offset,
                 a_kernel.layout.n,
                 a_kernel.layout.secret,
             )
@@ -728,7 +723,6 @@ def roll_dim_alignment(term, alignment, a_kernel, b_kernel):
                 a_kernel.layout.term,
                 a_rolls,
                 a_dims,
-                a_kernel.layout.offset,
                 a_kernel.layout.n,
                 a_kernel.layout.secret,
             )
@@ -792,7 +786,6 @@ def roll_roll_alignment(term, a_kernel, b_kernel):
             b_kernel.layout.term,
             b_kernel.layout.rolls + b_rolls,
             b_dims,
-            b_kernel.layout.offset,
             b_kernel.layout.n,
             b_kernel.layout.secret,
         )
@@ -809,7 +802,6 @@ def roll_roll_alignment(term, a_kernel, b_kernel):
             a_kernel.layout.term,
             a_kernel.layout.rolls + a_rolls,
             a_dims,
-            a_kernel.layout.offset,
             a_kernel.layout.n,
             a_kernel.layout.secret,
         )
@@ -1071,7 +1063,6 @@ def conv_dimensions(alignment, kernels):
             a_kernel.layout.term,
             a_kernel.layout.rolls,
             extent_a_dims,
-            a_kernel.layout.offset,
             a_kernel.layout.n,
             a_kernel.layout.secret,
         )
@@ -1085,7 +1076,6 @@ def conv_dimensions(alignment, kernels):
             b_kernel.layout.term,
             b_kernel.layout.rolls,
             aligned_b_dims,
-            b_kernel.layout.offset,
             b_kernel.layout.n,
             b_kernel.layout.secret,
         )
@@ -1101,7 +1091,6 @@ def conv_dimensions(alignment, kernels):
             b_kernel.layout.term,
             b_kernel.layout.rolls,
             extent_b_dims,
-            b_kernel.layout.offset,
             b_kernel.layout.n,
             b_kernel.layout.secret,
         )
@@ -1114,7 +1103,6 @@ def conv_dimensions(alignment, kernels):
             a_kernel.layout.term,
             a_kernel.layout.rolls,
             aligned_a_dims,
-            a_kernel.layout.offset,
             a_kernel.layout.n,
             a_kernel.layout.secret,
         )
@@ -1141,7 +1129,6 @@ def conv_ct_dimensions(alignment, kernels):
         b_kernel.layout.term,
         b_kernel.layout.rolls,
         aligned_b_dims,
-        b_kernel.layout.offset,
         b_kernel.layout.n,
         b_kernel.layout.secret,
     )
@@ -1157,7 +1144,6 @@ def conv_ct_dimensions(alignment, kernels):
         a_kernel.layout.term,
         a_kernel.layout.rolls,
         aligned_a_dims,
-        a_kernel.layout.offset,
         a_kernel.layout.n,
         a_kernel.layout.secret,
     )
@@ -1289,7 +1275,6 @@ def apply_sum_roll(term, kernel):
                 kernel.layout.term,
                 updated_rolls,
                 new_dims,
-                kernel.layout.offset,
                 kernel.layout.n,
                 kernel.layout.secret,
             )
@@ -1301,7 +1286,6 @@ def apply_sum_roll(term, kernel):
                 kernel.layout.term,
                 updated_rolls + [new_roll],
                 new_dims,
-                kernel.layout.offset,
                 kernel.layout.n,
                 kernel.layout.secret,
             )
@@ -1335,8 +1319,7 @@ def output_layout(term, alignment, a_kernel, b_kernel):
                         )
                     )
 
-            print("a_kernel.layout.offset:", a_kernel.layout.offset)
-            print("b_kernel.layout.offset:", b_kernel.layout.offset)
+            # offset removed
             # update_offset = copy(a_kernel.layout.offset)
             # print("update_offset:", update_offset)
             # for k, v in b_kernel.layout.offset.items():
@@ -1358,7 +1341,6 @@ def output_layout(term, alignment, a_kernel, b_kernel):
                     term,
                     a_kernel.layout.rolls,
                     output_dims,
-                    copy(a_kernel.layout.offset),
                     a_kernel.layout.n,
                     a_kernel.layout.secret or b_kernel.layout.secret,
                 )
@@ -1450,7 +1432,6 @@ def output_layout(term, alignment, a_kernel, b_kernel):
                     term,
                     new_rolls,
                     output_dims,
-                    a_kernel.layout.offset,
                     a_kernel.layout.n,
                     a_kernel.layout.secret or b_kernel.layout.secret,
                 )

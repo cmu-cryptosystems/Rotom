@@ -78,7 +78,6 @@ def gen_reshape(term, cs_kernels):
                 term,
                 cs_kernel.layout.rolls,
                 new_dims,
-                cs_kernel.layout.offset,
                 cs_kernel.layout.n,
                 cs_kernel.layout.secret,
             )

@@ -71,7 +71,9 @@ class Shape:
                     dim_i += 1
                 elif isinstance(idx, slice):
                     if dim_i >= len(shape):
-                        raise IndexError("INDEX spec has more dimensions than tensor rank")
+                        raise IndexError(
+                            "INDEX spec has more dimensions than tensor rank"
+                        )
                     dim_len = shape[dim_i]
                     new_dim = _slice_len(dim_len, idx)
                     new_shape.append(new_dim)

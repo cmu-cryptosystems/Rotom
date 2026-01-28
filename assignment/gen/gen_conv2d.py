@@ -45,7 +45,6 @@ def apply_replication(term, kernel, dim):
         term,
         kernel.layout.rolls,
         replicated_dims,
-        kernel.layout.offset,
         kernel.layout.n,
         kernel.layout.secret,
     )
@@ -77,7 +76,6 @@ def apply_roll(term, kernel, roll):
         term,
         rolled_rolls,
         rolled_dims,
-        kernel.layout.offset,
         kernel.layout.n,
         kernel.layout.secret,
     )
@@ -247,7 +245,7 @@ def gen_conv2d_roll(term, cs_kernels, shapes):
             b_rolls.append(Roll(b_dims[a_roll_idx[0]], b_dims[a_roll_idx[1]]))
 
         # create layout and kernel
-        b_layout = Layout(term.cs[1], b_rolls, b_dims, {}, a_kernel.layout.n, False)
+        b_layout = Layout(term.cs[1], b_rolls, b_dims, a_kernel.layout.n, False)
         b_kernel = Kernel(KernelOp.TENSOR, [], b_layout)
 
         # find output layout after convolution
@@ -277,7 +275,6 @@ def gen_conv2d_roll(term, cs_kernels, shapes):
             term,
             [],
             output_dims,
-            a_kernel.layout.offset,
             a_kernel.layout.n,
             a_kernel.layout.secret,
         )
@@ -395,7 +392,7 @@ def gen_conv2d(term, cs_kernels, shapes):
                 b_dims.append(Dim(None, dim.extent, r_offset))
                 r_offset *= dim.extent
 
-        b_layout = Layout(b_term, [], b_dims, {}, a_kernel.layout.n, False)
+        b_layout = Layout(b_term, [], b_dims, a_kernel.layout.n, False)
         b_kernel = Kernel(KernelOp.PUNCTURED_TENSOR, [], b_layout)
 
         # Output layout:
@@ -412,7 +409,7 @@ def gen_conv2d(term, cs_kernels, shapes):
             else:
                 output_dims.append(Dim(None, a_dim.extent, 1, DimType.EMPTY))
         output_layout = Layout(
-            term, [], output_dims, {}, a_kernel.layout.n, a_kernel.layout.secret
+            term, [], output_dims, a_kernel.layout.n, a_kernel.layout.secret
         )
 
         # TODO: this should work with bsgs matmul later

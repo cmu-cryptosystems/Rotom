@@ -196,7 +196,6 @@ def sub_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
         b_kernel = copy(b_kernel)
 
         term = a_kernel.layout.term - b_kernel.layout.term
-        term.offset = {}
         sub_kernels = gen_binop(
             term,
             [[a_kernel], [b_kernel]],
@@ -228,7 +227,6 @@ def matmul_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
             a_kernel = copy(a_kernel)
             b_kernel = copy(b_kernel)
             term = a_kernel.layout.term @ b_kernel.layout.term
-            term.offset = {}
             matmul_kernels = gen_binop(
                 term,
                 [[a_kernel], [b_kernel]],
@@ -361,7 +359,6 @@ def gen_strassens(term, cs_kernels, roll_flag, network):
                     # create offsets
                     indexed_a_kernels = []
                     for i, offset in enumerate(a_ct_offsets):
-                        offset_dict = {0: offset[0], 1: offset[2], "index": i}
                         # create indexed term:
                         term = copy(a_kernel.layout.term)
                         indexed_term = term[offset[0]:offset[1], offset[2]:offset[3]]
@@ -369,7 +366,6 @@ def gen_strassens(term, cs_kernels, roll_flag, network):
                             indexed_term,
                             a_kernel.layout.rolls,
                             a_kernel.layout.slot_dims,
-                            offset_dict,
                             a_kernel.layout.n,
                             a_kernel.layout.secret,
                         )
@@ -377,7 +373,7 @@ def gen_strassens(term, cs_kernels, roll_flag, network):
                         # captured in the layout (offset_dict) and tensor term.
                         indexed_a_kernel = Kernel(
                             KernelOp.SELECT,
-                            [a_cs_placeholder],
+                            [a_cs_placeholder, i],
                             indexed_a_layout,
                         )
                         indexed_a_kernels.append(indexed_a_kernel)
@@ -388,7 +384,6 @@ def gen_strassens(term, cs_kernels, roll_flag, network):
 
                     indexed_b_kernels = []
                     for i, offset in enumerate(b_ct_offsets):
-                        offset_dict = {0: offset[0], 1: offset[2], "index": i}
                         # create indexed term:
                         term = copy(b_kernel.layout.term)
                         indexed_term = term[offset[0]:offset[1], offset[2]:offset[3]]
@@ -396,13 +391,12 @@ def gen_strassens(term, cs_kernels, roll_flag, network):
                             indexed_term,
                             b_kernel.layout.rolls,
                             b_kernel.layout.slot_dims,
-                            offset_dict,
                             b_kernel.layout.n,
                             b_kernel.layout.secret,
                         )
                         indexed_b_kernel = Kernel(
                             KernelOp.SELECT,
-                            [b_cs_placeholder],
+                            [b_cs_placeholder, i],
                             indexed_b_layout,
                         )
                         indexed_b_kernels.append(indexed_b_kernel)

@@ -162,7 +162,6 @@ def lower_bsgs_matmul(env, kernel):
         kernel.cs[1].layout.term,
         [],
         output_dims,
-        kernel.cs[1].layout.offset,
         kernel.cs[1].layout.n,
         rolled_kernel.layout.secret,
     )

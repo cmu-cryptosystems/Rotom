@@ -109,9 +109,7 @@ def dimension_merging(layout):
             assert r in merged_dims
             new_rolls.append(Roll(k, r))
 
-    return Layout(
-        layout.term, new_rolls, merged_dims, layout.offset, layout.n, layout.secret
-    )
+    return Layout(layout.term, new_rolls, merged_dims, layout.n, layout.secret)
 
 
 def align_dimension_extents(a_dims, b_dims):
@@ -478,7 +476,6 @@ def apply_layout(pt_tensor, layout):
 
     print("pt tensor:", pt_tensor)
     print("layout:", layout)
-    print("offset:", layout.offset)
 
     # get base_term indices
     dims = layout.get_dims()
@@ -648,4 +645,4 @@ def parse_layout(layout_str, n, secret):
     for dim in result["dims"]:
         dims.append(Dim.parse(dim))
 
-    return Layout(None, rolls, dims, {}, n, secret)
+    return Layout(None, rolls, dims, n, secret)

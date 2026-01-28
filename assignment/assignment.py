@@ -263,7 +263,6 @@ class LayoutAssignment:
                         kernel.layout.term,
                         kernel.layout.rolls,
                         aligned_dims,
-                        kernel.layout.offset,
                         kernel.layout.n,
                         kernel.layout.secret,
                     )
@@ -455,7 +454,6 @@ class LayoutAssignment:
                         kernel.layout.term,
                         [new_roll],
                         new_dims,
-                        kernel.layout.offset,
                         kernel.layout.n,
                         kernel.layout.secret,
                     )

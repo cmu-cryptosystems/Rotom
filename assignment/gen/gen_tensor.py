@@ -128,7 +128,7 @@ def gen_tensor(term, secret, shape, n):
         # HACK: condition for ttm
         all_dims = [list(dims) for dims in itertools.permutations(dims)]
         for dims in all_dims:
-            layout = Layout(term, [], dims, {}, n, secret)
+            layout = Layout(term, [], dims, n, secret)
             layout.ct_dims = sorted(
                 [ct_dim for ct_dim in layout.ct_dims], key=lambda x: (x.dim, x.stride)
             )
@@ -150,7 +150,7 @@ def gen_tensor(term, secret, shape, n):
                 if dim[2] > 1:
                     ct_dims.append(Dim(dim[0], dim[2], dim[1]))
             dims = ct_dims + slot_dims
-            layout = Layout(term, [], dims, {}, n, secret)
+            layout = Layout(term, [], dims, n, secret)
             layout.ct_dims = sorted(
                 [ct_dim for ct_dim in layout.ct_dims], key=lambda x: (x.dim, x.stride)
             )
@@ -166,7 +166,7 @@ def gen_tensor(term, secret, shape, n):
             dims.append(empty_dim)
         all_dims = [list(dims) for dims in itertools.permutations(dims)]
         for dims in all_dims:
-            layout = Layout(term, [], dims, {}, n, secret)
+            layout = Layout(term, [], dims, n, secret)
             layout.ct_dims = sorted(
                 [ct_dim for ct_dim in layout.ct_dims], key=lambda x: (x.dim, x.stride)
             )

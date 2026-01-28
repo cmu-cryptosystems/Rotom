@@ -222,6 +222,14 @@ class Kernel:
                 seen.add(self)
                 res.append(self)
                 return res, seen
+            case KernelOp.SELECT:
+                res = []
+                _res, _seen = self.cs[0].helper_post_order(seen)
+                res += _res
+                seen |= _seen
+                seen.add(self)
+                res.append(self)
+                return res, seen
             case _:
                 res = []
                 for term in self.cs:
