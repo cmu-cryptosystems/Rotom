@@ -1055,6 +1055,12 @@ def conv_dimensions(alignment, kernels):
     a_kernel = kernels[0]
     b_kernel = kernels[1]
 
+    print("a child: ", a_kernel.cs[0])
+    print("b child: ", b_kernel.cs[0])
+    print("a layout: ", a_kernel.layout.layout_str())
+    print("b layout: ", b_kernel.layout.layout_str())
+    print()
+
     aligned_kernels = []
     if not a_kernel.layout.secret:
         aligned_kernels.append(match_public_kernel(alignment, a_kernel, b_kernel, True))

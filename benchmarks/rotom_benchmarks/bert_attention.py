@@ -15,8 +15,8 @@ def bert_attention():
     """
 
     seq_len = 128
-    hidden_dim = 768
-    num_heads = 12
+    hidden_dim = 1024
+    num_heads = 16
     head_dim = hidden_dim // num_heads
 
     inputs = {}

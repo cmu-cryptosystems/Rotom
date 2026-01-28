@@ -150,6 +150,7 @@ def run_benchmark_or_microbenchmark(args):
 
         # Lower to circuit IR
         circuit_ir = Lower(kernel).run()
+        exit(0)
 
         # Serialize circuit if requested
         if args.serialize:
@@ -228,9 +229,6 @@ def main(args):
     )
 
     kernel = LayoutAssignment(tensor_ir, args).run()
-    for k in kernel.post_order():
-        print(k)
-    print()
 
     # lower to circuit ir
     circuit_ir = Lower(kernel).run()
