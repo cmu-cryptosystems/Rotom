@@ -6,25 +6,6 @@ from util.util import split_lists
 
 
 def lower_roll(env, kernel):
-    print("kernel:", kernel)
-    print("roll:", kernel.cs[0])
-    for cs in kernel.cs:
-        print("cs:", cs)
-
-    print("layout:", kernel.layout)
-    print("kernel.layout.rolls:", kernel.layout.rolls)
-    print("kernel.layout.ct_dims:", kernel.layout.ct_dims)
-    print("kernel.layout.slot_dims:", kernel.layout.slot_dims)
-    # offset removed
-    print("kernel.layout.n:", kernel.layout.n)
-    print("kernel.layout.secret:", kernel.layout.secret)
-    print("kernel.layout.term:", kernel.layout.term)
-    print("kernel.layout.term.cs:", kernel.layout.term.cs)
-
-    print("kernel", kernel)
-    for k in kernel.post_order():
-        print("k:", k)
-
     n = kernel.layout.n
     roll = kernel.cs[0]
     ct_dims = kernel.layout.ct_dims
