@@ -30,16 +30,14 @@ class CKKS:
         self.not_secure = getattr(
             args, "not_secure", False
         )  # Flag to disable 128-bit security
-        # Optional CKKS tuning knobs (safe defaults).
-        self.ckks_scaling_mod_size = getattr(args, "ckks_scaling_mod_size", 59)
-        self.ckks_first_mod_size = getattr(args, "ckks_first_mod_size", 60)
-        self.ckks_depth_margin = getattr(args, "ckks_depth_margin", 2)
         self.env = {}
         self.pt_env = {}
         self.layout_map = {}
         self.input_cache = {}
         self.dependencies = {}
         self.rots = set()
+
+        self.margin_depth = 4
 
         # clean data path
         if os.path.exists("./data"):
@@ -99,12 +97,8 @@ class CKKS:
     def create_context(self, depth, rots):
         print("creating context...")
         parameters = CCParamsCKKSRNS()
-        # Give some extra depth headroom; OpenFHE's autoscaling/rescaling can
-        # consume extra levels beyond the theoretical mult depth.
-        depth = int(depth) + int(self.ckks_depth_margin)
         parameters.SetMultiplicativeDepth(depth)
-        parameters.SetFirstModSize(int(self.ckks_first_mod_size))
-        parameters.SetScalingModSize(int(self.ckks_scaling_mod_size))
+        parameters.SetScalingModSize(45)
         parameters.SetScalingTechnique(ScalingTechnique.FLEXIBLEAUTO)
 
         # Set security level based on flag (inverted logic)
@@ -500,7 +494,7 @@ class CKKS:
                     depth[c] = depth[c.cs[0]] + 1
                 case _:
                     raise NotImplementedError(c.op)
-        return max(depth.values())
+        return max(depth.values()) + self.margin_depth
 
     def find_depth(self, ct):
         depth = {}
@@ -527,7 +521,7 @@ class CKKS:
                         f"Unhandled operation in depth calculation: {c.op}"
                     )
         max_depth = max(depth.values()) if depth else 0
-        return max_depth + 1
+        return max_depth + self.margin_depth
 
     def run_and_check(self, term, cts):
         self.preprocess_packing(cts)
