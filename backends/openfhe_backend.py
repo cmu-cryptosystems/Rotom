@@ -102,13 +102,12 @@ class CKKS:
         parameters.SetScalingTechnique(ScalingTechnique.FLEXIBLEAUTO)
 
         # Set security level based on flag (inverted logic)
-        if self.not_secure:
+        if self.not_secure or self.n < 16384:
             parameters.SetSecurityLevel(HEStd_NotSet)
             print("Using default security level (not guaranteed)")
         else:
             parameters.SetSecurityLevel(HEStd_128_classic)
             print("Using 128-bit security level")
-
         parameters.SetRingDim(self.n * 2)
 
         self.cc = GenCryptoContext(parameters)
