@@ -1,4 +1,5 @@
 import numpy as np
+
 np.set_printoptions(legacy="1.25")
 
 from frontends.tensor import TensorOp
@@ -203,7 +204,7 @@ class Toy:
                 expected = apply_punctured_layout(eval_result, term.layout)
             else:
                 expected = apply_layout(eval_result, term.layout)
-          
+
             # skip checks for split rolls
             if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE]:
                 continue
