@@ -203,7 +203,7 @@ class LayoutAssignment:
 
         # generate optimized candidate kernels
         for term in self.comp.post_order():
-            candidate_kernels = self.generate_candidate_kernels(term)            
+            candidate_kernels = self.generate_candidate_kernels(term)
             kernels = Optimizer(self.roll_flag).run(candidate_kernels)
 
             # prune the search space
@@ -620,7 +620,9 @@ class LayoutAssignment:
         assert term in self.kernels and term in self.kernel_costs
         assert self.kernels[term] and self.kernel_costs[term]
 
-        best_layout, _best_cost = min(self.kernel_costs[term].items(), key=lambda kv: kv[1])
+        best_layout, _best_cost = min(
+            self.kernel_costs[term].items(), key=lambda kv: kv[1]
+        )
         return self.kernels[term][best_layout]
 
     def remove_duplicate_kernels(self, kernels):
