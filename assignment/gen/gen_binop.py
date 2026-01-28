@@ -855,13 +855,26 @@ def roll_dimensions(term, alignment, kernels):
     b_kernel = kernels[1]
 
     aligned_kernels = []
-    if not a_kernel.layout.secret:
-        aligned_kernels.append(match_public_kernel(alignment, a_kernel, b_kernel, True))
-    elif not b_kernel.layout.secret:
-        aligned_kernels.append(
-            match_public_kernel(alignment, a_kernel, b_kernel, False)
-        )
-    else:
+    # Prefer cheap public/tensor layout matching when possible.
+    #
+    # Original behavior only considered this when one side was public
+    # (layout.secret == False).  For packing input ciphertexts, it's
+    # also useful to treat a pure tensor kernel (KernelOp.TENSOR) as
+    # a candidate for this path, even if it is secret, so include that
+    # as an additional option instead of forcing the heavier
+    # roll/conv alignment path.
+    if (not a_kernel.layout.secret) or (a_kernel.op == KernelOp.TENSOR):
+        mk = match_public_kernel(alignment, a_kernel, b_kernel, True)
+        if mk is not None:
+            aligned_kernels.append(mk)
+    if (not b_kernel.layout.secret) or (b_kernel.op == KernelOp.TENSOR):
+        mk = match_public_kernel(alignment, a_kernel, b_kernel, False)
+        if mk is not None:
+            aligned_kernels.append(mk)
+
+    # If both sides are secret, also explore the general roll-based
+    # alignment path as before.
+    if a_kernel.layout.secret and b_kernel.layout.secret:
         # check if ct dimensions are matched
         ct_dim_alignment = check_ct_dim_alignment(alignment, a_kernel, b_kernel)
         slot_dim_alignment = check_slot_dim_alignment(alignment, a_kernel, b_kernel)
@@ -1088,15 +1101,24 @@ def conv_dimensions(alignment, kernels):
     b_kernel = kernels[1]
 
     aligned_kernels = []
-    if not a_kernel.layout.secret:
+    # As with roll_dimensions, allow the cheaper public/tensor-based
+    # matching path not only when one side is public, but also when
+    # the kernel op is a plain Tensor.  This gives an additional
+    # packing option for input ciphertexts without removing the
+    # existing conversion-based alignment path.
+    if (not a_kernel.layout.secret) or (a_kernel.op == KernelOp.TENSOR):
         mk = match_public_kernel(alignment, a_kernel, b_kernel, True)
         if mk is not None:
             aligned_kernels.append(mk)
-    elif not b_kernel.layout.secret:
+    if (not b_kernel.layout.secret) or (b_kernel.op == KernelOp.TENSOR):
         mk = match_public_kernel(alignment, a_kernel, b_kernel, False)
         if mk is not None:
             aligned_kernels.append(mk)
-    else:
+
+    # Preserve the original conversion behavior when both sides are
+    # secret; the new public/tensor options are in addition to, not
+    # instead of, this path.
+    if a_kernel.layout.secret and b_kernel.layout.secret:
         # align dimension extents
         extent_a_dims, extent_b_dims = align_dimension_extents(
             a_kernel.layout.get_dims(), b_kernel.layout.get_dims()
