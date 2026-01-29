@@ -6,6 +6,8 @@ iniconfig==2.1.0
 kiwisolver==1.4.9
 matplotlib==3.10.5
 numpy==2.2.6
+pandas>=2.2.0
+seaborn>=0.13.0
 openfhe==1.4.0.1.24.4
 packaging==25.0
 pillow==11.3.0

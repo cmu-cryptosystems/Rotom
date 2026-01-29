@@ -5,7 +5,7 @@ from util.layout_util import apply_layout
 
 
 def check_results(tensor_ir, inputs, kernel, results, runtime, args):
-    """Check results of the benchmark"""
+    """Check results of the benchmark"""    
     expected_cts = apply_layout(tensor_ir.eval(inputs), kernel.layout)
 
     # Check if values are close instead of exact equality

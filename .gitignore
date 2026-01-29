@@ -17,6 +17,7 @@ benchmarks/viaduct_benchmarks/
 scripts/fhelipe/
 scripts/viaduct/
 
+
 # Generated circuit output files
 output/
 logs/

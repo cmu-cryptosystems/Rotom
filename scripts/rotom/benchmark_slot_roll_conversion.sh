@@ -1,5 +1,4 @@
 mkdir -p logs/slot_roll_conversions/
-mkdir -p logs/slot_roll_conversions/
 
 # conversion
 for run in {1..5}; do
