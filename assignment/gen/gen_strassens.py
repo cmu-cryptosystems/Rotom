@@ -276,6 +276,46 @@ def sub_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
     return output_kernels
 
 
+def estimate_downstream_cost(matmul_kernel, network):
+    """
+    Estimate the cost of downstream operations that will use this matmul kernel.
+    
+    In strassens, matmul outputs are typically used in add/sub operations.
+    This function estimates the cost of those operations based on the matmul kernel's layout.
+    
+    The estimation is simplified: we estimate the cost of an add operation with a similar
+    kernel. For rolled kernels, add operations might be cheaper if both operands have rolls.
+    
+    Args:
+        matmul_kernel: The matmul kernel to estimate downstream costs for
+        network: Network type for cost modeling
+        
+    Returns:
+        float: Estimated downstream cost
+    """
+    # Simple heuristic: estimate add operation cost based on layout
+    # Add operations cost is roughly proportional to number of ciphertexts
+    num_ct = matmul_kernel.layout.num_ct()
+    
+    # Basic add cost per ciphertext
+    base_add_cost = 0.1  # Small base cost per CT
+    
+    # If the kernel has rolls, downstream operations might need to handle rolls
+    # This could add some cost, but rolled kernels often work better together
+    roll_penalty = 0.0
+    if matmul_kernel.layout.rolls:
+        # Rolled kernels might need roll alignment in downstream ops
+        # But this is often offset by better performance in rolled operations
+        roll_penalty = 0.05 * len(matmul_kernel.layout.rolls)
+    
+    estimated_cost = num_ct * base_add_cost + roll_penalty
+    
+    # This is a very rough estimate - the actual cost depends on the specific
+    # operations and other kernels involved. But it gives us a way to prefer
+    # kernels that will work well in downstream operations.
+    return estimated_cost
+
+
 def matmul_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
     output_kernels = {}
     output_kernel_costs = {}
@@ -302,35 +342,42 @@ def matmul_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
             print(f"\n  === matmul_tiles for {term} ===")
             print(f"  Total kernels: {len(matmul_kernels)}, With rolls: {len(matmuls_with_rolls)}, Without rolls: {len(matmuls_without_rolls)}")
             
-            # Calculate costs for all kernels
+            # Calculate costs for all kernels including downstream operations
             kernel_costs = []
             for k in matmul_kernels:
-                cost = KernelCost(k, network).total_cost()
+                matmul_cost = KernelCost(k, network).total_cost()
+                # Estimate downstream cost (operations that will use this matmul output)
+                # In strassens, matmul outputs are typically used in add/sub operations
+                downstream_cost = estimate_downstream_cost(k, network)
+                total_cost = matmul_cost + downstream_cost
                 has_rolls = bool(k.layout.rolls)
-                kernel_costs.append((k, cost, has_rolls))
+                kernel_costs.append((k, matmul_cost, downstream_cost, total_cost, has_rolls))
             
-            # Sort by cost
-            kernel_costs.sort(key=lambda x: x[1])
+            # Sort by total cost (matmul + downstream)
+            kernel_costs.sort(key=lambda x: x[3])
             
-            print(f"  Top 5 kernels by cost:")
-            for i, (k, cost, has_rolls) in enumerate(kernel_costs[:5]):
-                print(f"    {i+1}. Cost: {cost}, Has rolls: {has_rolls}, Layout: {k.layout}")
+            print(f"  Top 5 kernels by total cost (matmul + downstream):")
+            for i, (k, matmul_cost, downstream_cost, total_cost, has_rolls) in enumerate(kernel_costs[:5]):
+                print(f"    {i+1}. Total: {total_cost} (matmul: {matmul_cost}, downstream: {downstream_cost}), Has rolls: {has_rolls}, Layout: {k.layout}")
             
             # Check if cheapest has rolls
             if kernel_costs:
                 cheapest = kernel_costs[0]
-                print(f"  Cheapest kernel: Cost={cheapest[1]}, Has rolls={cheapest[2]}")
+                print(f"  Cheapest kernel: Total cost={cheapest[3]} (matmul: {cheapest[1]}, downstream: {cheapest[2]}), Has rolls={cheapest[4]}")
             
             for matmul_kernel in matmul_kernels:
                 layout = matmul_kernel.layout
                 layout_str = layout_to_str(layout)
-                cost = KernelCost(matmul_kernel, network).total_cost()
+                # Use total cost (matmul + downstream) for selection
+                matmul_cost = KernelCost(matmul_kernel, network).total_cost()
+                downstream_cost = estimate_downstream_cost(matmul_kernel, network)
+                total_cost = matmul_cost + downstream_cost
                 if layout_str not in output_kernels:
                     output_kernels[layout_str] = matmul_kernel
-                    output_kernel_costs[layout_str] = cost
-                elif cost < output_kernel_costs[layout_str]:
+                    output_kernel_costs[layout_str] = total_cost
+                elif total_cost < output_kernel_costs[layout_str]:
                     output_kernels[layout_str] = matmul_kernel
-                    output_kernel_costs[layout_str] = cost
+                    output_kernel_costs[layout_str] = total_cost
             
             # When roll_flag is True, prefer rolled kernels over non-rolled ones
             # Create a layout key ignoring rolls to find duplicates
