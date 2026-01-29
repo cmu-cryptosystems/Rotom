@@ -91,7 +91,9 @@ def run_benchmark_or_microbenchmark(args):
             mlir_file = f"heir/{args.fn}/{args.fn}.mlir"
             mlir_results = run_mlir_interpreter(mlir_file)
             # Check MLIR results against kernel.layout.term.eval()
-            check_results(kernel.layout.term, inputs, kernel, mlir_results, runtime, args)
+            check_results(
+                kernel.layout.term, inputs, kernel, mlir_results, runtime, args
+            )
             heir_backend.serialize_results(mlir_results)
         else:
             raise NotImplementedError("unknown backend")
