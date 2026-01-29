@@ -18,12 +18,12 @@ def find_test_scripts(scripts_dir: str = "./scripts") -> List[Path]:
     if not scripts_path.exists():
         print(f"Error: Scripts directory '{scripts_dir}' not found!")
         return []
-    
+
     test_scripts = []
     for script_file in scripts_path.rglob("*.sh"):
         if script_file.is_file():
             test_scripts.append(script_file)
-    
+
     return sorted(test_scripts)
 
 
@@ -32,7 +32,7 @@ def run_script(script_path: Path) -> Tuple[bool, str]:
     print(f"\n{'='*60}")
     print(f"Running: ./{script_path}")
     print(f"{'='*60}")
-    
+
     try:
         # Run the script and capture output
         start_time = time.time()
@@ -41,12 +41,12 @@ def run_script(script_path: Path) -> Tuple[bool, str]:
             capture_output=True,
             text=True,
             shell=False,
-            cwd="."
+            cwd=".",
         )
         end_time = time.time()
-        
+
         duration = end_time - start_time
-        
+
         if result.returncode == 0:
             print(f"✅ SUCCESS - {script_path.name} completed in {duration:.2f}s")
             if result.stdout.strip():
@@ -61,9 +61,9 @@ def run_script(script_path: Path) -> Tuple[bool, str]:
             if result.stdout.strip():
                 print("Standard output:")
                 print(result.stdout)
-        
+
         return result.returncode == 0, result.stdout + result.stderr
-        
+
     except Exception as e:
         print(f"❌ ERROR - Failed to run {script_path.name}: {e}")
         return False, str(e)
@@ -73,40 +73,40 @@ def main():
     """Main function to run all tests."""
     print("🚀 Starting test execution for all scripts in ./scripts directory")
     print(f"Current working directory: {os.getcwd()}")
-    
+
     # Find all test scripts
     test_scripts = find_test_scripts()
-    
+
     if not test_scripts:
         print("No test scripts found in ./scripts directory!")
         sys.exit(1)
-    
+
     print(f"\nFound {len(test_scripts)} test scripts:")
     for script in test_scripts:
         print(f"  - {script}")
-    
+
     # Run all tests
     print(f"\n{'='*60}")
     print("EXECUTING TESTS")
     print(f"{'='*60}")
-    
+
     successful_tests = 0
     failed_tests = 0
     test_results = []
-    
+
     start_time = time.time()
-    
+
     for script in test_scripts:
         success, output = run_script(script)
         test_results.append((script, success, output))
-        
+
         if success:
             successful_tests += 1
         else:
             failed_tests += 1
-    
+
     total_time = time.time() - start_time
-    
+
     # Print summary
     print(f"\n{'='*60}")
     print("TEST SUMMARY")
@@ -115,7 +115,7 @@ def main():
     print(f"Successful: {successful_tests}")
     print(f"Failed: {failed_tests}")
     print(f"Total execution time: {total_time:.2f}s")
-    
+
     if failed_tests > 0:
         print(f"\n❌ {failed_tests} test(s) failed:")
         for script, success, output in test_results:
@@ -128,4 +128,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()
