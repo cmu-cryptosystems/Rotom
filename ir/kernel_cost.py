@@ -56,20 +56,28 @@ class KernelCost:
                 # 1Gbps
                 # ct = 1.2mb
                 # 0.0096 ms per ct.
+                # Updated costs to better reflect actual operation costs:
+                # - Rotation is expensive (requires key switching, ~0.5-4ms per rotation)
+                # - Multiplication is expensive (requires relinearization, ~10ms per mul)
+                # - Addition is relatively cheap (~0.5ms per add)
+                # - Communication is relatively cheap on LAN (0.0096ms per CT)
+                # These values are calibrated to make packing beneficial when appropriate
                 return {
                     "comm": 0.0096,
-                    "add": 0.0001,
-                    "mul": 0.006,
-                    "rot": 0.006,
+                    "add": 0.5,  # Increased from 0.0001 to reflect actual cost
+                    "mul": 10.0,  # Increased from 0.006 to reflect actual cost
+                    "rot": 4.0,  # Increased from 0.006 to reflect actual cost (key switching)
                 }
             case "wan":
                 # 100mbps
                 # 0.096 ms per ct
+                # On WAN, communication is much more expensive relative to compute
+                # But compute costs remain the same
                 return {
                     "comm": 0.096,
-                    "add": 0.0001,
-                    "mul": 0.006,
-                    "rot": 0.006,
+                    "add": 0.5,
+                    "mul": 10.0,
+                    "rot": 4.0,
                 }
             case _:
                 raise NotImplementedError(f"network: {self.network}")
