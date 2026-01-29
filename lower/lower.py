@@ -3,6 +3,7 @@ Lowering should account for layout and dimensions at each step
 """
 
 from ir.kernel import KernelOp
+from lower.circuit_opts.lift_rot_to_pack import lift_rotations_to_pack
 from lower.circuit_opts.mask_opts import (
     mask_identity_opt,
     zero_mask_identity_opt,
@@ -116,9 +117,15 @@ class Lower:
         opt_cts = {}
         for ct_idx, ct in layout_cts.items():
             opt_ct = rot_zero_opt(ct)
-            opt_ct = zero_mask_opt(ct)
-            opt_ct = mask_identity_opt(ct)
-            opt_ct = zero_mask_identity_opt(ct)
+            opt_ct = zero_mask_opt(opt_ct)
+            opt_ct = mask_identity_opt(opt_ct)
+            opt_ct = zero_mask_identity_opt(opt_ct)
+
+            # Lift rotations to packing phase (optimization for convolution)
+            # This replaces ROT(CS(PACK(...)), rot_amt) with pre-rotated PACK operations
+            # The backend can then rotate during packing instead of homomorphically
+            opt_ct = lift_rotations_to_pack(opt_ct)
+
             opt_cts[ct_idx] = opt_ct
 
         self.env[self.kernel] = LayoutCiphertexts(layout=layout_cts.layout, cts=opt_cts)
