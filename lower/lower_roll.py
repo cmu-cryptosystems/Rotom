@@ -10,6 +10,27 @@ def lower_roll(env, kernel):
     roll = kernel.cs[0]
     ct_dims = kernel.layout.ct_dims
 
+    def _build_global_base_map(base_indices_by_cts):
+        """
+        Map a full-layout index tuple -> list of (ct_index, slot_index).
+        We store a list since different slots can share the same projected index tuple.
+        """
+        global_map = {}
+        for ct_i, indices in enumerate(base_indices_by_cts):
+            for slot_i, index in enumerate(indices):
+                key = tuple(index)
+                if key not in global_map:
+                    global_map[key] = []
+                global_map[key].append((ct_i, slot_i))
+        return global_map
+
+    def _pop_from_global_map(global_map, key):
+        if key not in global_map or len(global_map[key]) == 0:
+            raise KeyError(f"missing base slot for index {key}")
+        ct_slot = global_map[key][0]
+        global_map[key] = global_map[key][1:]
+        return ct_slot
+
     if roll.dim_to_roll in ct_dims and roll.dim_to_roll_by in ct_dims:
         input_cts = env[kernel.cs[1]]
 
@@ -28,69 +49,67 @@ def lower_roll(env, kernel):
         return LayoutCiphertexts(layout=kernel.layout, cts=new_cts)
     else:
         base_indices_by_cts, rolled_indices_by_cts = get_rots_per_ct(kernel)
-        cts = {}
-        for ct_index in range(len(base_indices_by_cts)):
-            # create base mapping
-            base_map = {}
-            for i, index in enumerate(base_indices_by_cts[ct_index]):
-                if tuple(index) not in base_map:
-                    base_map[tuple(index)] = []
-                base_map[tuple(index)].append(i)
+        # Build a global mapping so rolled indices can source from different ciphertexts.
+        # This avoids KeyError when a roll crosses ciphertext boundaries.
+        global_base_map = _build_global_base_map(base_indices_by_cts)
 
-            # map rotations to new ct
-            rots = {}
-            for i, index in enumerate(rolled_indices_by_cts[ct_index]):
-                index = tuple(index)
-                rot_amt = base_map[index][0] - i
-                base_map[index] = base_map[index][1:]
-                if rot_amt not in rots:
-                    rots[rot_amt] = []
-                rots[rot_amt].append(i)
+        input_cts = env[kernel.cs[1]]
+        # Normalize input_cts to sequential keys starting from 0, since
+        # _build_global_base_map uses 0-based indices
+        input_cts_list = list(input_cts.values())
+        if len(input_cts_list) == 0:
+            # Empty input - check if layout expects ciphertexts
+            if len(rolled_indices_by_cts) > 0:
+                raise ValueError(
+                    f"lower_roll: input_cts is empty but {len(rolled_indices_by_cts)} output ciphertexts expected. "
+                    f"This suggests a bug in the previous lowering step."
+                )
+            # Empty input and no output expected - return empty ciphertexts
+            return LayoutCiphertexts(layout=kernel.layout, cts={})
 
-            # self.env ct term
-            input_cts = env[kernel.cs[1]]
-            base_term = input_cts[ct_index]
-            if len(rots) == 1:
-                # this roll can be done with a single rotation
-                for rot_amt, _ in rots.items():
-                    cts[ct_index] = base_term << rot_amt
-            elif len(rots) == 2:
-                # rolls can be optimized with subtraction
-                rot_amts = list(rots.keys())
-                indices = rots[rot_amts[0]]
+        out_cts = {}
+        for out_ct_index in range(len(rolled_indices_by_cts)):
+            # Group contributions by (source_ct, rot_amt) -> output slot indices.
+            contribs = {}  # (src_ct, rot_amt) -> [out_slot_i, ...]
+            for out_slot_i, index in enumerate(rolled_indices_by_cts[out_ct_index]):
+                key = tuple(index)
+                src_ct_index, src_slot_i = _pop_from_global_map(global_base_map, key)
+                rot_amt = src_slot_i - out_slot_i
+                contrib_key = (src_ct_index, rot_amt)
+                if contrib_key not in contribs:
+                    contribs[contrib_key] = []
+                contribs[contrib_key].append(out_slot_i)
+
+            # Fast path: one source ciphertext and one rotation => pure rotation.
+            if len(contribs) == 1:
+                (src_ct_index, rot_amt), _indices = next(iter(contribs.items()))
+                if src_ct_index >= len(input_cts_list):
+                    raise IndexError(
+                        f"src_ct_index {src_ct_index} out of range for input_cts (len={len(input_cts_list)})"
+                    )
+                out_cts[out_ct_index] = input_cts_list[src_ct_index] << rot_amt
+                continue
+
+            # General (correct) path: masked rotated contributions summed together.
+            terms_to_sum = []
+            for (src_ct_index, rot_amt), out_indices in contribs.items():
+                if src_ct_index >= len(input_cts_list):
+                    raise IndexError(
+                        f"src_ct_index {src_ct_index} out of range for input_cts (len={len(input_cts_list)})"
+                    )
                 mask = [0] * n
-                for index in indices:
-                    mask[index] = 1
-
-                # rotate mask
-                mask = [mask[(i - rot_amts[0]) % n] for i in range(len(mask))]
+                for idx in out_indices:
+                    mask[idx] = 1
                 mask_term = HETerm(HEOp.MASK, [mask], False, "roll mask")
+                rot_term = input_cts_list[src_ct_index] << rot_amt
+                terms_to_sum.append(rot_term * mask_term)
 
-                # create masked_a_term
-                masked_a_term = base_term * mask_term
-                # create masked_b_term through subtraction
-                masked_b_term = base_term - masked_a_term
+            sum_term = terms_to_sum[0]
+            for t in terms_to_sum[1:]:
+                sum_term = sum_term + t
+            out_cts[out_ct_index] = sum_term
 
-                # rotate both
-                rot_a_term = masked_a_term << rot_amts[0]
-                rot_b_term = masked_b_term << rot_amts[1]
-                cts[ct_index] = rot_a_term + rot_b_term
-            else:
-                # TODO: THERE SHOULD BE SOME BSGS OPTIMIZATION THAT CAN BE APPLIED HERE
-                terms_to_sum = []
-                for rot_amt, indices in rots.items():
-                    mask = [0] * n
-                    for index in indices:
-                        mask[index] = 1
-                    mask_term = HETerm(HEOp.MASK, [mask], False, "roll mask")
-                    rot_base = base_term << rot_amt
-                    mask_base = rot_base * mask_term
-                    terms_to_sum.append(mask_base)
-                sum_base = terms_to_sum[0]
-                for sum_term in terms_to_sum[1:]:
-                    sum_base = sum_base + sum_term
-                cts[ct_index] = sum_base
-        return LayoutCiphertexts(layout=kernel.layout, cts=cts)
+        return LayoutCiphertexts(layout=kernel.layout, cts=out_cts)
 
 
 def lower_rot_roll(env, kernel):
@@ -201,21 +220,56 @@ def lower_bsgs_roll(env, kernel):
 
     # find rotation amounts
     base_indices_by_cts, rolled_indices_by_cts = get_rots_per_ct(kernel)
+    # If this roll crosses ciphertext boundaries, fall back to the general (masked) lowering.
+    # The BSGS logic assumes each output ciphertext is sourced from exactly one input ciphertext.
+    global_base_map = {}
+    for ct_i, indices in enumerate(base_indices_by_cts):
+        for slot_i, index in enumerate(indices):
+            key = tuple(index)
+            if key not in global_base_map:
+                global_base_map[key] = []
+            global_base_map[key].append((ct_i, slot_i))
+
+    def _pop_global(key):
+        if key not in global_base_map or len(global_base_map[key]) == 0:
+            raise KeyError(f"missing base slot for index {key}")
+        v = global_base_map[key][0]
+        global_base_map[key] = global_base_map[key][1:]
+        return v
+
+    crosses_ct = False
+    for out_ct_index in range(len(rolled_indices_by_cts)):
+        for index in rolled_indices_by_cts[out_ct_index]:
+            src_ct_i, _src_slot_i = _pop_global(tuple(index))
+            if src_ct_i != out_ct_index:
+                crosses_ct = True
+                break
+        if crosses_ct:
+            break
+
+    if crosses_ct:
+        return lower_roll(env, kernel)
+
+    # Rebuild per-ct mapping now that we've consumed the global map during detection.
+    base_indices_by_cts, rolled_indices_by_cts = get_rots_per_ct(kernel)
     cts = {}
     for ct_index in range(len(base_indices_by_cts)):
-        # create base mapping
         base_map = {}
         for i, index in enumerate(base_indices_by_cts[ct_index]):
-            if tuple(index) not in base_map:
-                base_map[tuple(index)] = []
-            base_map[tuple(index)].append(i)
+            key = tuple(index)
+            if key not in base_map:
+                base_map[key] = []
+            base_map[key].append(i)
 
-        # map rotations to new ct
         rots = {}
         for i, index in enumerate(rolled_indices_by_cts[ct_index]):
-            index = tuple(index)
-            rot_amt = base_map[index][0] - i
-            base_map[index] = base_map[index][1:]
+            key = tuple(index)
+            if key not in base_map or len(base_map[key]) == 0:
+                # Safety fallback: shouldn't happen after crosses_ct detection,
+                # but falling back keeps us correct.
+                return lower_roll(env, kernel)
+            rot_amt = base_map[key][0] - i
+            base_map[key] = base_map[key][1:]
             if rot_amt not in rots:
                 rots[rot_amt] = []
             rots[rot_amt].append(i)

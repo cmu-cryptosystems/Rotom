@@ -34,6 +34,10 @@ class TestMatrixMultiplicationCiphertextPlaintext:
 
         # Run compiler
         kernel = LayoutAssignment(tensor_ir, args).run()
+
+        for k in kernel.post_order():
+            print(k)
+        print()
         circuit_ir = Lower(kernel).run()
         results = run_backend(backend, circuit_ir, inputs, args)
 
@@ -134,6 +138,53 @@ class TestMatrixMultiplicationCiphertextPlaintext:
         )
         inputs["b"] = np.array(
             [[random.choice(range(2)) for j in range(16)] for i in range(4)]
+        )
+
+        self._run_test_case(inputs, args, backend)
+
+    def test_matmul_ct_pt_4x6_6x6_binary_random(self, backend):
+        """Test ciphertext-plaintext matrix multiplication with 4x6 * 6x6 binary random matrices."""
+        # Create args
+        args = get_default_args()
+        # Use small power-of-two n; both dimensions (4, 6) are < n so layout works
+        args.n = 8
+        args.benchmark = "matmul_ct_pt_6"
+
+        # Create inputs: 4x6 * 6x6 -> 4x6
+        inputs = {}
+        inputs["a"] = np.array(
+            [[random.choice(range(2)) for _ in range(6)] for _ in range(4)]
+        )
+        inputs["b"] = np.array(
+            [[random.choice(range(2)) for _ in range(6)] for _ in range(6)]
+        )
+
+        self._run_test_case(inputs, args, backend)
+
+    def test_matmul_ct_pt_16x256_256x256_binary_random(self, backend):
+        """Test ciphertext-plaintext matrix multiplication with 16x256 * 256x256 binary random matrices."""
+        # Create args
+        args = get_default_args()
+        # Use n=256; compatible with 16 and 256 extents
+        args.n = 256
+        args.benchmark = "matmul_ct_pt_16x256"
+        args.rolls = True
+
+        # Create inputs: 16x256 * 256x256 -> 16x256
+        inputs = {}
+        seq_len = 16
+        hidden_dim = 256
+        inputs["a"] = np.array(
+            [
+                [random.choice(range(2)) for _ in range(hidden_dim)]
+                for _ in range(seq_len)
+            ]
+        )
+        inputs["b"] = np.array(
+            [
+                [random.choice(range(2)) for _ in range(hidden_dim)]
+                for _ in range(hidden_dim)
+            ]
         )
 
         self._run_test_case(inputs, args, backend)

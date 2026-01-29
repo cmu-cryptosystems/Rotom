@@ -61,8 +61,6 @@ def run_bsgs_matmul(candidate):
                     and not kernel.cs[1].layout.secret
                     and kernel_0_roll_index == kernel_1_roll_index
                 ):
-                    # # remove the rot_roll and change the operation to BSGS_MATMUL
-                    # kernel.cs[0] = kernel.cs[0].cs[1]
                     kernel.cs[0].op = KernelOp.BSGS_ROT_ROLL
                     kernel.cs.insert(0, kernel_0_roll_index)
                     kernel.op = KernelOp.BSGS_MATMUL
@@ -74,8 +72,6 @@ def run_bsgs_matmul(candidate):
                     and not kernel.cs[0].layout.secret
                     and kernel_0_roll_index == kernel_1_roll_index
                 ):
-                    # # remove the rot_roll and change the operation to BSGS_MATMUL
-                    # kernel.cs[1] = kernel.cs[1].cs[1]
                     kernel.cs[1].op = KernelOp.BSGS_ROT_ROLL
                     kernel.cs.insert(0, kernel_0_roll_index)
                     kernel.op = KernelOp.BSGS_MATMUL

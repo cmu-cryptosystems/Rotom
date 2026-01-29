@@ -57,5 +57,9 @@ def lower_replicate(env, kernel):
 
     cts = {}
     for i, ct_index in enumerate(relevant_ct_indices):
+        if ct_index not in replicated_cts:
+            raise KeyError(
+                f"Computed ct_index {ct_index} not found in replicated_cts (keys: {list(replicated_cts.keys())})"
+            )
         cts[i] = replicated_cts[ct_index]
     return LayoutCiphertexts(layout=kernel.layout, cts=cts)

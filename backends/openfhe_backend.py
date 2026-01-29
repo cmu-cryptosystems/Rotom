@@ -37,6 +37,8 @@ class CKKS:
         self.dependencies = {}
         self.rots = set()
 
+        self.margin_depth = 4
+
         # clean data path
         if os.path.exists("./data"):
             shutil.rmtree("./data")
@@ -100,13 +102,12 @@ class CKKS:
         parameters.SetScalingTechnique(ScalingTechnique.FLEXIBLEAUTO)
 
         # Set security level based on flag (inverted logic)
-        if self.not_secure:
+        if self.not_secure or self.n < 16384:
             parameters.SetSecurityLevel(HEStd_NotSet)
             print("Using default security level (not guaranteed)")
         else:
             parameters.SetSecurityLevel(HEStd_128_classic)
             print("Using 128-bit security level")
-
         parameters.SetRingDim(self.n * 2)
 
         self.cc = GenCryptoContext(parameters)
@@ -492,7 +493,7 @@ class CKKS:
                     depth[c] = depth[c.cs[0]] + 1
                 case _:
                     raise NotImplementedError(c.op)
-        return max(depth.values())
+        return max(depth.values()) + self.margin_depth
 
     def find_depth(self, ct):
         depth = {}
@@ -519,7 +520,7 @@ class CKKS:
                         f"Unhandled operation in depth calculation: {c.op}"
                     )
         max_depth = max(depth.values()) if depth else 0
-        return max_depth + 1
+        return max_depth + self.margin_depth
 
     def run_and_check(self, term, cts):
         self.preprocess_packing(cts)
@@ -547,11 +548,16 @@ class CKKS:
         print("dagifying...")
         cts = self.dagify_fhe_circuit()
         rots = self.find_unique_rots(cts)
-        depth = self.find_depth(cts[0])
-        try:
-            depth = self.find_depth(cts[0])
-        except:
-            depth = self.find_depth_rescale(cts[0])
+        # Compute required depth across *all* outputs, not just the first one.
+        # Otherwise we can under-provision the context and only fail at decrypt.
+        depth = 0
+        for ct in cts:
+            if not ct.secret:
+                continue
+            try:
+                depth = max(depth, self.find_depth(ct))
+            except Exception:
+                depth = max(depth, self.find_depth_rescale(ct))
 
         self.create_context(depth, rots)
         self.preprocess_packing(cts)
@@ -574,10 +580,14 @@ class CKKS:
     def run_wrapper(self):
         cts = self.circuit_ir
         rots = self.find_unique_rots(cts)
-        try:
-            depth = self.find_depth(cts[0])
-        except:
-            depth = self.find_depth_rescale(cts[0])
+        depth = 0
+        for ct in cts:
+            if not ct.secret:
+                continue
+            try:
+                depth = max(depth, self.find_depth(ct))
+            except Exception:
+                depth = max(depth, self.find_depth_rescale(ct))
 
         self.create_context(depth, rots)
         self.preprocess_packing(cts)

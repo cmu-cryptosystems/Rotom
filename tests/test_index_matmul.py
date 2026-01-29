@@ -51,14 +51,6 @@ class TestIndexedMatrixMultiplication:
 
     def test_index_matmul_index_0(self, backend):
         """Test indexed matrix multiplication with index 0."""
-        # Skip CKKS for this test - INDEX operations with complex reshapes/permutes
-        # don't work correctly with CKKS at small ring dimensions (n=16) due to
-        # precision issues and overflow with large values
-        if backend == "ckks":
-            pytest.skip(
-                "CKKS backend has precision issues with INDEX operations at small ring dimensions"
-            )
-
         # Create args
         args = get_default_args()
         args.n = 16
@@ -77,13 +69,6 @@ class TestIndexedMatrixMultiplication:
 
     def test_index_matmul_index_1(self, backend):
         """Test indexed matrix multiplication with index 1."""
-        # Skip CKKS for this test - INDEX operations with complex reshapes/permutes
-        # don't work correctly with CKKS at small ring dimensions (n=16)
-        if backend == "ckks":
-            pytest.skip(
-                "CKKS backend has precision issues with INDEX operations at small ring dimensions"
-            )
-
         # Create args
         args = get_default_args()
         args.n = 16

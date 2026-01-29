@@ -187,7 +187,9 @@ class Toy:
         results = []
         for term, cts in self.circuit_ir.items():
             results = []
-            for _, ct in cts.items():
+            # Sort by ciphertext index to ensure consistent ordering
+            for ct_idx in sorted(cts.keys()):
+                ct = cts[ct_idx]
                 if isinstance(ct, list):
                     for c in ct:
                         for ct_term in c.post_order():
@@ -205,7 +207,7 @@ class Toy:
             else:
                 expected = apply_layout(eval_result, term.layout)
 
-            # skip checks for split rolls
+            # skip checks for split rolls, replicate
             if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE]:
                 continue
 
@@ -234,7 +236,6 @@ class Toy:
                 for expected_vec, result_vec in zip(expected, results):
                     print([e - r for e, r in zip(expected_vec, result_vec)])
                 print()
-
                 print("expected layout:", term.layout)
 
             assert all_close, f"Values not close enough. Max diff: {max_diff}"
@@ -244,7 +245,9 @@ class Toy:
         results = []
         for term, cts in self.circuit_ir.items():
             results = []
-            for _, ct in cts.items():
+            # Sort by ciphertext index to ensure consistent ordering
+            for ct_idx in sorted(cts.keys()):
+                ct = cts[ct_idx]
                 if isinstance(ct, list):
                     for c in ct:
                         for ct_term in c.post_order():

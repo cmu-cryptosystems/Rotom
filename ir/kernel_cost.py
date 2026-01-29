@@ -340,6 +340,7 @@ class KernelCost:
         ops["mul"] += matmul_ops["mul"]
         ops["rot"] += matmul_ops["rot"]
 
+        # forces strassens if enabled
         ops["add"] = -100000
         ops["mul"] = -100000
         ops["rot"] = -100000

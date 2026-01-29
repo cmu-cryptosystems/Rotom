@@ -460,8 +460,10 @@ class LayoutAssignment:
                     new_kernel = copy(kernel)
                     new_kernel.layout = new_layout
                     eq_kernels.add(new_kernel)
+
+        # Return a deterministic, sorted list of kernels
         assert eq_kernels
-        return eq_kernels
+        return sorted(eq_kernels, key=lambda k: k.layout.layout_str())
 
     def prune(self, kernels):
         layouts = {}
@@ -608,22 +610,20 @@ class LayoutAssignment:
                 self.kernel_costs[term][kernel_layout] = kernel_cost
 
     def search(self, term):
-        # find kernel with min_cost
-        kernel_dags = list(self.kernels[term].values())
-        min_cost = KernelCost(kernel_dags[0].kernel, self.network).total_cost()
-        min_kernels = kernel_dags[0]
+        """Pick the minimum-cost kernel DAG for `term`.
 
-        for kernel_dag in kernel_dags[1:]:
-            cost = 0
-            for kernel_dag_term in kernel_dag.post_order():
-                cost += KernelCost(kernel_dag_term.kernel, self.network).total_cost()
-            if not min_cost:
-                min_cost = cost
-                min_kernels = kernel_dag
-            elif cost < min_cost:
-                min_cost = cost
-                min_kernels = kernel_dag
-        return min_kernels
+        During `update_kernels` we already compute and cache the total cost of each
+        candidate (including child kernel DAG costs) in `self.kernel_costs[term]`.
+        Using that cache avoids recomputing costs and, critically, ensures we're
+        comparing like-for-like totals (not just the root kernel op cost).
+        """
+        assert term in self.kernels and term in self.kernel_costs
+        assert self.kernels[term] and self.kernel_costs[term]
+
+        best_layout, _best_cost = min(
+            self.kernel_costs[term].items(), key=lambda kv: kv[1]
+        )
+        return self.kernels[term][best_layout]
 
     def remove_duplicate_kernels(self, kernels):
         new_kernels = []
