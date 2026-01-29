@@ -2,7 +2,7 @@ mkdir -p logs/rotom/matmul
 
 # matmul-128-64
 for run in {1..5}; do
-python main.py --n 8192 --backend ckks --rolls --benchmark matmul_128_64 > logs/rotom/matmul/matmul_128_64_$run.txt
+python main.py --n 8192 --backend ckks --rolls --benchmark matmul_128_64 --not-secure > logs/rotom/matmul/matmul_128_64_$run.txt
 done 
 
 # matmul-256-128

@@ -2,7 +2,7 @@ mkdir -p logs/rotom/double_matmul
 
 # double-matmul-128-64
 for run in {1..5}; do
-python main.py --n 8192 --backend ckks --rolls --benchmark double_matmul_128_64 > logs/rotom/double_matmul/double_matmul_128_64_$run.txt
+python main.py --n 8192 --backend ckks --rolls --benchmark double_matmul_128_64 --not-secure > logs/rotom/double_matmul/double_matmul_128_64_$run.txt
 done 
 
 # double-matmul-256-128

@@ -13,6 +13,7 @@ Key functions:
 """
 
 from copy import deepcopy as copy
+from traceback import print_tb
 
 from assignment.alignment import get_dim_alignment
 from assignment.gen.gen_compaction import find_compaction
@@ -368,6 +369,19 @@ def check_roll_alignment(term, alignment, a_kernel, b_kernel):
     for b_roll in b_kernel.layout.rolls:
         b_roll_idx_set.add(b_roll.roll_index(b_dims))
 
+    for a_roll_idx in a_roll_idx_set:
+        if (
+            a_roll_idx in b_roll_idx_set
+            and a_dims[a_roll_idx[0]].extent != b_dims[a_roll_idx[1]].extent
+        ):
+            return False
+    for b_roll_idx in b_roll_idx_set:
+        if (
+            b_roll_idx in a_roll_idx_set
+            and b_dims[b_roll_idx[0]].extent != a_dims[b_roll_idx[1]].extent
+        ):
+            return False
+
     # check that aligned dimensions have aligned rolls
     # this only applies to dimensions that will be summed together
     for a_roll in a_kernel.layout.rolls:
@@ -427,7 +441,6 @@ def match_layout(term, kernels, alignment, roll_flag):
         # assert that dimensions are aligned
         matched = []
         for a_kernel, b_kernel in matched_layouts:
-
             if not check_alignment(term, alignment, a_kernel, b_kernel):
                 print("failed match:")
                 print(a_kernel)
@@ -457,9 +470,14 @@ def get_dim_from_alignment(alignment, dim, index, remaining_dims):
 
 def match_public_kernel(alignment, a_kernel, b_kernel, left):
     # match a_kernel with b_kernel
-    aligned_b_dims, aligned_a_dims = get_aligned_dimensions(
-        alignment, a_kernel.layout.get_dims(), b_kernel.layout.get_dims()
-    )
+    # Some candidate alignments are invalid once extents are consumed; treat those
+    # as "no match" instead of aborting the whole assignment search.
+    try:
+        aligned_b_dims, aligned_a_dims = get_aligned_dimensions(
+            alignment, a_kernel.layout.get_dims(), b_kernel.layout.get_dims()
+        )
+    except KeyError:
+        return None
 
     if left:
         roll_indices = []
@@ -486,10 +504,7 @@ def match_public_kernel(alignment, a_kernel, b_kernel, left):
         )
         return (aligned_a_kernel, b_kernel)
     else:
-        # match a_kernel with b_kernel
-        aligned_b_dims, aligned_a_dims = get_aligned_dimensions(
-            alignment, a_kernel.layout.get_dims(), b_kernel.layout.get_dims()
-        )
+        # match a_kernel with b_kernel (dims already aligned above)
 
         roll_indices = []
         for roll in a_kernel.layout.rolls:
@@ -840,13 +855,26 @@ def roll_dimensions(term, alignment, kernels):
     b_kernel = kernels[1]
 
     aligned_kernels = []
-    if not a_kernel.layout.secret:
-        aligned_kernels.append(match_public_kernel(alignment, a_kernel, b_kernel, True))
-    elif not b_kernel.layout.secret:
-        aligned_kernels.append(
-            match_public_kernel(alignment, a_kernel, b_kernel, False)
-        )
-    else:
+    # Prefer cheap public/tensor layout matching when possible.
+    #
+    # Original behavior only considered this when one side was public
+    # (layout.secret == False).  For packing input ciphertexts, it's
+    # also useful to treat a pure tensor kernel (KernelOp.TENSOR) as
+    # a candidate for this path, even if it is secret, so include that
+    # as an additional option instead of forcing the heavier
+    # roll/conv alignment path.
+    if (not a_kernel.layout.secret) or (a_kernel.op == KernelOp.TENSOR):
+        mk = match_public_kernel(alignment, a_kernel, b_kernel, True)
+        if mk is not None:
+            aligned_kernels.append(mk)
+    if (not b_kernel.layout.secret) or (b_kernel.op == KernelOp.TENSOR):
+        mk = match_public_kernel(alignment, a_kernel, b_kernel, False)
+        if mk is not None:
+            aligned_kernels.append(mk)
+
+    # If both sides are secret, also explore the general roll-based
+    # alignment path as before.
+    if a_kernel.layout.secret and b_kernel.layout.secret:
         # check if ct dimensions are matched
         ct_dim_alignment = check_ct_dim_alignment(alignment, a_kernel, b_kernel)
         slot_dim_alignment = check_slot_dim_alignment(alignment, a_kernel, b_kernel)
@@ -980,7 +1008,23 @@ def get_aligned_dimensions(alignment, a_dims, b_dims):
         extent = a_dim.extent
         dim = copy(a_dim)
         a_dim_dim = a_dim.dim
-        dim.dim = a_alignment[a_dim_dim][0]
+        # Pick an aligned b-dimension that still has remaining extent.
+        # Note: aligned dimension ids can be `None`, so use a sentinel to
+        # distinguish "not found" from picking `None`.
+        if a_dim_dim not in a_alignment or len(a_alignment[a_dim_dim]) == 0:
+            raise KeyError(f"missing alignment for a-dim {a_dim_dim}")
+        _MISSING = object()
+        picked = _MISSING
+        for cand in a_alignment[a_dim_dim]:
+            if cand in b_remaining_extents:
+                picked = cand
+                break
+        if picked is _MISSING:
+            raise KeyError(
+                f"no remaining aligned b-dim for a-dim {a_dim_dim}; "
+                f"candidates={a_alignment[a_dim_dim]}, remaining={list(b_remaining_extents.keys())}"
+            )
+        dim.dim = picked
         if b_remaining_extents[dim.dim] <= extent:
             dim.extent = b_remaining_extents[dim.dim]
             dim.stride = b_stride[dim.dim] // dim.extent
@@ -1007,7 +1051,21 @@ def get_aligned_dimensions(alignment, a_dims, b_dims):
         extent = b_dim.extent
         dim = copy(b_dim)
         b_dim_dim = b_dim.dim
-        dim.dim = b_alignment[b_dim_dim][0]
+        # Symmetric handling for picking an aligned a-dimension.
+        if b_dim_dim not in b_alignment or len(b_alignment[b_dim_dim]) == 0:
+            raise KeyError(f"missing alignment for b-dim {b_dim_dim}")
+        _MISSING = object()
+        picked = _MISSING
+        for cand in b_alignment[b_dim_dim]:
+            if cand in a_remaining_extents:
+                picked = cand
+                break
+        if picked is _MISSING:
+            raise KeyError(
+                f"no remaining aligned a-dim for b-dim {b_dim_dim}; "
+                f"candidates={b_alignment[b_dim_dim]}, remaining={list(a_remaining_extents.keys())}"
+            )
+        dim.dim = picked
         if a_remaining_extents[dim.dim] <= extent:
             dim.extent = a_remaining_extents[dim.dim]
             dim.stride = a_stride[dim.dim] // dim.extent
@@ -1043,20 +1101,34 @@ def conv_dimensions(alignment, kernels):
     b_kernel = kernels[1]
 
     aligned_kernels = []
-    if not a_kernel.layout.secret:
-        aligned_kernels.append(match_public_kernel(alignment, a_kernel, b_kernel, True))
-    elif not b_kernel.layout.secret:
-        aligned_kernels.append(
-            match_public_kernel(alignment, a_kernel, b_kernel, False)
-        )
-    else:
+    # As with roll_dimensions, allow the cheaper public/tensor-based
+    # matching path not only when one side is public, but also when
+    # the kernel op is a plain Tensor.  This gives an additional
+    # packing option for input ciphertexts without removing the
+    # existing conversion-based alignment path.
+    if (not a_kernel.layout.secret) or (a_kernel.op == KernelOp.TENSOR):
+        mk = match_public_kernel(alignment, a_kernel, b_kernel, True)
+        if mk is not None:
+            aligned_kernels.append(mk)
+    if (not b_kernel.layout.secret) or (b_kernel.op == KernelOp.TENSOR):
+        mk = match_public_kernel(alignment, a_kernel, b_kernel, False)
+        if mk is not None:
+            aligned_kernels.append(mk)
+
+    # Preserve the original conversion behavior when both sides are
+    # secret; the new public/tensor options are in addition to, not
+    # instead of, this path.
+    if a_kernel.layout.secret and b_kernel.layout.secret:
         # align dimension extents
         extent_a_dims, extent_b_dims = align_dimension_extents(
             a_kernel.layout.get_dims(), b_kernel.layout.get_dims()
         )
-        aligned_b_dims, aligned_a_dims = get_aligned_dimensions(
-            alignment, extent_a_dims, extent_b_dims
-        )
+        try:
+            aligned_b_dims, aligned_a_dims = get_aligned_dimensions(
+                alignment, extent_a_dims, extent_b_dims
+            )
+        except KeyError:
+            return []
 
         a_layout = Layout(
             a_kernel.layout.term,
@@ -1121,9 +1193,12 @@ def conv_ct_dimensions(alignment, kernels):
     a_kernel = kernels[0]
     b_kernel = kernels[1]
 
-    aligned_b_dims, aligned_a_dims = get_aligned_dimensions(
-        alignment, a_kernel.layout.get_dims(), b_kernel.layout.get_dims()
-    )
+    try:
+        aligned_b_dims, aligned_a_dims = get_aligned_dimensions(
+            alignment, a_kernel.layout.get_dims(), b_kernel.layout.get_dims()
+        )
+    except KeyError:
+        return []
     conv_b_layout = Layout(
         b_kernel.layout.term,
         b_kernel.layout.rolls,
