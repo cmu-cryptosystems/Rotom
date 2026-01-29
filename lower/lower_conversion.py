@@ -212,7 +212,7 @@ def lower_conversion(env, kernel):
     for i, slot_dim in enumerate(relevant_slot_dims):
         if slot_dim.dim_type == DimType.FILL and slot_dim not in target_slot_dim_set:
             dims_to_remove.append((i, slot_dim))
-    
+
     for i, dim_to_remove in dims_to_remove:
         segment = slot_segments[i]
         new_relevant_cts = []
@@ -227,7 +227,7 @@ def lower_conversion(env, kernel):
         relevant_cts = new_relevant_cts
         relevant_slot_dims.pop(i)
         slot_segments = get_segments(relevant_slot_dims)
-    
+
     for i, slot_dim in enumerate(relevant_slot_dims):
         if slot_dim.dim_type == DimType.EMPTY and slot_dims[i].dim_type == DimType.FILL:
             new_relevant_cts = []
