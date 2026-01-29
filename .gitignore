@@ -9,9 +9,18 @@ heir/
 # Explicitly allow backends/heir source code
 !backends/heir/
 
+# benchmarks
+benchmarks/fhelipe_benchmarks/
+benchmarks/viaduct_benchmarks/
+
+# scripts
+scripts/fhelipe/
+scripts/viaduct/
+
 # Generated circuit output files
 output/
 logs/
+
 
 # Documentation generated files
 docs/html/
