@@ -56,6 +56,8 @@ def lower_conversion(env, kernel):
             ct_slot.append((split_ct_dim, target_slot_dims.index(split_ct_dim)))
 
     for i, split_slot_dim in enumerate(split_slot_dims):
+        if split_slot_dim.dim_type == DimType.EMPTY:
+            continue
         if split_slot_dim in target_slot_dims and i != target_slot_dims.index(
             split_slot_dim
         ):
@@ -77,8 +79,9 @@ def lower_conversion(env, kernel):
             break
 
     # get non-repeated ct_dims
-    num_ct = kernel.layout.num_ct()
-    relevant_ct_indices = [0] * num_ct
+    input_layout = kernel.cs[2].layout
+    num_ct_input = input_layout.num_ct()
+    relevant_ct_indices = [0] * num_ct_input
     relevant_ct_dims = []
     split_ct_dim_map = {}
     for i, split_dim in enumerate(split_ct_dims):
@@ -99,18 +102,13 @@ def lower_conversion(env, kernel):
 
     relevant_ct_indices = list(set(relevant_ct_indices))
     relevant_ct_indices.sort()
-    # Track only the relevant ciphertexts (those that participate in the conversion)
     relevant_cts = [cts[index] for index in relevant_ct_indices]
 
-    # decompaction, slot to ct transformations
     if slot_ct or slot_slot:
-        # decompaction
         swaps = slot_ct + slot_slot
         for swap_slot in swaps:
             swap_dim = swap_slot[0]
             swap_dim_index = relevant_slot_dims.index(swap_dim)
-
-            # update layout tracker
             relevant_ct_dims.append(swap_dim)
             relevant_slot_dims[swap_dim_index].dim = None
             relevant_slot_dims[swap_dim_index].dim_type = DimType.EMPTY
@@ -126,14 +124,12 @@ def lower_conversion(env, kernel):
                                 i * slot_segments[swap_dim_index][2],
                             ],
                             ct.secret,
-                            f"rot: {i * slot_segments[swap_dim_index][2]}\ndecompaction: {swap_slot} {kernel.cs[2].layout.layout_str()} => {relevant_ct_dims};{relevant_slot_dims}",
+                            f"decompaction: {swap_slot}",
                         )
                         * HETerm.mask([mask]),
                     )
-            # update relevant_cts
             relevant_cts = masked_cts
 
-    # optimize decompaction chain
     updated_cts = []
     for ct in relevant_cts:
         cs_term = None
@@ -150,11 +146,7 @@ def lower_conversion(env, kernel):
     relevant_cts = updated_cts
 
     if ct_slot or slot_slot:
-        # compaction
         swaps = ct_slot + slot_slot
-
-        # Build an initial layout that matches the relevant ciphertexts we are tracking:
-        # ct dimensions are the non-repeated relevant_ct_dims, followed by the slot dims.
         expanded_layout = Layout(
             kernel.cs[2].layout.term,
             kernel.cs[2].layout.rolls,
@@ -174,11 +166,7 @@ def lower_conversion(env, kernel):
                 continue
 
             swap_to_dim_index = swap_slot[1]
-
-            # Use the current LayoutCiphertexts to group ciphertexts by the swap dimension
             ct_groups = get_cts_by_dim(layout_cts, swap_dim)
-
-            # Perform compaction by rotating and adding ciphertexts within each group
             new_relevant_cts_list = []
             for ct_group in ct_groups:
                 base = ct_group[0]
@@ -193,11 +181,9 @@ def lower_conversion(env, kernel):
                     base = base + rot_term
                 new_relevant_cts_list.append(base)
 
-            # Update tracked ciphertexts
             relevant_cts = new_relevant_cts_list
             new_cts_dict = {i: ct for i, ct in enumerate(relevant_cts)}
 
-            # Update layout bookkeeping to reflect the move of swap_dim from ct to slot
             if relevant_slot_dims[swap_to_dim_index].extent == swap_dim.extent:
                 relevant_slot_dims[swap_to_dim_index] = swap_dim
                 relevant_ct_dims.remove(swap_dim)
@@ -210,7 +196,6 @@ def lower_conversion(env, kernel):
             else:
                 raise NotImplementedError("sizes mismatch")
 
-            # Keep the LayoutCiphertexts in sync with these dimension/layout changes
             expanded_layout = Layout(
                 layout_cts.layout.term,
                 layout_cts.layout.rolls,
@@ -220,8 +205,29 @@ def lower_conversion(env, kernel):
             )
             layout_cts = LayoutCiphertexts(layout=expanded_layout, cts=new_cts_dict)
 
-    # find places for slot replication
     slot_dims = kernel.layout.slot_dims
+    target_slot_dim_set = set(slot_dims)
+    slot_segments = get_segments(relevant_slot_dims)
+    dims_to_remove = []
+    for i, slot_dim in enumerate(relevant_slot_dims):
+        if slot_dim.dim_type == DimType.FILL and slot_dim not in target_slot_dim_set:
+            dims_to_remove.append((i, slot_dim))
+
+    for i, dim_to_remove in dims_to_remove:
+        segment = slot_segments[i]
+        new_relevant_cts = []
+        for ct in relevant_cts:
+            mask = [0] * n
+            for k in range(segment[0]):
+                pos = k * segment[1] * segment[2]
+                if pos < n:
+                    mask[pos] = 1
+            masked_ct = ct * HETerm.mask([mask])
+            new_relevant_cts.append(masked_ct)
+        relevant_cts = new_relevant_cts
+        relevant_slot_dims.pop(i)
+        slot_segments = get_segments(relevant_slot_dims)
+
     for i, slot_dim in enumerate(relevant_slot_dims):
         if slot_dim.dim_type == DimType.EMPTY and slot_dims[i].dim_type == DimType.FILL:
             new_relevant_cts = []
