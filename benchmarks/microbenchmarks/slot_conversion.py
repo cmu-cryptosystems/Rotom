@@ -6,7 +6,6 @@ from frontends.tensor import TensorTerm
 from ir.dim import Dim
 from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
-from ir.roll import Roll
 
 
 def slot_conversion(n, size):
@@ -20,7 +19,7 @@ def slot_conversion(n, size):
 
     # create conversion
     tensor_layout = Layout(
-        term, [], [Dim.parse(f"[0:{size}:1]"), Dim.parse(f"[1:{size}:1]")], {}, n, True
+        term, [], [Dim.parse(f"[0:{size}:1]"), Dim.parse(f"[1:{size}:1]")], n, True
     )
     tensor_kernel = Kernel(KernelOp.TENSOR, [], layout=tensor_layout)
 
@@ -29,7 +28,6 @@ def slot_conversion(n, size):
         term,
         [],
         [Dim.parse(f"[1:{size}:1]"), Dim.parse(f"[{size}]")],
-        {},
         n,
         True,
     )

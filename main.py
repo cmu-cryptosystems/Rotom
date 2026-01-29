@@ -79,10 +79,10 @@ def run_benchmark_or_microbenchmark(args):
         runtime = 0
         if args.backend.lower() == "toy":
             results = Toy(circuit_ir, inputs, args).run()
-            check_results(kernel.term, inputs, kernel, results, runtime, args)
+            check_results(kernel.layout.term, inputs, kernel, results, runtime, args)
         elif args.backend.lower() == "ckks":
             runtime, results = CKKS(circuit_ir, inputs, args).run()
-            check_results(kernel.term, inputs, kernel, results, runtime, args)
+            check_results(kernel.layout.term, inputs, kernel, results, runtime, args)
         elif args.backend.lower() == "heir":
             # HEIR backend generates MLIR output
             heir_backend = HEIR(circuit_ir, inputs, args)
@@ -90,8 +90,8 @@ def run_benchmark_or_microbenchmark(args):
             # Run MLIR interpreter to get results
             mlir_file = f"heir/{args.fn}/{args.fn}.mlir"
             mlir_results = run_mlir_interpreter(mlir_file)
-            # Check MLIR results against kernel.term.eval()
-            check_results(kernel.term, inputs, kernel, mlir_results, runtime, args)
+            # Check MLIR results against kernel.layout.term.eval()
+            check_results(kernel.layout.term, inputs, kernel, mlir_results, runtime, args)
             heir_backend.serialize_results(mlir_results)
         else:
             raise NotImplementedError("unknown backend")
