@@ -57,9 +57,9 @@ class Optimizer:
             be enabled in future versions.
         """
         # run optimization passes
-        optimized_kernels = set()
-        for kernel in kernels:
-            if self.roll_flag:
+        optimized_kernels = []
+        if self.roll_flag:
+            for kernel in kernels:
                 opt_kernel = copy(kernel)
                 opt_kernel = run_roll_propogation(opt_kernel)
                 opt_kernels = run_roll_reordering(opt_kernel)
@@ -67,8 +67,13 @@ class Optimizer:
                     opt_kernel = run_rot_roll(opt_kernel)
                     opt_kernel = run_ct_roll_bsgs(opt_kernel)
                     opt_kernel = run_bsgs_matmul(opt_kernel)
-                    optimized_kernels.add(opt_kernel)
-            else:
-                optimized_kernels = set(kernels)
+                    optimized_kernels.append(opt_kernel)
+        else:
+            optimized_kernels = list(kernels)
+
+        # Make the result deterministic by sorting kernels by their layout string
         assert optimized_kernels
+        optimized_kernels = sorted(
+            optimized_kernels, key=lambda k: k.layout.layout_str()
+        )
         return optimized_kernels

@@ -30,9 +30,18 @@ def lower_index(env, kernel):
     cts_index = 0
     for i, ct_index in enumerate(ct_indices):
         # create mask - match the index value from the term
-        # TODO: this is the issue
         mask = [1 if c == index_value else 0 for c in ct_index]
-        if any(mask) and not all(mask):
+        if not any(mask):
+            # This ciphertext does not contain the requested index at all
+            continue
+
+        if all(mask):
+            # The entire ciphertext corresponds to the requested index;
+            # no masking or rotation needed.
+            cts[cts_index] = input_cts[i]
+            cts_index += 1
+        else:
+            # Mixed indices inside this ciphertext – create a mask and align.
             rot_align = mask.index(1)
             cts[cts_index] = (input_cts[i] * HETerm.mask([mask])) << rot_align
             cts_index += 1
