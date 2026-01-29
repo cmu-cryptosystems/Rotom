@@ -191,8 +191,25 @@ class CKKS:
                     pkl.dump(packed_tensor, open(fn, "wb"))
 
         # get packing index and return packed vector
-        packing_idx = int(term.metadata.split()[0])
+        # Parse metadata: "packing_idx rot:rot_amt" or just "packing_idx"
+        metadata_parts = term.metadata.split()
+        packing_idx = int(metadata_parts[0])
         vector = self.input_cache[layout][packing_idx]
+        
+        # Check if this pack has pre-rotation metadata (e2_o1 optimization)
+        rot_amt = None
+        for part in metadata_parts:
+            if part.startswith("rot:"):
+                rot_amt = int(part.split(":")[1])
+                break
+        
+        # Apply rotation during packing if specified (cheaper than homomorphic rotation)
+        if rot_amt is not None:
+            # Rotate the vector: positive rot_amt means left rotate (same as EvalRotate and toy backend)
+            # Toy backend: rotated[i] = original[(rot_amt + i) % n]
+            # This means element at position i in rotated comes from (rot_amt + i) % n in original
+            n = len(vector)
+            vector = [vector[(rot_amt + i) % n] for i in range(n)]
 
         if encrypt:
             ct = self.encrypt(self.encode(vector))
@@ -415,6 +432,10 @@ class CKKS:
                         for ct_term in term.post_order():
                             for i, cs_ct_term in enumerate(ct_term.cs):
                                 if isinstance(cs_ct_term, HETerm):
+                                    # If the child term is not in ct_env yet, add it
+                                    # This can happen with new PACK terms created by optimizations
+                                    if cs_ct_term not in ct_env:
+                                        ct_env[cs_ct_term] = cs_ct_term
                                     ct_term.cs[i] = ct_env[cs_ct_term]
                             if ct_term.op == HEOp.CS:
                                 ct_env[ct_term] = ct_term.cs[0]
@@ -424,6 +445,10 @@ class CKKS:
                     for ct_term in ct.post_order():
                         for i, cs_ct_term in enumerate(ct_term.cs):
                             if isinstance(cs_ct_term, HETerm):
+                                # If the child term is not in ct_env yet, add it
+                                # This can happen with new PACK terms created by optimizations
+                                if cs_ct_term not in ct_env:
+                                    ct_env[cs_ct_term] = cs_ct_term
                                 ct_term.cs[i] = ct_env[cs_ct_term]
                         if ct_term.op == HEOp.CS:
                             ct_env[ct_term] = ct_term.cs[0]

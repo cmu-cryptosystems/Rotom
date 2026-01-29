@@ -73,8 +73,26 @@ class Toy:
             self.input_cache[(layout.term, layout)] = packed_tensor
 
         # get packing index and return packed vector
-        packing_idx = int(term.metadata.split()[0])
-        return self.input_cache[(layout.term, layout)][packing_idx]
+        # Parse metadata: "packing_idx rot:rot_amt" or just "packing_idx"
+        metadata_parts = term.metadata.split()
+        packing_idx = int(metadata_parts[0])
+        vector = self.input_cache[(layout.term, layout)][packing_idx]
+        
+        # Check if this pack has pre-rotation metadata (e2_o1 optimization)
+        rot_amt = None
+        for part in metadata_parts:
+            if part.startswith("rot:"):
+                rot_amt = int(part.split(":")[1])
+                break
+        
+        # Apply rotation during packing if specified (cheaper than homomorphic rotation)
+        if rot_amt is not None:
+            # Rotate the vector: positive rot_amt means left rotate (same as eval_rot)
+            # rotated[i] = original[(rot_amt + i) % n]
+            n = len(vector)
+            vector = [vector[(rot_amt + i) % n] for i in range(n)]
+        
+        return vector
 
     def eval_pack_punctured(self, term):
         """
@@ -155,11 +173,18 @@ class Toy:
     def eval(self, term):
         match term.op:
             case HEOp.CS:
+                # If the child term is not in env yet, evaluate it first
+                # This can happen with new PACK terms created by optimizations
+                if term.cs[0] not in self.env:
+                    self.env[term.cs[0]] = self.eval(term.cs[0])
                 return self.env[term.cs[0]]
             case HEOp.MASK:
                 return self.eval_mask(term)
             case HEOp.PACK:
-                return self.eval_pack(term)
+                # Evaluate and cache the result
+                if term not in self.env:
+                    self.env[term] = self.eval_pack(term)
+                return self.env[term]
             case HEOp.PUNCTURED_PACK:
                 return self.eval_pack_punctured(term)
             case HEOp.CS_PACK:

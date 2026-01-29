@@ -5,6 +5,7 @@ import numpy as np
 from ir.analysis.shape import Shape
 from ir.dim import DimType
 from ir.he import HEOp, HETerm
+from ir.kernel import KernelOp
 from lower.layout_cts import LayoutCiphertexts, create_layout_without_dims
 from lower.lower_util import find_sum_dim, rotate_and_sum
 from util.layout_util import convert_layout_to_mask, get_cts_by_dim, get_segment
@@ -80,10 +81,36 @@ def lower_conv2d(env, kernel):
     kernel.cs[1].layout.term.cs.append(masks)
     kernel.cs[1].layout.term.cs.append(rot_amts)
 
-    # rotate a_cs by rot_amt
+    # OPTIMIZATION: e2_o1-style - lift filter alignment rotations to packing
+    # Instead of creating rotations on CS terms, create pre-rotated PACK operations
+    # This requires finding the original input layout (before replication)
+    
+    # Find original input layout by tracing back through kernel.cs[0]
+    # kernel.cs[0] might be a REPLICATE kernel, so we need to find the original TENSOR
+    original_input_layout = None
+    input_kernel = kernel.cs[0]
+    while input_kernel.op == KernelOp.REPLICATE and len(input_kernel.cs) > 0:
+        input_kernel = input_kernel.cs[0]
+    if input_kernel.op == KernelOp.TENSOR:
+        original_input_layout = input_kernel.layout
+    
+    # If we found the original layout, we can create pre-rotated PACK operations
+    # Otherwise, fall back to creating rotations (which will be lifted by optimization pass)
     a_rot_cs = []
-    for i in range(len(rot_amts)):
-        a_rot_cs.append(a_cs[i] << rot_amts[i])
+    if original_input_layout is not None:
+        # Create pre-rotated PACK operations for each filter position
+        # This lifts all filter alignment rotations to packing
+        for i, rot_amt in enumerate(rot_amts):
+            # Create a pre-rotated PACK with rotation metadata
+            # The packing index should match the CT index from replication
+            packing_idx = i % original_input_layout.num_ct() if original_input_layout.num_ct() > 0 else 0
+            metadata = f"{packing_idx} {kernel.cs[0]} rot:{rot_amt}"
+            pre_rotated_pack = HETerm(HEOp.PACK, [original_input_layout], original_input_layout.secret, metadata)
+            a_rot_cs.append(HETerm(HEOp.CS, [pre_rotated_pack], pre_rotated_pack.secret))
+    else:
+        # Fallback: create rotations (will be lifted by optimization pass if possible)
+        for i in range(len(rot_amts)):
+            a_rot_cs.append(a_cs[i] << rot_amts[i])
 
     # calculate the multiplications between ct
     cts = {}
@@ -94,7 +121,33 @@ def lower_conv2d(env, kernel):
     # Create initial layout_cts with input layout
     layout_cts = LayoutCiphertexts(layout=kernel.cs[0].layout, cts=cts)
 
-    # find summing dimension
+    # OPTIMIZATION: Sum all filter position CTs together first (just additions, no rotations)
+    # After multiplication, we have 9 CTs (one per filter position)
+    # These should be summed to 1 CT using only additions
+    # Then we sum across channels (slot dimension) with 3 rotations
+    
+    # Sum all None dimensions (filter dimensions) in ciphertext dimensions
+    # These correspond to filter positions and should be summed together
+    # Check which None dimensions exist in the layout
+    filter_ct_dims = [dim for dim in layout_cts.layout.ct_dims if dim.dim is None and dim.dim_type == DimType.FILL]
+    for ct_sum_dim in filter_ct_dims:
+        if ct_sum_dim not in layout_cts.layout.ct_dims:
+            continue
+        ct_groups = get_cts_by_dim(layout_cts, ct_sum_dim)
+        
+        # sum within group
+        sum_cts = {}
+        for i, group in enumerate(ct_groups):
+            base = group[0]
+            for j in range(1, len(group)):
+                base = base + group[j]
+            sum_cts[i] = base
+        
+        # Create new layout without the summed dimension
+        new_layout = create_layout_without_dims(layout_cts.layout, [ct_sum_dim])
+        layout_cts = LayoutCiphertexts(layout=new_layout, cts=sum_cts)
+
+    # find summing dimension for input channels
     # the sum dimension should be the 0th dimension of kernel.cs[0]
     # the sum dimension also should be the 0th and 1st dimension of kernel.cs[1]
     sum_dims = [(0, 0), (0, None)]
@@ -105,8 +158,10 @@ def lower_conv2d(env, kernel):
         if not ct_sum_dims and not slot_sum_dims:
             continue
 
-        # sum together ciphertexts
+        # sum together ciphertexts (if any remain)
         for ct_sum_dim in ct_sum_dims:
+            if ct_sum_dim not in layout_cts.layout.ct_dims:
+                continue
             ct_groups = get_cts_by_dim(layout_cts, ct_sum_dim)
 
             # sum within group
@@ -127,6 +182,9 @@ def lower_conv2d(env, kernel):
             extent = segment[1]
             mul_offset = segment[2]
             summed_cts = {}
+            # Standard rotation strategy for channel summation
+            # (The e2_o1 optimization is about reducing filter alignment rotations,
+            #  not channel summation rotations)
             for index, term in layout_cts.cts.items():
                 summed_cts[index] = rotate_and_sum(term, extent, mul_offset)
 
