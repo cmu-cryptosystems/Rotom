@@ -19,7 +19,7 @@ def conversion(n, size):
 
     # create conversion
     tensor_layout = Layout(
-        term, [], [Dim.parse(f"[0:{size}:1]"), Dim.parse(f"[1:{size}:1]")], {}, n, True
+        term, [], [Dim.parse(f"[0:{size}:1]"), Dim.parse(f"[1:{size}:1]")], n, True
     )
     tensor_kernel = Kernel(KernelOp.TENSOR, [], layout=tensor_layout)
 
@@ -32,7 +32,6 @@ def conversion(n, size):
             Dim.parse(f"[0:{size}:1]"),
             Dim.parse(f"[1:{size}:1]"),
         ],
-        {},
         n,
         True,
     )
@@ -47,7 +46,6 @@ def conversion(n, size):
             Dim.parse(f"[0:{size}:1]"),
             Dim.parse(f"[{size}]"),
         ],
-        {},
         n,
         True,
     )
