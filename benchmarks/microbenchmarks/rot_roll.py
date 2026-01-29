@@ -20,7 +20,7 @@ def rot_roll(n, size):
 
     # create conversion
     tensor_layout = Layout(
-        term, [], [Dim.parse(f"[0:{size}:1]"), Dim.parse(f"[1:{size}:1]")], {}, n, True
+        term, [], [Dim.parse(f"[1:{size}:1]"), Dim.parse(f"[0:{size}:1]")], n, True
     )
     tensor_kernel = Kernel(KernelOp.TENSOR, [], layout=tensor_layout)
 
@@ -30,10 +30,9 @@ def rot_roll(n, size):
         [],
         [
             Dim.parse(f"[{size}]"),
-            Dim.parse(f"[0:{size}:1]"),
             Dim.parse(f"[1:{size}:1]"),
+            Dim.parse(f"[0:{size}:1]"),
         ],
-        {},
         n,
         True,
     )
@@ -46,10 +45,9 @@ def rot_roll(n, size):
         [roll],
         [
             Dim.parse(f"[1:{size}:1]"),
-            Dim.parse(f"[0:{size}:1]"),
             Dim.parse(f"[{size}]"),
+            Dim.parse(f"[0:{size}:1]"),
         ],
-        {},
         n,
         True,
     )
