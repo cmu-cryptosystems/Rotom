@@ -1,8 +1,8 @@
 """
 Optimization to lift rotations to the packing phase.
 
-This implements the Viaduct e2_o1 strategy: instead of rotating ciphertexts
-homomorphically, we can pre-rotate them during packing and send multiple CTs.
+Instead of rotating ciphertexts homomorphically, we can pre-rotate them
+during packing and send multiple CTs.
 
 Pattern: ROT(CS(PACK(layout, metadata)), rot_amt)
   -> CS(PACK(layout, metadata + " rot:" + str(rot_amt)))

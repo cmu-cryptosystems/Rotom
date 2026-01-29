@@ -78,7 +78,7 @@ class Toy:
         packing_idx = int(metadata_parts[0])
         vector = self.input_cache[(layout.term, layout)][packing_idx]
 
-        # Check if this pack has pre-rotation metadata (e2_o1 optimization)
+        # Check if this pack has pre-rotation metadata
         rot_amt = None
         for part in metadata_parts:
             if part.startswith("rot:"):

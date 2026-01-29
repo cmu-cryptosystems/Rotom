@@ -121,7 +121,7 @@ class Lower:
             opt_ct = mask_identity_opt(opt_ct)
             opt_ct = zero_mask_identity_opt(opt_ct)
 
-            # Lift rotations to packing phase (e2_o1-style optimization for convolution)
+            # Lift rotations to packing phase (optimization for convolution)
             # This replaces ROT(CS(PACK(...)), rot_amt) with pre-rotated PACK operations
             # The backend can then rotate during packing instead of homomorphically
             opt_ct = lift_rotations_to_pack(opt_ct)

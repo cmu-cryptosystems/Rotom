@@ -81,7 +81,7 @@ def lower_conv2d(env, kernel):
     kernel.cs[1].layout.term.cs.append(masks)
     kernel.cs[1].layout.term.cs.append(rot_amts)
 
-    # OPTIMIZATION: e2_o1-style - lift filter alignment rotations to packing
+    # OPTIMIZATION: Lift filter alignment rotations to packing
     # Instead of creating rotations on CS terms, create pre-rotated PACK operations
     # This requires finding the original input layout (before replication)
 
@@ -198,7 +198,7 @@ def lower_conv2d(env, kernel):
             mul_offset = segment[2]
             summed_cts = {}
             # Standard rotation strategy for channel summation
-            # (The e2_o1 optimization is about reducing filter alignment rotations,
+            # (The rotation lifting optimization is about reducing filter alignment rotations,
             #  not channel summation rotations)
             for index, term in layout_cts.cts.items():
                 summed_cts[index] = rotate_and_sum(term, extent, mul_offset)
