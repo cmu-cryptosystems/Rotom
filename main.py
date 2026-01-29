@@ -143,6 +143,16 @@ def run_benchmark_or_microbenchmark(args):
         # Generate kernel from tensor_ir
         kernel = LayoutAssignment(tensor_ir, args).run()
 
+        # Apply pack tensor lifting optimization
+        # This analyzes the selected kernel and replaces REPLICATE(+ROT_ROLL)
+        # patterns with packed TENSOR kernels when cheaper (trades compute for communication)
+        from opt.pack_tensor_lifting import run_pack_tensor_lifting
+
+        # Apply optimization to the kernel
+        kernel = run_pack_tensor_lifting(
+            kernel, args.net if hasattr(args, "net") else "lan"
+        )
+
         # Output found kernel
         print("found kernel:")
         for k in kernel.post_order():
