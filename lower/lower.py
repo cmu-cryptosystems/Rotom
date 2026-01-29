@@ -3,18 +3,13 @@ Lowering should account for layout and dimensions at each step
 """
 
 from ir.kernel import KernelOp
+from lower.circuit_opts.lift_rot_to_pack import lift_rotations_to_pack
 from lower.circuit_opts.mask_opts import (
     mask_identity_opt,
     zero_mask_identity_opt,
     zero_mask_opt,
 )
-from lower.circuit_opts.rot_opts import join_rot, rot_zero_opt
-from lower.circuit_opts.rot_conv_opt import (
-    optimize_conv_rotations,
-    share_common_rotations,
-)
-from lower.circuit_opts.rot_lift_opt import optimize_rot_mul_plaintext
-from lower.circuit_opts.lift_rot_to_pack import lift_rotations_to_pack
+from lower.circuit_opts.rot_opts import rot_zero_opt
 
 # replace with optimized cts
 from lower.layout_cts import LayoutCiphertexts
@@ -121,27 +116,16 @@ class Lower:
         layout_cts = self.env[self.kernel]
         opt_cts = {}
         for ct_idx, ct in layout_cts.items():
-            # Basic optimizations
             opt_ct = rot_zero_opt(ct)
-            opt_ct = join_rot(opt_ct)  # Combine consecutive rotations
             opt_ct = zero_mask_opt(opt_ct)
             opt_ct = mask_identity_opt(opt_ct)
             opt_ct = zero_mask_identity_opt(opt_ct)
-            
-            # Convolution-specific rotation optimizations
-            # These can share common rotations and reduce redundant operations
-            opt_ct = optimize_conv_rotations(opt_ct)
-            opt_ct = share_common_rotations(opt_ct)
-            
-            # Lift rotations in ROT then MUL(plaintext) patterns
-            # This optimizes patterns like MUL(ROT(ct, a), pt) by sharing rotations
-            opt_ct = optimize_rot_mul_plaintext(opt_ct)
-            
-            # Lift rotations to packing phase (e2_o1-style optimization)
+
+            # Lift rotations to packing phase (e2_o1-style optimization for convolution)
             # This replaces ROT(CS(PACK(...)), rot_amt) with pre-rotated PACK operations
             # The backend can then rotate during packing instead of homomorphically
             opt_ct = lift_rotations_to_pack(opt_ct)
-            
+
             opt_cts[ct_idx] = opt_ct
 
         self.env[self.kernel] = LayoutCiphertexts(layout=layout_cts.layout, cts=opt_cts)

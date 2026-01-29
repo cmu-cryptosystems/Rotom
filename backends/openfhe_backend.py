@@ -195,14 +195,14 @@ class CKKS:
         metadata_parts = term.metadata.split()
         packing_idx = int(metadata_parts[0])
         vector = self.input_cache[layout][packing_idx]
-        
+
         # Check if this pack has pre-rotation metadata (e2_o1 optimization)
         rot_amt = None
         for part in metadata_parts:
             if part.startswith("rot:"):
                 rot_amt = int(part.split(":")[1])
                 break
-        
+
         # Apply rotation during packing if specified (cheaper than homomorphic rotation)
         if rot_amt is not None:
             # Rotate the vector: positive rot_amt means left rotate (same as EvalRotate and toy backend)
