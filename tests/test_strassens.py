@@ -39,6 +39,7 @@ class TestStrassensMatmul:
             print(k)
         print()
 
+
         circuit_ir = Lower(kernel).run()
         results = run_backend(backend, circuit_ir, inputs, args)
 

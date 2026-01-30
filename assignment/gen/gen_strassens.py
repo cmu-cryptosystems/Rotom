@@ -20,6 +20,7 @@ from ir.dim import Dim
 from ir.kernel import Kernel, KernelOp
 from ir.kernel_cost import KernelCost
 from ir.layout import Layout
+from ir.roll import Roll
 from opt.opt import Optimizer
 from util.layout_util import dimension_merging
 
@@ -206,17 +207,6 @@ def add_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
             kernel_map[term] = []
         kernel_map[term] += add_kernels
         
-        # Debug: Check add kernel costs
-        add_with_rolls = [k for k in add_kernels if k.layout.rolls]
-        add_without_rolls = [k for k in add_kernels if not k.layout.rolls]
-        if add_with_rolls and add_without_rolls:
-            costs_with_rolls = [KernelCost(k, network).total_cost() for k in add_with_rolls]
-            costs_without_rolls = [KernelCost(k, network).total_cost() for k in add_without_rolls]
-            min_cost_with_rolls = min(costs_with_rolls) if costs_with_rolls else float('inf')
-            min_cost_without_rolls = min(costs_without_rolls) if costs_without_rolls else float('inf')
-            if min_cost_with_rolls < min_cost_without_rolls:
-                print(f"  ⚠ add_tiles: Rolled kernel cheaper ({min_cost_with_rolls} vs {min_cost_without_rolls}) for {term}")
-        
         for add_kernel in add_kernels:
             layout = add_kernel.layout
             layout_str = layout_to_str(layout)
@@ -252,17 +242,6 @@ def sub_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
             kernel_map[term] = []
         kernel_map[term] += sub_kernels
         
-        # Debug: Check sub kernel costs
-        sub_with_rolls = [k for k in sub_kernels if k.layout.rolls]
-        sub_without_rolls = [k for k in sub_kernels if not k.layout.rolls]
-        if sub_with_rolls and sub_without_rolls:
-            costs_with_rolls = [KernelCost(k, network).total_cost() for k in sub_with_rolls]
-            costs_without_rolls = [KernelCost(k, network).total_cost() for k in sub_without_rolls]
-            min_cost_with_rolls = min(costs_with_rolls) if costs_with_rolls else float('inf')
-            min_cost_without_rolls = min(costs_without_rolls) if costs_without_rolls else float('inf')
-            if min_cost_with_rolls < min_cost_without_rolls:
-                print(f"  ⚠ sub_tiles: Rolled kernel cheaper ({min_cost_with_rolls} vs {min_cost_without_rolls}) for {term}")
-        
         for sub_kernel in sub_kernels:
             layout = sub_kernel.layout
             layout_str = layout_to_str(layout)
@@ -277,152 +256,222 @@ def sub_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
 
 
 def estimate_downstream_cost(matmul_kernel, network):
-    """
-    Estimate the cost of downstream operations that will use this matmul kernel.
-    
-    In strassens, matmul outputs are typically used in add/sub operations.
-    This function estimates the cost of those operations based on the matmul kernel's layout.
-    
-    The estimation is simplified: we estimate the cost of an add operation with a similar
-    kernel. For rolled kernels, add operations might be cheaper if both operands have rolls.
-    
-    Args:
-        matmul_kernel: The matmul kernel to estimate downstream costs for
-        network: Network type for cost modeling
-        
-    Returns:
-        float: Estimated downstream cost
-    """
-    # Simple heuristic: estimate add operation cost based on layout
-    # Add operations cost is roughly proportional to number of ciphertexts
+    """Estimate the cost of downstream operations that will use this matmul kernel."""
     num_ct = matmul_kernel.layout.num_ct()
-    
-    # Basic add cost per ciphertext
-    base_add_cost = 0.1  # Small base cost per CT
-    
-    # If the kernel has rolls, downstream operations might need to handle rolls
-    # This could add some cost, but rolled kernels often work better together
+    base_add_cost = 0.1
     roll_penalty = 0.0
     if matmul_kernel.layout.rolls:
-        # Rolled kernels might need roll alignment in downstream ops
-        # But this is often offset by better performance in rolled operations
         roll_penalty = 0.05 * len(matmul_kernel.layout.rolls)
+    return num_ct * base_add_cost + roll_penalty
+
+
+def check_optimal_tile_matmul_layout(a_kernel, b_kernel):
+    """
+    Check if kernels match the optimal tile matmul input pattern.
     
-    estimated_cost = num_ct * base_add_cost + roll_penalty
+    The optimal pattern is:
+    - A: [1:size][0:size] (dim 1, then dim 0)
+    - B: [0:size][1:size] (dim 0, then dim 1)
     
-    # This is a very rough estimate - the actual cost depends on the specific
-    # operations and other kernels involved. But it gives us a way to prefer
-    # kernels that will work well in downstream operations.
-    return estimated_cost
+    Both should have no rolls initially.
+    
+    Args:
+        a_kernel: Input kernel A
+        b_kernel: Input kernel B
+        
+    Returns:
+        bool: True if kernels match the optimal pattern, False otherwise
+    """
+    # Check that both kernels have no rolls
+    if a_kernel.layout.rolls or b_kernel.layout.rolls:
+        return False
+    
+    a_dims = a_kernel.layout.get_dims()
+    b_dims = b_kernel.layout.get_dims()
+    
+    # Check both have exactly 2 dimensions
+    if len(a_dims) != 2 or len(b_dims) != 2:
+        return False
+    
+    # Extract dimension indices
+    a_dim_0 = None
+    a_dim_1 = None
+    for dim in a_dims:
+        if dim.dim == 0:
+            a_dim_0 = dim
+        elif dim.dim == 1:
+            a_dim_1 = dim
+    
+    b_dim_0 = None
+    b_dim_1 = None
+    for dim in b_dims:
+        if dim.dim == 0:
+            b_dim_0 = dim
+        elif dim.dim == 1:
+            b_dim_1 = dim
+    
+    # Verify we found the expected dimensions
+    if (a_dim_0 is None or a_dim_1 is None or 
+        b_dim_0 is None or b_dim_1 is None):
+        return False
+    
+    # Check that dimensions match in extent
+    if (a_dim_0.extent != b_dim_0.extent or 
+        a_dim_1.extent != b_dim_1.extent):
+        return False
+    
+    # Check order: A should be [1][0], B should be [0][1]
+    pattern1 = (a_dims[0].dim == 1 and a_dims[1].dim == 0 and
+                 b_dims[0].dim == 0 and b_dims[1].dim == 1)
+    
+    return pattern1
 
 
 def matmul_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
     output_kernels = {}
-    output_kernel_costs = {}
     for a_kernel in a_kernels.values():
         for b_kernel in b_kernels.values():
             a_kernel = copy(a_kernel)
             b_kernel = copy(b_kernel)
             term = a_kernel.layout.term @ b_kernel.layout.term
-            matmul_kernels = gen_binop(
-                term,
+
+            matmul_kernels = []
+            if check_optimal_tile_matmul_layout(a_kernel, b_kernel) and roll_flag:
+                optimal_kernel = gen_optimal_tile_matmul(term, a_kernel, b_kernel, kernel_map)
+                if term not in kernel_map:
+                    kernel_map[term] = []
+                kernel_map[term] += [optimal_kernel]
+                return {layout_to_str(optimal_kernel.layout): optimal_kernel}
+            else:
+                matmul_kernels = gen_binop(
+                    term,
                 [[a_kernel], [b_kernel]],
                 [get_shape(a_kernel), get_shape(b_kernel)],
                 roll_flag,
             )
-            optimizer = Optimizer(roll_flag)
-            matmul_kernels = optimizer.run(matmul_kernels)
+                optimizer = Optimizer(roll_flag)
+                matmul_kernels = optimizer.run(matmul_kernels)
             if term not in kernel_map:
                 kernel_map[term] = []
             kernel_map[term] += matmul_kernels
-            
-            # Debug: Detailed analysis of matmul kernels
-            matmuls_with_rolls = [k for k in matmul_kernels if k.layout.rolls]
-            matmuls_without_rolls = [k for k in matmul_kernels if not k.layout.rolls]
-            print(f"\n  === matmul_tiles for {term} ===")
-            print(f"  Total kernels: {len(matmul_kernels)}, With rolls: {len(matmuls_with_rolls)}, Without rolls: {len(matmuls_without_rolls)}")
-            
-            # Calculate costs for all kernels including downstream operations
-            kernel_costs = []
-            for k in matmul_kernels:
-                matmul_cost = KernelCost(k, network).total_cost()
-                # Estimate downstream cost (operations that will use this matmul output)
-                # In strassens, matmul outputs are typically used in add/sub operations
-                downstream_cost = estimate_downstream_cost(k, network)
-                total_cost = matmul_cost + downstream_cost
-                has_rolls = bool(k.layout.rolls)
-                kernel_costs.append((k, matmul_cost, downstream_cost, total_cost, has_rolls))
-            
-            # Sort by total cost (matmul + downstream)
-            kernel_costs.sort(key=lambda x: x[3])
-            
-            print(f"  Top 5 kernels by total cost (matmul + downstream):")
-            for i, (k, matmul_cost, downstream_cost, total_cost, has_rolls) in enumerate(kernel_costs[:5]):
-                print(f"    {i+1}. Total: {total_cost} (matmul: {matmul_cost}, downstream: {downstream_cost}), Has rolls: {has_rolls}, Layout: {k.layout}")
-            
-            # Check if cheapest has rolls
-            if kernel_costs:
-                cheapest = kernel_costs[0]
-                print(f"  Cheapest kernel: Total cost={cheapest[3]} (matmul: {cheapest[1]}, downstream: {cheapest[2]}), Has rolls={cheapest[4]}")
-            
-            for matmul_kernel in matmul_kernels:
-                layout = matmul_kernel.layout
-                layout_str = layout_to_str(layout)
-                # Use total cost (matmul + downstream) for selection
-                matmul_cost = KernelCost(matmul_kernel, network).total_cost()
-                downstream_cost = estimate_downstream_cost(matmul_kernel, network)
-                total_cost = matmul_cost + downstream_cost
-                if layout_str not in output_kernels:
-                    output_kernels[layout_str] = matmul_kernel
-                    output_kernel_costs[layout_str] = total_cost
-                elif total_cost < output_kernel_costs[layout_str]:
-                    output_kernels[layout_str] = matmul_kernel
-                    output_kernel_costs[layout_str] = total_cost
-            
-            # When roll_flag is True, prefer rolled kernels over non-rolled ones
-            # Create a layout key ignoring rolls to find duplicates
-            if roll_flag:
-                # Group kernels by layout ignoring rolls
-                layout_groups = {}
-                for layout_str, kernel in output_kernels.items():
-                    # Create a key that ignores rolls - use just the dimensions
-                    dims_key = str(kernel.layout.get_dims())
-                    if dims_key not in layout_groups:
-                        layout_groups[dims_key] = []
-                    layout_groups[dims_key].append((layout_str, kernel, output_kernel_costs[layout_str]))
-                
-                # For each group, if there are both rolled and non-rolled, prefer rolled
-                filtered_output_kernels = {}
-                filtered_output_kernel_costs = {}
-                for dims_key, kernels in layout_groups.items():
-                    rolled_kernels = [(ls, k, c) for ls, k, c in kernels if k.layout.rolls]
-                    non_rolled_kernels = [(ls, k, c) for ls, k, c in kernels if not k.layout.rolls]
-                    
-                    if rolled_kernels and non_rolled_kernels:
-                        # Prefer rolled kernels - keep the cheapest rolled one
-                        rolled_kernels.sort(key=lambda x: x[2])  # Sort by cost
-                        best_rolled = rolled_kernels[0]
-                        filtered_output_kernels[best_rolled[0]] = best_rolled[1]
-                        filtered_output_kernel_costs[best_rolled[0]] = best_rolled[2]
-                        print(f"  ✓ Preferring rolled kernel (cost={best_rolled[2]}) over non-rolled for dims {dims_key[:60]}")
-                    else:
-                        # No choice - keep all
-                        for ls, k, c in kernels:
-                            filtered_output_kernels[ls] = k
-                            filtered_output_kernel_costs[ls] = c
-                
-                output_kernels = filtered_output_kernels
-                output_kernel_costs = filtered_output_kernel_costs
-            
-            # Debug: Which kernel was selected for output
-            selected_layouts = list(output_kernels.keys())
-            print(f"  Selected {len(selected_layouts)} unique layouts for output")
-            for layout_str in selected_layouts[:3]:  # Show first 3
-                k = output_kernels[layout_str]
-                cost = output_kernel_costs[layout_str]
-                print(f"    Selected: Cost={cost}, Has rolls={bool(k.layout.rolls)}, Layout={layout_str[:80]}")
-            print()
     return output_kernels
+
+
+def gen_optimal_tile_matmul(term, a_kernel, b_kernel, kernel_map):
+    """
+    Generate the optimal tile matmul sequence directly.
+    
+    Optimal sequence:
+    - A: [1:size][0:size] -> BSGS_ROLL(1,0) -> REPLICATE -> ROLL(2,1) -> ROLL(0,1)
+    - B: [0:size][1:size] -> REPLICATE -> ROT_ROLL(0,1)
+    - Final: MATMUL
+    
+    Args:
+        term: The matmul term (a_term @ b_term)
+        a_kernel: Input kernel A with layout [1:size][0:size]
+        b_kernel: Input kernel B with layout [0:size][1:size]
+        kernel_map: Dictionary to add intermediate kernels to
+        
+    Returns:
+        Kernel: The final matmul kernel with optimal sequence
+    """
+    a_term = a_kernel.layout.term
+    b_term = b_kernel.layout.term
+    n = a_kernel.layout.n
+    secret = a_kernel.layout.secret
+    
+    # Extract dimensions
+    a_dims = a_kernel.layout.get_dims()
+    b_dims = b_kernel.layout.get_dims()
+    
+    # Extract dimension objects
+    a_dim_1 = None
+    a_dim_0 = None
+    for dim in a_dims:
+        if dim.dim == 1:
+            a_dim_1 = dim
+        elif dim.dim == 0:
+            a_dim_0 = dim
+    
+    b_dim_0 = None
+    b_dim_1 = None
+    for dim in b_dims:
+        if dim.dim == 0:
+            b_dim_0 = dim
+        elif dim.dim == 1:
+            b_dim_1 = dim
+    
+    if a_dim_1 is None or a_dim_0 is None or b_dim_0 is None or b_dim_1 is None:
+        raise ValueError("Expected dimensions 0 and 1 in both kernels")
+    
+    size = a_dim_1.extent
+    
+    # Construct optimal sequence for A: BSGS_ROLL(1,0) -> REPLICATE -> ROLL(2,1)
+    # Step 1: BSGS_ROLL(1,0) on A
+    roll_1_0_a = Roll(a_dim_0, a_dim_1)
+    a_bsgs_rolled_layout = Layout(
+        a_term,
+        [roll_1_0_a],
+        [a_dim_1, a_dim_0],
+        n,
+        secret,
+    )
+    a_bsgs_rolled = Kernel(KernelOp.BSGS_ROLL, [roll_1_0_a, a_kernel], layout=a_bsgs_rolled_layout)
+    kernel_map[a_bsgs_rolled_layout.term] += [a_bsgs_rolled]
+    
+    # Step 2: REPLICATE A
+    replicate_dim = Dim(None, size, 1)
+    a_replicated_layout = Layout(
+        a_term,
+        a_bsgs_rolled_layout.rolls,
+        [replicate_dim, a_dim_1, a_dim_0],
+        n,
+        secret,
+    )
+    a_replicated = Kernel(KernelOp.REPLICATE, [a_bsgs_rolled], layout=a_replicated_layout)
+    kernel_map[a_replicated_layout.term] += [a_replicated]
+
+    # Step 3: ROLL on A
+    roll_2_1_a = Roll(a_dim_1, replicate_dim)
+    a_replicated_rolled_layout_1 = Layout(
+        a_term,
+        [roll_2_1_a, Roll(a_dim_0, replicate_dim)],
+        [a_dim_1, a_dim_0, replicate_dim],
+        n,
+        secret,
+    )
+    a_final = Kernel(KernelOp.ROLL, [roll_2_1_a, a_replicated], layout=a_replicated_rolled_layout_1)
+    kernel_map[a_replicated_rolled_layout_1.term] += [a_final]
+    
+    # Construct optimal sequence for B: REPLICATE -> ROT_ROLL
+    # Step 1: REPLICATE B
+    b_replicated_layout = Layout(
+        b_term,
+        [],
+        [replicate_dim, b_dim_0, b_dim_1],
+        n,
+        secret,
+    )
+    b_replicated = Kernel(KernelOp.REPLICATE, [b_kernel], layout=b_replicated_layout)
+    kernel_map[b_replicated_layout.term] += [b_replicated]
+
+    # Step 2: ROT_ROLL on B
+    roll_0_1_b = Roll(b_dim_0, replicate_dim)
+    b_rot_rolled_layout = Layout(
+        b_term,
+        [roll_0_1_b],
+        [b_dim_0, replicate_dim, b_dim_1],
+        n,
+        secret,
+    )
+    b_final = Kernel(KernelOp.ROT_ROLL, [roll_0_1_b, b_replicated], layout=b_rot_rolled_layout)
+    
+    # Final matmul
+    matmul_output_dims = [a_dim_0, b_dim_1]
+    matmul_layout = Layout(term, [Roll(a_dim_0, b_dim_1)], matmul_output_dims, n, secret)
+    matmul_kernel = Kernel(KernelOp.MATMUL, [a_final, b_final], layout=matmul_layout)
+    
+    return matmul_kernel
 
 
 def create_combine_kernel(term, kernel_map, C1, C2, C3, C4):
@@ -475,7 +524,7 @@ def strassens_opt(term, kernel_map, a_tiles, b_tiles, roll_flag, network):
 
     # T2 = B1 + B4
     T2 = add_tiles(kernel_map, B1, B4, roll_flag, network)
-
+    
     # M1 = T1 @ T2
     M1 = matmul_tiles(kernel_map, T1, T2, roll_flag, network)
 
@@ -548,61 +597,13 @@ def strassens_opt(term, kernel_map, a_tiles, b_tiles, roll_flag, network):
 
     output_kernels = []
     for layout in C1.keys():
-        # Debug: Check C kernel layouts
         c1_kernel = C1[layout]
         c2_kernel = C2[layout]
         c3_kernel = C3[layout]
         c4_kernel = C4[layout]
-        print(f"\n=== C kernels for layout {layout} ===")
-        print(f"C1 has rolls: {bool(c1_kernel.layout.rolls)}, rolls: {c1_kernel.layout.rolls}")
-        print(f"C2 has rolls: {bool(c2_kernel.layout.rolls)}, rolls: {c2_kernel.layout.rolls}")
-        print(f"C3 has rolls: {bool(c3_kernel.layout.rolls)}, rolls: {c3_kernel.layout.rolls}")
-        print(f"C4 has rolls: {bool(c4_kernel.layout.rolls)}, rolls: {c4_kernel.layout.rolls}")
-        
         combine_kernel = create_combine_kernel(
             term, kernel_map, c1_kernel, c2_kernel, c3_kernel, c4_kernel
         )
-        # Calculate combine kernel's own cost
-        combine_own_cost = KernelCost(combine_kernel, network).total_cost()
-        
-        # Calculate child (CS) kernel costs - these reference the C kernels
-        from util.kernel_util import get_cs_op_kernels
-        from ir.layout_utils import dimension_merging
-        cs_kernels = get_cs_op_kernels(combine_kernel)
-        cs_costs = 0
-        for cs_kernel in cs_kernels:
-            # CS kernels reference terms in kernel_map, get their costs
-            cs_term = cs_kernel.layout.term
-            if cs_term in kernel_map:
-                # Get the cost of the C kernel from kernel_map
-                # We need to find the cost of the C kernel layout
-                c_kernel_layout = cs_kernel.layout
-                # The C kernel cost should be in kernel_map, but we need to calculate it
-                # For now, just get the direct cost
-                cs_cost = KernelCost(cs_kernel, network).total_cost()
-                cs_costs += cs_cost
-            else:
-                cs_cost = KernelCost(cs_kernel, network).total_cost()
-                cs_costs += cs_cost
-        
-        # Also calculate costs of C1, C2, C3, C4 kernels themselves
-        c1_cost = KernelCost(c1_kernel, network).total_cost()
-        c2_cost = KernelCost(c2_kernel, network).total_cost()
-        c3_cost = KernelCost(c3_kernel, network).total_cost()
-        c4_cost = KernelCost(c4_kernel, network).total_cost()
-        total_c_costs = c1_cost + c2_cost + c3_cost + c4_cost
-        
-        total_cost = combine_own_cost + cs_costs
-        
-        print(f"Combine kernel has rolls: {bool(combine_kernel.layout.rolls)}, rolls: {combine_kernel.layout.rolls}")
-        print(f"Combine kernel own cost: {combine_own_cost}")
-        print(f"C1 cost: {c1_cost}, C2 cost: {c2_cost}, C3 cost: {c3_cost}, C4 cost: {c4_cost}")
-        print(f"Total C kernels cost: {total_c_costs}")
-        print(f"Child (CS) kernels cost: {cs_costs}")
-        print(f"Total cost (combine + CS): {total_cost}")
-        print(f"Estimated total (combine + C kernels): {combine_own_cost + total_c_costs}")
-        print(f"Layout: {combine_kernel.layout}")
-        print("=" * 60)
         output_kernels.append(combine_kernel)
     return output_kernels
 
@@ -615,21 +616,8 @@ def gen_strassens(term, cs_kernels, roll_flag, network):
     will use roll-based matmul when roll_flag is True for better performance.
     """
     kernel_map = {}
-    # Debug: Print input kernels
-    print(f"\n=== gen_strassens for {term} ===")
-    print(f"roll_flag: {roll_flag}")
-    print(f"Total a_kernels: {len(cs_kernels[0])}")
-    print(f"Total b_kernels: {len(cs_kernels[1])}")
-    a_kernels_with_rolls = [k for k in cs_kernels[0] if k.layout.rolls]
-    b_kernels_with_rolls = [k for k in cs_kernels[1] if k.layout.rolls]
-    print(f"a_kernels with rolls: {len(a_kernels_with_rolls)}")
-    print(f"b_kernels with rolls: {len(b_kernels_with_rolls)}")
-    
-    # Filter to only kernels without rolls, as strassens requires no-roll inputs for tiling
     a_kernels_no_rolls = [k for k in cs_kernels[0] if not k.layout.rolls]
     b_kernels_no_rolls = [k for k in cs_kernels[1] if not k.layout.rolls]
-    print(f"a_kernels without rolls: {len(a_kernels_no_rolls)}")
-    print(f"b_kernels without rolls: {len(b_kernels_no_rolls)}")
     
     for a_kernel in a_kernels_no_rolls:
         for b_kernel in b_kernels_no_rolls:
