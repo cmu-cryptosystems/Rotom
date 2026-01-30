@@ -149,16 +149,22 @@ class LayoutAssignment:
                         print(f"roll_flag: {self.roll_flag}")
                         print(f"Total candidate kernels: {len(kernels)}")
                         kernels_with_rolls = [k for k in kernels if k.layout.rolls]
-                        kernels_without_rolls = [k for k in kernels if not k.layout.rolls]
+                        kernels_without_rolls = [
+                            k for k in kernels if not k.layout.rolls
+                        ]
                         print(f"Kernels with rolls: {len(kernels_with_rolls)}")
                         print(f"Kernels without rolls: {len(kernels_without_rolls)}")
                         for i, kernel in enumerate(kernels):
                             has_rolls = bool(kernel.layout.rolls)
-                            print(f"\nKernel {i+1}: {'HAS ROLLS' if has_rolls else 'NO ROLLS'}")
+                            print(
+                                f"\nKernel {i+1}: {'HAS ROLLS' if has_rolls else 'NO ROLLS'}"
+                            )
                             print(f"  Layout: {kernel.layout}")
                             print(f"  Rolls: {kernel.layout.rolls}")
                             if has_rolls:
-                                print(f"  Roll details: {[str(r) for r in kernel.layout.rolls]}")
+                                print(
+                                    f"  Roll details: {[str(r) for r in kernel.layout.rolls]}"
+                                )
                         print("=" * 60)
             case TensorOp.SUM:
                 kernels = gen_sum(term, cs_kernels[0])
@@ -638,10 +644,14 @@ class LayoutAssignment:
         assert self.kernels[term] and self.kernel_costs[term]
 
         # Debug: Print all candidate costs
-        if term.op.value == "MATMUL" or (hasattr(term, 'op') and str(term).startswith("(@")):
+        if term.op.value == "MATMUL" or (
+            hasattr(term, "op") and str(term).startswith("(@")
+        ):
             print(f"\n=== Search for {term} ===")
             print(f"Number of candidate layouts: {len(self.kernel_costs[term])}")
-            for layout_key, cost in sorted(self.kernel_costs[term].items(), key=lambda kv: kv[1]):
+            for layout_key, cost in sorted(
+                self.kernel_costs[term].items(), key=lambda kv: kv[1]
+            ):
                 kernel = self.kernels[term][layout_key].kernel
                 has_rolls = bool(kernel.layout.rolls)
                 print(f"  Layout: {layout_key}")
