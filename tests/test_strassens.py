@@ -35,9 +35,6 @@ class TestStrassensMatmul:
         tensor_ir, expected = self._create_strassens_matmul_computation(inputs)
         # Run compiler
         kernel = LayoutAssignment(tensor_ir, args).run()
-        for k in kernel.post_order():
-            print(k)
-        print()
 
         circuit_ir = Lower(kernel).run()
         results = run_backend(backend, circuit_ir, inputs, args)

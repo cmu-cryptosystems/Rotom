@@ -159,13 +159,6 @@ def run_benchmark_or_microbenchmark(args):
             print(k)
         print()
 
-        # Debug: Check if final kernel has rolls
-        if hasattr(kernel, "layout"):
-            print(f"Final kernel layout rolls: {kernel.layout.rolls}")
-            print(f"Final kernel has rolls: {bool(kernel.layout.rolls)}")
-            print(f"Final kernel layout: {kernel.layout}")
-            print()
-
         # Lower to circuit IR
         circuit_ir = Lower(kernel).run()
 
