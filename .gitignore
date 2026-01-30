@@ -13,6 +13,9 @@ heir/
 output/
 logs/
 
+# Generated plot PDFs
+plots/results_*.pdf
+
 # Documentation generated files
 docs/html/
 docs/doctrees/
