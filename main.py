@@ -1,4 +1,4 @@
-import random
+import time
 from argparse import ArgumentParser, BooleanOptionalAction
 
 import numpy as np
@@ -140,6 +140,10 @@ def run_benchmark_or_microbenchmark(args):
         assert tensor_ir
         assert inputs
         assert n
+
+        # Start compile time measurement
+        compile_start = time.time()
+
         # Generate kernel from tensor_ir
         kernel = LayoutAssignment(tensor_ir, args).run()
 
@@ -161,6 +165,10 @@ def run_benchmark_or_microbenchmark(args):
 
         # Lower to circuit IR
         circuit_ir = Lower(kernel).run()
+
+        # End compile time measurement
+        compile_time = time.time() - compile_start
+        print("compile time:", compile_time)
 
         # Serialize circuit if requested
         if args.serialize:
