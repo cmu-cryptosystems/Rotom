@@ -444,7 +444,7 @@ def gen_optimal_tile_matmul(term, a_kernel, b_kernel, kernel_map):
     a_replicated_rolled_layout_1 = Layout(
         a_term,
         [Roll(a_dim_0, replicate_dim), roll_2_1_a],
-        [a_dim_1, replicate_dim,  a_dim_0],
+        [a_dim_1, replicate_dim, a_dim_0],
         n,
         secret,
     )
