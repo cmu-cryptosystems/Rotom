@@ -22,6 +22,7 @@ from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
 from ir.roll import Roll
 from util.shape_util import get_term_shape
+from util.util import round_to_ceiling_power_of_2
 
 
 def apply_replication(term, kernel, dim):
@@ -395,27 +396,36 @@ def gen_conv2d(term, cs_kernels, shapes):
         b_layout = Layout(b_term, [], b_dims, a_kernel.layout.n, False)
         b_kernel = Kernel(KernelOp.PUNCTURED_TENSOR, [], b_layout)
 
-        # Output layout:
-        # - the output layout should just pass the height and width forward from the input layout
-        # - if there are gap-slots open in the layout, then we should compact the output channels
-        output_dims = []
-        for a_dim, b_dim in zip(a_kernel.layout.get_dims(), b_kernel.layout.get_dims()):
-            if a_dim.dim is not None and a_dim.dim > 0:
-                output_dims.append(a_dim)
-            elif b_dim.dim == 0:
-                output_dims.append(b_dim)
-            elif a_dim.dim == 0:
-                output_dims.append(Dim(None, a_dim.extent, 1, DimType.EMPTY))
+        # Output spatial size (depends on stride and padding)
+        stride = term.cs[2]
+        padding = term.cs[3]
+        h_i, w_i = a_shape[1], a_shape[2]
+        f_h, f_w = b_shape[2], b_shape[3]
+        c_o = b_shape[0]
+        if padding == "valid":
+            h_o = (h_i - f_h) // stride + 1
+            w_o = (w_i - f_w) // stride + 1
+        else:
+            # Same padding: stride 1 -> input size; stride > 1 -> ceil(H/stride) x ceil(W/stride)
+            if stride == 1:
+                h_o, w_o = h_i, w_i
             else:
-                output_dims.append(Dim(None, a_dim.extent, 1, DimType.EMPTY))
+                h_o = (h_i + stride - 1) // stride
+                w_o = (w_i + stride - 1) // stride
+        h_o_p2 = round_to_ceiling_power_of_2(h_o)
+        w_o_p2 = round_to_ceiling_power_of_2(w_o)
+
+        # Output layout: only output dims [channel, height, width] so n divides product
+        output_dims = []
+        if c_o > 1:
+            output_dims.append(Dim(0, c_o, h_o_p2 * w_o_p2))
+        output_dims.append(Dim(1, h_o_p2, w_o_p2))
+        output_dims.append(Dim(2, w_o_p2, 1))
         output_layout = Layout(
             term, [], output_dims, a_kernel.layout.n, a_kernel.layout.secret
         )
 
-        # TODO: this should work with bsgs matmul later
         kernel = Kernel(KernelOp.CONV2D, [a_kernel, b_kernel], output_layout)
         output_kernels.add(kernel)
-
-        # TODO: add compaction or masking for stride here.
 
     return output_kernels

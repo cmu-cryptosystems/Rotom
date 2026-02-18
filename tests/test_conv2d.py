@@ -250,6 +250,93 @@ class TestConvolution2D:
         )
         self._run_test_case(tensor_ir, inputs, args, backend)
 
+    @pytest.mark.parametrize("conv_roll", [False])
+    def test_conv2d_stride2_valid_8x8_filter_3x3(self, conv_roll, backend):
+        """Test 2D convolution with stride=2 and valid padding (8x8 input, 3x3 filter -> 3x3 output)."""
+        args = get_default_args()
+        args.n = 64
+        args.rolls = True
+        args.conv_roll = conv_roll
+        args.benchmark = "conv2d_stride2_valid"
+
+        dim_size = 8
+        f_size = 3
+        stride = 2
+        padding = "valid"
+        inputs = {}
+        inputs["a"] = np.array(
+            [
+                [[i + j * dim_size for i in range(dim_size)] for j in range(dim_size)]
+                for _ in range(1)
+            ]
+        ).astype(float)
+        inputs["b"] = np.array(
+            [[[[1 for i in range(f_size)] for j in range(f_size)]]]
+        ).astype(float)
+
+        tensor_ir = self._create_convolution_computation(
+            dim_size, 1, 1, 1, f_size, f_size, stride, padding
+        )
+        self._run_test_case(tensor_ir, inputs, args, backend)
+
+    @pytest.mark.parametrize("conv_roll", [False])
+    def test_conv2d_stride2_same_8x8_filter_3x3(self, conv_roll, backend):
+        """Test 2D convolution with stride=2 and same padding (8x8 input -> 4x4 output)."""
+        args = get_default_args()
+        args.n = 64
+        args.rolls = True
+        args.conv_roll = conv_roll
+        args.benchmark = "conv2d_stride2_same"
+
+        dim_size = 8
+        f_size = 3
+        stride = 2
+        padding = "same"
+        inputs = {}
+        inputs["a"] = np.array(
+            [
+                [[i + j * dim_size for i in range(dim_size)] for j in range(dim_size)]
+                for _ in range(1)
+            ]
+        ).astype(float)
+        inputs["b"] = np.array(
+            [[[[1 for i in range(f_size)] for j in range(f_size)]]]
+        ).astype(float)
+
+        tensor_ir = self._create_convolution_computation(
+            dim_size, 1, 1, 1, f_size, f_size, stride, padding
+        )
+        self._run_test_case(tensor_ir, inputs, args, backend)
+
+    @pytest.mark.parametrize("conv_roll", [False])
+    def test_conv2d_stride2_valid_6x6_filter_2x2(self, conv_roll, backend):
+        """Test 2D convolution with stride=2 and valid padding (6x6 input, 2x2 filter -> 3x3 output)."""
+        args = get_default_args()
+        args.n = 64
+        args.rolls = True
+        args.conv_roll = conv_roll
+        args.benchmark = "conv2d_stride2_valid_2x2"
+
+        dim_size = 6
+        f_size = 2
+        stride = 2
+        padding = "valid"
+        inputs = {}
+        inputs["a"] = np.array(
+            [
+                [[i + j * dim_size for i in range(dim_size)] for j in range(dim_size)]
+                for _ in range(1)
+            ]
+        ).astype(float)
+        inputs["b"] = np.array(
+            [[[[i + j + 1 for i in range(f_size)] for j in range(f_size)]]]
+        ).astype(float)
+
+        tensor_ir = self._create_convolution_computation(
+            dim_size, 1, 1, 1, f_size, f_size, stride, padding
+        )
+        self._run_test_case(tensor_ir, inputs, args, backend)
+
     # def test_conv2d_8x8_filter_4x4(self):
     #     TODO: Broken test
     #     """Test 2D convolution with 8x8 input and 4x4 filter (larger filter, power of 2)."""

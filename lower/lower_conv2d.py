@@ -8,7 +8,12 @@ from ir.he import HEOp, HETerm
 from ir.kernel import KernelOp
 from lower.layout_cts import LayoutCiphertexts, create_layout_without_dims
 from lower.lower_util import find_sum_dim, rotate_and_sum
-from util.layout_util import convert_layout_to_mask, get_cts_by_dim, get_segment
+from util.layout_util import (
+    convert_layout_to_mask,
+    convert_layout_to_stride_mask,
+    get_cts_by_dim,
+    get_segment,
+)
 from util.shape_util import get_term_shape
 
 
@@ -35,9 +40,11 @@ def lower_conv2d(env, kernel):
     pad_bottom = kernel.layout.term.cs[4][1]
     pad_left = kernel.layout.term.cs[4][2]
     pad_right = kernel.layout.term.cs[4][3]
+    stride = kernel.layout.term.cs[2]
 
     # calculate rotation amounts for input ciphertexts
     # assumes dim 1 and 2 are continuous and in the slot dimensions
+    # filter position (i,j) reads input at (h+i, w+j) for output (h,w); stride does not change these offsets
     rot_amts = []
     dim_map = []
     offset = 1
@@ -48,9 +55,6 @@ def lower_conv2d(env, kernel):
 
     dim_map = dim_map[::-1]
 
-    rot_amts = []
-
-    # find rotational offset from padding
     rot_offset = -pad_top * dim_map[0][2] - pad_left
 
     for i in range(b_shape[2]):
@@ -221,8 +225,64 @@ def lower_conv2d(env, kernel):
             mask_term = term * mask
             masked_cts[index] = mask_term
         layout_cts = LayoutCiphertexts(layout=layout_cts.layout, cts=masked_cts)
-    else:
-        # Update layout to output layout if no mask needed
-        layout_cts = LayoutCiphertexts(layout=layout_cts.layout, cts=layout_cts.cts)
+
+    # mask out stride > 1: zero slots not at (h%stride==0, w%stride==0) or beyond output range
+    if stride > 1:
+        padding = kernel.layout.term.cs[3]
+        h_i, w_i = a_shape[1], a_shape[2]
+        f_h, f_w = b_shape[2], b_shape[3]
+        if padding == "valid":
+            h_o = (h_i - f_h) // stride + 1
+            w_o = (w_i - f_w) // stride + 1
+        else:
+            # Same padding: stride 1 -> input size; stride > 1 -> ceil(H/stride) x ceil(W/stride)
+            if stride == 1:
+                h_o, w_o = h_i, w_i
+            else:
+                h_o = (h_i + stride - 1) // stride
+                w_o = (w_i + stride - 1) // stride
+        stride_mask = HETerm.mask(
+            [convert_layout_to_stride_mask(layout_cts.layout, h_o, w_o, stride)]
+        )
+        masked_cts = {}
+        for index, term in layout_cts.cts.items():
+            masked_cts[index] = term * stride_mask
+        layout_cts = LayoutCiphertexts(layout=layout_cts.layout, cts=masked_cts)
+
+        # Compact from input-sized layout (h_i x w_i) to output-sized layout (h_o_p2 x w_o_p2)
+        # so the result matches kernel.layout expected by the backend.
+        h_o_p2 = 1
+        w_o_p2 = 1
+        for dim in kernel.layout.slot_dims:
+            if dim.dim == 1:
+                h_o_p2 = dim.extent
+            elif dim.dim == 2:
+                w_o_p2 = dim.extent
+        # Input layout slot size (may be padded); get width from layout_cts
+        w_layout = w_i
+        for dim in layout_cts.layout.slot_dims:
+            if dim.dim == 2:
+                w_layout = dim.extent
+                break
+        slot_0_mask = [1] + [0] * (layout_cts.layout.n - 1)
+        compacted_cts = {}
+        for ct_index, ct in layout_cts.cts.items():
+            terms = []
+            for oh in range(h_o_p2):
+                for ow in range(w_o_p2):
+                    src_slot = oh * stride * w_layout + ow * stride
+                    dst_slot = oh * w_o_p2 + ow
+                    # Left-rotate by src_slot to bring slot src_slot to slot 0
+                    rotated = ct << src_slot
+                    masked = rotated * HETerm.mask([slot_0_mask])
+                    # Left-rotate by dst_slot to place value at slot dst_slot (new[i] = old[(i+dst)%n], so slot 0 goes to slot -dst = n-dst? No: new[dst] = old[0] when we rotate by dst: new[i] = old[(i-dst)%n], so new[dst] = old[0]. So we need rotate right by dst, i.e. left by -dst = n-dst. So place_rot = n - dst_slot.)
+                    place_rot = (layout_cts.layout.n - dst_slot) % layout_cts.layout.n
+                    placed = masked << place_rot
+                    terms.append(placed)
+            compacted = terms[0]
+            for t in terms[1:]:
+                compacted = compacted + t
+            compacted_cts[ct_index] = compacted
+        layout_cts = LayoutCiphertexts(layout=kernel.layout, cts=compacted_cts)
 
     return layout_cts

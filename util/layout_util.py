@@ -289,6 +289,25 @@ def convert_layout_to_mask(layout):
     return mask
 
 
+def convert_layout_to_stride_mask(layout, h_o, w_o, stride):
+    """Mask for conv2d stride > 1: zero slots where (dim1,dim2) is not a valid output position.
+    Keep only slots where dim1 % stride == 0, dim2 % stride == 0,
+    dim1 < h_o*stride, dim2 < w_o*stride. Layout uses input spatial size (h_i, w_i)."""
+    indices_by_dim = get_dim_indices_by_dim(layout.slot_dims)
+    mask = [1] * layout.n
+    dim1_indices = indices_by_dim.get(1)
+    dim2_indices = indices_by_dim.get(2)
+    if dim1_indices is not None:
+        for i, idx in enumerate(dim1_indices):
+            if idx is not None and (idx % stride != 0 or idx >= h_o * stride):
+                mask[i] = 0
+    if dim2_indices is not None:
+        for i, idx in enumerate(dim2_indices):
+            if idx is not None and (idx % stride != 0 or idx >= w_o * stride):
+                mask[i] = 0
+    return mask
+
+
 def layout_to_ct_indices(layout):
     dims = layout.ct_dims
     dim_indices = get_dim_indices(dims)

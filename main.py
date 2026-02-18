@@ -1,4 +1,4 @@
-import time
+import random
 from argparse import ArgumentParser, BooleanOptionalAction
 
 import numpy as np
@@ -16,7 +16,6 @@ from benchmarks.microbenchmarks.rot_roll import rot_roll
 from benchmarks.microbenchmarks.slot_bsgs_roll import slot_bsgs_roll
 from benchmarks.microbenchmarks.slot_conversion import slot_conversion
 from benchmarks.microbenchmarks.slot_roll import slot_roll
-from benchmarks.microbenchmarks.strassens.strassens_matmul import strassens_matmul
 from benchmarks.rotom_benchmarks.bert_attention import bert_attention
 from benchmarks.rotom_benchmarks.convolution.convolution import convolution
 from benchmarks.rotom_benchmarks.convolution.convolution_32768 import convolution_32768
@@ -26,9 +25,10 @@ from benchmarks.rotom_benchmarks.double_matmul.double_matmul_128_64_ct_ct import
 from benchmarks.rotom_benchmarks.double_matmul.double_matmul_256_128_ct_ct import (
     double_matmul_256_128_ct_ct,
 )
-from benchmarks.rotom_benchmarks.logreg import logreg
 from benchmarks.rotom_benchmarks.matmul.matmul_128_64 import matmul_128_64
 from benchmarks.rotom_benchmarks.matmul.matmul_256_128 import matmul_256_128
+from benchmarks.rotom_benchmarks.logreg import logreg
+from benchmarks.rotom_benchmarks.mlp_mnist import mlp_mnist
 from benchmarks.rotom_benchmarks.ttm import ttm
 
 # Import Rotom
@@ -79,10 +79,10 @@ def run_benchmark_or_microbenchmark(args):
         runtime = 0
         if args.backend.lower() == "toy":
             results = Toy(circuit_ir, inputs, args).run()
-            check_results(kernel.layout.term, inputs, kernel, results, runtime, args)
+            check_results(kernel.term, inputs, kernel, results, runtime, args)
         elif args.backend.lower() == "ckks":
             runtime, results = CKKS(circuit_ir, inputs, args).run()
-            check_results(kernel.layout.term, inputs, kernel, results, runtime, args)
+            check_results(kernel.term, inputs, kernel, results, runtime, args)
         elif args.backend.lower() == "heir":
             # HEIR backend generates MLIR output
             heir_backend = HEIR(circuit_ir, inputs, args)
@@ -90,10 +90,8 @@ def run_benchmark_or_microbenchmark(args):
             # Run MLIR interpreter to get results
             mlir_file = f"heir/{args.fn}/{args.fn}.mlir"
             mlir_results = run_mlir_interpreter(mlir_file)
-            # Check MLIR results against kernel.layout.term.eval()
-            check_results(
-                kernel.layout.term, inputs, kernel, mlir_results, runtime, args
-            )
+            # Check MLIR results against kernel.term.eval()
+            check_results(kernel.term, inputs, kernel, mlir_results, runtime, args)
             heir_backend.serialize_results(mlir_results)
         else:
             raise NotImplementedError("unknown backend")
@@ -124,38 +122,23 @@ def run_benchmark_or_microbenchmark(args):
             case "logreg":
                 tensor_ir, inputs = logreg()
                 args.n = n
+            case "mlp_mnist":
+                tensor_ir, inputs = mlp_mnist()
+                args.n = n
             case "ttm":
                 tensor_ir, inputs = ttm()
                 args.n = n
-            case "ttm_32":
-                tensor_ir, inputs = ttm()
-                args.n = n
             case "bert_attention":
-                tensor_ir, inputs = bert_attention()
-            case "strassens":
-                tensor_ir, inputs = strassens_matmul()
+                tensor_ir, inputs, n = bert_attention()
+                args.n = n
             case _:
                 raise NotImplementedError("unknown benchmark")
 
         assert tensor_ir
         assert inputs
         assert n
-
-        # Start compile time measurement
-        compile_start = time.time()
-
         # Generate kernel from tensor_ir
         kernel = LayoutAssignment(tensor_ir, args).run()
-
-        # Apply pack tensor lifting optimization
-        # This analyzes the selected kernel and replaces REPLICATE(+ROT_ROLL)
-        # patterns with packed TENSOR kernels when cheaper (trades compute for communication)
-        from opt.pack_tensor_lifting import run_pack_tensor_lifting
-
-        # Apply optimization to the kernel
-        kernel = run_pack_tensor_lifting(
-            kernel, args.net if hasattr(args, "net") else "lan"
-        )
 
         # Output found kernel
         print("found kernel:")
@@ -165,10 +148,6 @@ def run_benchmark_or_microbenchmark(args):
 
         # Lower to circuit IR
         circuit_ir = Lower(kernel).run()
-
-        # End compile time measurement
-        compile_time = time.time() - compile_start
-        print("compile time:", compile_time)
 
         # Serialize circuit if requested
         if args.serialize:
@@ -247,6 +226,10 @@ def main(args):
     )
 
     kernel = LayoutAssignment(tensor_ir, args).run()
+
+    for k in kernel.post_order():
+        print(k)
+    print()
 
     # lower to circuit ir
     circuit_ir = Lower(kernel).run()

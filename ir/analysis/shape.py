@@ -161,22 +161,30 @@ class Shape:
                 w_i = a_shape[2]
 
                 c_o = b_shape[0]
-                f_h = b_shape[1]
-                f_w = b_shape[2]
+                f_h = b_shape[2]
+                f_w = b_shape[3]
 
                 stride = term.cs[2]
                 padding = term.cs[3]
 
                 if padding == "valid":
-                    # does not add any extra pixels to the image
                     h_o = (h_i - f_h) // stride + 1
                     w_o = (w_i - f_w) // stride + 1
                 elif padding == "same":
-                    h_o = h_i
-                    w_o = w_i
+                    # Same padding: stride 1 -> input size; stride > 1 -> ceil(H/stride) x ceil(W/stride)
+                    if stride == 1:
+                        h_o, w_o = h_i, w_i
+                    else:
+                        h_o = (h_i + stride - 1) // stride
+                        w_o = (w_i + stride - 1) // stride
                 else:
                     raise NotImplementedError(f"unknown padding: {padding}")
-                c_shape = [c_o, h_o, w_o]
+                # Round to power of 2 for layout compatibility
+                c_shape = [
+                    c_o,
+                    round_to_ceiling_power_of_2(h_o),
+                    round_to_ceiling_power_of_2(w_o),
+                ]
                 return c_shape
             case TensorOp.INDEX:
                 a_shape = copy(self.padded_shapes[term.cs[0]])
@@ -255,24 +263,25 @@ class Shape:
                 a_shape = copy(self.get_shape(a))
                 b_shape = copy(self.get_shape(b))
 
-                c_i = a_shape[0]
+                c_o = b_shape[0]
+                f_h = b_shape[2]
+                f_w = b_shape[3]
                 h_i = a_shape[1]
                 w_i = a_shape[2]
-
-                c_o = b_shape[0]
-                f_h = b_shape[1]
-                f_w = b_shape[2]
 
                 stride = term.cs[2]
                 padding = term.cs[3]
 
                 if padding == "valid":
-                    # does not add any extra pixels to the image
                     h_o = (h_i - f_h) // stride + 1
                     w_o = (w_i - f_w) // stride + 1
                 elif padding == "same":
-                    h_o = h_i
-                    w_o = w_i
+                    # Same padding: stride 1 -> input size; stride > 1 -> ceil(H/stride) x ceil(W/stride)
+                    if stride == 1:
+                        h_o, w_o = h_i, w_i
+                    else:
+                        h_o = (h_i + stride - 1) // stride
+                        w_o = (w_i + stride - 1) // stride
                 else:
                     raise NotImplementedError(f"unknown padding: {padding}")
                 c_shape = [c_o, h_o, w_o]
