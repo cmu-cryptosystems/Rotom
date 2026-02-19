@@ -59,7 +59,6 @@ class ViaductWrapper:
                 TensorTerm(TensorOp.TENSOR, [input_name]),
                 rolls,
                 dims,
-                {},
                 self.args.n,
                 secret,
             )
