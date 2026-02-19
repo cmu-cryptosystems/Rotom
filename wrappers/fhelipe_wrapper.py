@@ -64,7 +64,7 @@ class FhelipeWrapper:
                 dims.append(Dim(i, int(shape ** (1 / num_dims))))
 
             layout = Layout(
-                TensorTerm(TensorOp.TENSOR, [name]), [], dims, {}, self.args.n, False
+                TensorTerm(TensorOp.TENSOR, [name]), [], dims, self.args.n, False
             )
             return HETerm(HEOp.PACK, [layout], False, "0 ")
         elif elems[0] == "MASK":
@@ -94,7 +94,6 @@ class FhelipeWrapper:
             TensorTerm(TensorOp.TENSOR, [f"zero_{var}"]),
             [],
             [Dim(0, self.args.n)],
-            {},
             True,
             "0 ",
         )
