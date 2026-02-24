@@ -511,16 +511,8 @@ def apply_layout(pt_tensor, layout):
 
     # update dims
     for i in range(len(dims)):
-        print("dims:", dims[i].dim, dims[i].dim_type)
         if dims[i].dim_type == DimType.EMPTY:
             dim_indices[i] = [j if not j else None for j in dim_indices[i]]
-    print("dims:", dims)
-    print("len dims:", len(dims))
-    print("len dim_indices:", len(dim_indices))
-    if len(dims) == 3:
-        print("dim_indices[0]:", dim_indices[0])
-        print("dim_indices[1]:", dim_indices[1])
-        print("dim_indices[2]:", dim_indices[2])
 
     # split indices by dimensions:
     indices_map = {}
@@ -551,8 +543,6 @@ def apply_layout(pt_tensor, layout):
         for i in range((layout_len // layout.n))
     ]
 
-    print("base_indices_by_cts:", base_indices_by_cts)
-
     # combine cts if ct_dim is a gap dimension
     combined_cts = copy(base_indices_by_cts)
     ct_dims = copy(layout.ct_dims)
@@ -571,9 +561,6 @@ def apply_layout(pt_tensor, layout):
 
     # Get the actual tensor dimensionality
     pt_tensor_ndim = np.ndim(pt_tensor)
-    print("pt_tensor:", pt_tensor)
-    print("pt_tensor_shape:", pt_tensor.shape)
-    print("layout:", layout)
 
     cts = []
     for ct_index in range(len(base_indices_by_cts)):
@@ -581,12 +568,19 @@ def apply_layout(pt_tensor, layout):
         ct = []
 
         for index in ct_indices:
+            # Pad index with 0 for dimensions not covered by layout (e.g. G group dim)
+            effective_index = list(index)
+            while len(effective_index) < pt_tensor_ndim:
+                effective_index.append(0)
+
             # Check if any required index is None
-            if any(index[i] is None for i in range(pt_tensor_ndim)):
+            if any(effective_index[i] is None for i in range(pt_tensor_ndim)):
                 ct.append(0)
                 continue
 
-            if any(index[i] >= pt_tensor.shape[i] for i in range(pt_tensor_ndim)):
+            if any(
+                effective_index[i] >= pt_tensor.shape[i] for i in range(pt_tensor_ndim)
+            ):
                 ct.append(0)
                 continue
 
@@ -594,13 +588,17 @@ def apply_layout(pt_tensor, layout):
             if pt_tensor_ndim == 0:
                 value = pt_tensor.item()
             elif pt_tensor_ndim == 1:
-                value = pt_tensor[index[0]]
+                value = pt_tensor[effective_index[0]]
             elif pt_tensor_ndim == 2:
-                value = pt_tensor[index[0]][index[1]]
+                value = pt_tensor[effective_index[0]][effective_index[1]]
             elif pt_tensor_ndim == 3:
-                value = pt_tensor[index[0]][index[1]][index[2]]
+                value = pt_tensor[effective_index[0]][effective_index[1]][
+                    effective_index[2]
+                ]
             elif pt_tensor_ndim == 4:
-                value = pt_tensor[index[0]][index[1]][index[2]][index[3]]
+                value = pt_tensor[effective_index[0]][effective_index[1]][
+                    effective_index[2]
+                ][effective_index[3]]
             else:
                 raise NotImplementedError(
                     f"tensors with {pt_tensor_ndim} dimensions are not supported"
