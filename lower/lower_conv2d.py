@@ -225,27 +225,4 @@ def lower_conv2d(env, kernel):
             mask_term = term * mask
             masked_cts[index] = mask_term
         layout_cts = LayoutCiphertexts(layout=layout_cts.layout, cts=masked_cts)
-
-    # mask out stride > 1: zero slots not at (h%stride==0, w%stride==0) or beyond output range
-    if stride > 1:
-        padding = kernel.layout.term.cs[3]
-        h_i, w_i = a_shape[1], a_shape[2]
-        f_h, f_w = b_shape[2], b_shape[3]
-        if padding == "valid":
-            h_o = (h_i - f_h) // stride + 1
-            w_o = (w_i - f_w) // stride + 1
-        else:
-            # Same padding: stride 1 -> input size; stride > 1 -> ceil(H/stride) x ceil(W/stride)
-            if stride == 1:
-                h_o, w_o = h_i, w_i
-            else:
-                h_o = (h_i + stride - 1) // stride
-                w_o = (w_i + stride - 1) // stride
-        stride_mask = HETerm.mask(
-            [convert_layout_to_stride_mask(layout_cts.layout, h_o, w_o, stride)]
-        )
-        masked_cts = {}
-        for index, term in layout_cts.cts.items():
-            masked_cts[index] = term * stride_mask
-        layout_cts = LayoutCiphertexts(layout=layout_cts.layout, cts=masked_cts)
     return layout_cts
