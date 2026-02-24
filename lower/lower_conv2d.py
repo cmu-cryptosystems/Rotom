@@ -248,41 +248,4 @@ def lower_conv2d(env, kernel):
         for index, term in layout_cts.cts.items():
             masked_cts[index] = term * stride_mask
         layout_cts = LayoutCiphertexts(layout=layout_cts.layout, cts=masked_cts)
-
-        # Compact from input-sized layout (h_i x w_i) to output-sized layout (h_o_p2 x w_o_p2)
-        # so the result matches kernel.layout expected by the backend.
-        h_o_p2 = 1
-        w_o_p2 = 1
-        for dim in kernel.layout.slot_dims:
-            if dim.dim == 1:
-                h_o_p2 = dim.extent
-            elif dim.dim == 2:
-                w_o_p2 = dim.extent
-        # Input layout slot size (may be padded); get width from layout_cts
-        w_layout = w_i
-        for dim in layout_cts.layout.slot_dims:
-            if dim.dim == 2:
-                w_layout = dim.extent
-                break
-        slot_0_mask = [1] + [0] * (layout_cts.layout.n - 1)
-        compacted_cts = {}
-        for ct_index, ct in layout_cts.cts.items():
-            terms = []
-            for oh in range(h_o_p2):
-                for ow in range(w_o_p2):
-                    src_slot = oh * stride * w_layout + ow * stride
-                    dst_slot = oh * w_o_p2 + ow
-                    # Left-rotate by src_slot to bring slot src_slot to slot 0
-                    rotated = ct << src_slot
-                    masked = rotated * HETerm.mask([slot_0_mask])
-                    # Left-rotate by dst_slot to place value at slot dst_slot (new[i] = old[(i+dst)%n], so slot 0 goes to slot -dst = n-dst? No: new[dst] = old[0] when we rotate by dst: new[i] = old[(i-dst)%n], so new[dst] = old[0]. So we need rotate right by dst, i.e. left by -dst = n-dst. So place_rot = n - dst_slot.)
-                    place_rot = (layout_cts.layout.n - dst_slot) % layout_cts.layout.n
-                    placed = masked << place_rot
-                    terms.append(placed)
-            compacted = terms[0]
-            for t in terms[1:]:
-                compacted = compacted + t
-            compacted_cts[ct_index] = compacted
-        layout_cts = LayoutCiphertexts(layout=kernel.layout, cts=compacted_cts)
-
     return layout_cts

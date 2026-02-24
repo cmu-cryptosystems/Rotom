@@ -32,9 +32,7 @@ def mlp_mnist(hidden_size=1024):
         (tensor_ir, inputs) for use with main.py --benchmark mlp_mnist.
     """
     inputs = {}
-    inputs["input"] = np.array(
-        [[np.random.randn() * 0.1 for _ in range(hidden_size)]]
-    )
+    inputs["input"] = np.array([[np.random.randn() * 0.1 for _ in range(hidden_size)]])
     inputs["fc1"] = np.array(
         [
             [np.random.randn() * 0.1 for _ in range(hidden_size)]

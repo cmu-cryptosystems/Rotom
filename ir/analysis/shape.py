@@ -161,8 +161,11 @@ class Shape:
                 w_i = a_shape[2]
 
                 c_o = b_shape[0]
-                f_h = b_shape[2]
-                f_w = b_shape[3]
+                # Filter: 4D [c_out, c_in, f_h, f_w] or 3D [c_out, f_h, f_w] (assume c_in=1)
+                if len(b_shape) == 4:
+                    f_h, f_w = b_shape[2], b_shape[3]
+                else:
+                    f_h, f_w = b_shape[1], b_shape[2]  # 3D: assume c_in=1
 
                 stride = term.cs[2]
                 padding = term.cs[3]
@@ -264,8 +267,11 @@ class Shape:
                 b_shape = copy(self.get_shape(b))
 
                 c_o = b_shape[0]
-                f_h = b_shape[2]
-                f_w = b_shape[3]
+                # Filter: 4D [c_out, c_in, f_h, f_w] or 3D [c_out, f_h, f_w] (assume c_in=1)
+                if len(b_shape) == 4:
+                    f_h, f_w = b_shape[2], b_shape[3]
+                else:
+                    f_h, f_w = b_shape[1], b_shape[2]  # 3D: assume c_in=1
                 h_i = a_shape[1]
                 w_i = a_shape[2]
 

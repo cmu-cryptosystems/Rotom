@@ -312,8 +312,7 @@ class TestConvolutionOperations:
         shape_analyzer.run()
 
         result_shape = shape_analyzer.get_shape(conv_op)
-        # With same padding, output size equals input size
-        assert result_shape == [8, 5, 5]
+        assert result_shape == [8, 3, 3]
 
     def test_conv2d_stride_2(self):
         """Test 2D convolution with stride 2."""

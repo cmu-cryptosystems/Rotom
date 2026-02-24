@@ -417,14 +417,23 @@ def gen_conv2d(term, cs_kernels, shapes):
 
         # Output layout: only output dims [channel, height, width] so n divides product
         output_dims = []
-        if c_o > 1:
-            output_dims.append(Dim(0, c_o, h_o_p2 * w_o_p2))
-        output_dims.append(Dim(1, h_o_p2, w_o_p2))
-        output_dims.append(Dim(2, w_o_p2, 1))
+        if stride == 1:
+            if c_o > 1:
+                output_dims.append(Dim(0, c_o, stride))
+            output_dims.append(Dim(1, h_o_p2, stride))
+            output_dims.append(Dim(2, w_o_p2, stride))
+        elif stride == 2:
+            if c_o > 1:
+                output_dims.append(Dim(0, c_o, 1))
+            output_dims.append(Dim(1, h_o_p2, 1))
+            output_dims.append(Dim(None, stride, 1, DimType.EMPTY))
+            output_dims.append(Dim(2, w_o_p2, 1))
+            output_dims.append(Dim(None, stride, 1, DimType.EMPTY))
+        else:
+            raise NotImplementedError("stride not supported: " + str(stride))
         output_layout = Layout(
             term, [], output_dims, a_kernel.layout.n, a_kernel.layout.secret
         )
-
         kernel = Kernel(KernelOp.CONV2D, [a_kernel, b_kernel], output_layout)
         output_kernels.add(kernel)
 
