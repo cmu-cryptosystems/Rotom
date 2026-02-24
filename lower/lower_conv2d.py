@@ -8,7 +8,11 @@ from ir.he import HEOp, HETerm
 from ir.kernel import KernelOp
 from lower.layout_cts import LayoutCiphertexts, create_layout_without_dims
 from lower.lower_util import find_sum_dim, rotate_and_sum
-from util.layout_util import convert_layout_to_mask, get_cts_by_dim, get_segment
+from util.layout_util import (
+    convert_layout_to_mask,
+    get_cts_by_dim,
+    get_segment,
+)
 from util.shape_util import get_term_shape
 
 
@@ -35,9 +39,11 @@ def lower_conv2d(env, kernel):
     pad_bottom = kernel.layout.term.cs[4][1]
     pad_left = kernel.layout.term.cs[4][2]
     pad_right = kernel.layout.term.cs[4][3]
+    stride = kernel.layout.term.cs[2]
 
     # calculate rotation amounts for input ciphertexts
     # assumes dim 1 and 2 are continuous and in the slot dimensions
+    # filter position (i,j) reads input at (h+i, w+j) for output (h,w); stride does not change these offsets
     rot_amts = []
     dim_map = []
     offset = 1
@@ -48,9 +54,6 @@ def lower_conv2d(env, kernel):
 
     dim_map = dim_map[::-1]
 
-    rot_amts = []
-
-    # find rotational offset from padding
     rot_offset = -pad_top * dim_map[0][2] - pad_left
 
     for i in range(b_shape[2]):
@@ -221,8 +224,4 @@ def lower_conv2d(env, kernel):
             mask_term = term * mask
             masked_cts[index] = mask_term
         layout_cts = LayoutCiphertexts(layout=layout_cts.layout, cts=masked_cts)
-    else:
-        # Update layout to output layout if no mask needed
-        layout_cts = LayoutCiphertexts(layout=layout_cts.layout, cts=layout_cts.cts)
-
     return layout_cts

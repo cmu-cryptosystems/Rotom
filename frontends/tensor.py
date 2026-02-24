@@ -567,12 +567,19 @@ class TensorTerm:
             w_o = (input_shape[2] - filter_shape[3]) // stride + 1
             output_shape = [filter_shape[0], h_o, w_o]
         elif padding == "same":
-            output_shape = [filter_shape[0], input_shape[1], input_shape[2]]
+            # Same padding: stride 1 -> output size = input size; stride > 1 -> ceil(H/stride) x ceil(W/stride)
+            if stride == 1:
+                output_shape = [filter_shape[0], input_shape[1], input_shape[2]]
+            else:
+                h_o = (input_shape[1] + stride - 1) // stride
+                w_o = (input_shape[2] + stride - 1) // stride
+                output_shape = [filter_shape[0], h_o, w_o]
 
         # pad indices based on padding
         if padding == "valid":
             pass
         elif padding == "same":
+            # Padding so that strided conv yields exactly h_o x w_o output
             pad_top = math.floor(
                 (stride * (output_shape[1] - 1) - input_shape[1] + filter_shape[2]) / 2
             )

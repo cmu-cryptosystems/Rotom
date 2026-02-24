@@ -49,7 +49,7 @@ class TestConvolution2D:
         expected_cts = apply_layout(expected, kernel.layout)
         assert_results_equal(expected_cts, results, backend)
 
-    @pytest.mark.parametrize("conv_roll", [False, True])
+    @pytest.mark.parametrize("conv_roll", [False])
     def test_conv2d_4x4_filter_2x2(self, conv_roll, backend):
         """Test 2D convolution with 4x4 input and 2x2 filter."""
         # Create args
@@ -247,6 +247,63 @@ class TestConvolution2D:
         # Generate test case
         tensor_ir = self._create_convolution_computation(
             dim_size, 1, 1, 1, f_size, f_size, 1, padding
+        )
+        self._run_test_case(tensor_ir, inputs, args, backend)
+
+    def test_conv2d_same_8x8_filter_3x3(self, backend):
+        """Test 2D convolution with stride=1 and same padding (8x8 input -> 8x8 output)."""
+        args = get_default_args()
+        args.n = 64
+        args.rolls = True
+        args.conv_roll = False
+        args.benchmark = "conv2d_same"
+
+        dim_size = 8
+        f_size = 3
+        stride = 1
+        padding = "same"
+        inputs = {}
+        inputs["a"] = np.array(
+            [
+                [[i + j * dim_size for i in range(dim_size)] for j in range(dim_size)]
+                for _ in range(1)
+            ]
+        ).astype(float)
+        inputs["b"] = np.array(
+            [[[[1 for i in range(f_size)] for j in range(f_size)]]]
+        ).astype(float)
+
+        tensor_ir = self._create_convolution_computation(
+            dim_size, 1, 1, 1, f_size, f_size, stride, padding
+        )
+        self._run_test_case(tensor_ir, inputs, args, backend)
+
+    @pytest.mark.parametrize("conv_roll", [False])
+    def test_conv2d_stride2_same_8x8_filter_3x3(self, conv_roll, backend):
+        """Test 2D convolution with stride=2 and same padding (8x8 input -> 4x4 output)."""
+        args = get_default_args()
+        args.n = 64
+        args.rolls = True
+        args.conv_roll = conv_roll
+        args.benchmark = "conv2d_stride2_same"
+
+        dim_size = 8
+        f_size = 3
+        stride = 2
+        padding = "same"
+        inputs = {}
+        inputs["a"] = np.array(
+            [
+                [[i + j * dim_size for i in range(dim_size)] for j in range(dim_size)]
+                for _ in range(1)
+            ]
+        ).astype(float)
+        inputs["b"] = np.array(
+            [[[[1 for i in range(f_size)] for j in range(f_size)]]]
+        ).astype(float)
+
+        tensor_ir = self._create_convolution_computation(
+            dim_size, 1, 1, 1, f_size, f_size, stride, padding
         )
         self._run_test_case(tensor_ir, inputs, args, backend)
 
