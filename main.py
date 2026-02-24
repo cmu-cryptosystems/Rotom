@@ -226,11 +226,7 @@ def main(args):
     )
 
     kernel = LayoutAssignment(tensor_ir, args).run()
-
-    for k in kernel.post_order():
-        print(k)
-    print()
-
+    
     # lower to circuit ir
     circuit_ir = Lower(kernel).run()
 
