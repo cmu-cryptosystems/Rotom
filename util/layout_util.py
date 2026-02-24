@@ -473,7 +473,6 @@ def mul(vec, n):
 def apply_layout(pt_tensor, layout):
     """apply a layout to a pt tensor"""
     layout_len = max(len(layout), layout.n)
-
     # get base_term indices
     dims = layout.get_dims()
     dim_indices = get_dim_indices(dims)
@@ -550,8 +549,7 @@ def apply_layout(pt_tensor, layout):
         ct = []
 
         for index in ct_indices:
-            # Use the tensor's actual dimensionality, not just the index length
-            # Pad index with 0s if needed for higher-dimensional tensors
+            # Pad index with 0 for dimensions not covered by layout (e.g. G group dim)
             effective_index = list(index)
             while len(effective_index) < pt_tensor_ndim:
                 effective_index.append(0)
@@ -561,36 +559,38 @@ def apply_layout(pt_tensor, layout):
                 ct.append(0)
                 continue
 
-            # Access tensor using the appropriate number of indices
-            try:
-                if pt_tensor_ndim == 0:
-                    value = pt_tensor.item()
-                elif pt_tensor_ndim == 1:
-                    value = pt_tensor[effective_index[0]]
-                elif pt_tensor_ndim == 2:
-                    value = pt_tensor[effective_index[0]][effective_index[1]]
-                elif pt_tensor_ndim == 3:
-                    value = pt_tensor[effective_index[0]][effective_index[1]][
-                        effective_index[2]
-                    ]
-                elif pt_tensor_ndim == 4:
-                    value = pt_tensor[effective_index[0]][effective_index[1]][
-                        effective_index[2]
-                    ][effective_index[3]]
-                else:
-                    raise NotImplementedError(
-                        f"tensors with {pt_tensor_ndim} dimensions are not supported"
-                    )
-
-                # Convert single-element arrays to scalars
-                if isinstance(value, np.ndarray) and value.ndim > 0 and value.size == 1:
-                    value = value.item()
-                elif isinstance(value, np.ndarray) and value.ndim == 0:
-                    value = value.item()
-
-                ct.append(value)
-            except (IndexError, TypeError):
+            if any(
+                effective_index[i] >= pt_tensor.shape[i] for i in range(pt_tensor_ndim)
+            ):
                 ct.append(0)
+                continue
+
+            # Access tensor using the appropriate number of indices
+            if pt_tensor_ndim == 0:
+                value = pt_tensor.item()
+            elif pt_tensor_ndim == 1:
+                value = pt_tensor[effective_index[0]]
+            elif pt_tensor_ndim == 2:
+                value = pt_tensor[effective_index[0]][effective_index[1]]
+            elif pt_tensor_ndim == 3:
+                value = pt_tensor[effective_index[0]][effective_index[1]][
+                    effective_index[2]
+                ]
+            elif pt_tensor_ndim == 4:
+                value = pt_tensor[effective_index[0]][effective_index[1]][
+                    effective_index[2]
+                ][effective_index[3]]
+            else:
+                raise NotImplementedError(
+                    f"tensors with {pt_tensor_ndim} dimensions are not supported"
+                )
+
+            # Convert single-element arrays to scalars
+            if isinstance(value, np.ndarray) and value.ndim > 0 and value.size == 1:
+                value = value.item()
+            elif isinstance(value, np.ndarray) and value.ndim == 0:
+                value = value.item()
+            ct.append(value)
 
         # this places cts in row-major order
         cts.append(ct)

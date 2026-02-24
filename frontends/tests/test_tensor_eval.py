@@ -378,6 +378,58 @@ class TestConvolutionEvaluation:
 
         np.testing.assert_array_equal(result, expected)
 
+    def test_conv2d_stride2_valid_evaluation(self):
+        """Test 2D convolution evaluation with stride=2 and valid padding."""
+        # 5x5 input, 2x2 filter -> (5-2)//2+1 = 2, so 2x2 output
+        input_tensor = TensorTerm.Tensor("input", [1, 5, 5], True)
+        filter_tensor = TensorTerm.Tensor("filter", [1, 1, 2, 2], False)
+        conv = TensorTerm.conv2d(input_tensor, filter_tensor, 2, "valid")
+
+        inputs = {
+            "input": np.array(
+                [
+                    [
+                        [0, 1, 2, 3, 4],
+                        [5, 6, 7, 8, 9],
+                        [10, 11, 12, 13, 14],
+                        [15, 16, 17, 18, 19],
+                        [20, 21, 22, 23, 24],
+                    ]
+                ]
+            ),
+            "filter": np.array([[[[1, 0], [0, 1]]]]),
+        }
+        result = conv.eval(inputs)
+        # Stride 2: positions (0,0), (0,2), (2,0), (2,2)
+        # (0,0): 0+6=6, (0,2): 2+8=10, (2,0): 10+16=26, (2,2): 12+18=30
+        expected = np.array([[[6, 10], [26, 30]]])
+        np.testing.assert_array_equal(result, expected)
+
+    def test_conv2d_stride2_same_evaluation(self):
+        """Test 2D convolution evaluation with stride=2 and same padding (output size = ceil(H/stride) x ceil(W/stride))."""
+        input_tensor = TensorTerm.Tensor("input", [1, 4, 4], True)
+        filter_tensor = TensorTerm.Tensor("filter", [1, 1, 2, 2], False)
+        conv = TensorTerm.conv2d(input_tensor, filter_tensor, 2, "same")
+
+        inputs = {
+            "input": np.array(
+                [
+                    [
+                        [1, 2, 3, 4],
+                        [5, 6, 7, 8],
+                        [9, 10, 11, 12],
+                        [13, 14, 15, 16],
+                    ]
+                ]
+            ),
+            "filter": np.array([[[[1, 0], [0, 0]]]]),
+        }
+        result = conv.eval(inputs)
+        # same padding with stride 2: output ceil(4/2)xceil(4/2) = 2x2
+        # i=0,j=0: patch (0,0)-(2,2) -> 1; i=0,j=1: (0,2)-(2,4) -> 3; i=1,j=0: (2,0)-(4,2) -> 9; i=1,j=1: (2,2)-(4,4) -> 11
+        expected = np.array([[[1, 3], [9, 11]]])
+        np.testing.assert_array_equal(result, expected)
+
 
 class TestComplexComputationEvaluation:
     """Test evaluation of complex tensor computations."""
