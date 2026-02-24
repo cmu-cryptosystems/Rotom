@@ -307,7 +307,6 @@ class TestConvolution2D:
         )
         self._run_test_case(tensor_ir, inputs, args, backend)
 
-
     # def test_conv2d_8x8_filter_4x4(self):
     #     TODO: Broken test
     #     """Test 2D convolution with 8x8 input and 4x4 filter (larger filter, power of 2)."""
