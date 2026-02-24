@@ -10,7 +10,6 @@ from lower.layout_cts import LayoutCiphertexts, create_layout_without_dims
 from lower.lower_util import find_sum_dim, rotate_and_sum
 from util.layout_util import (
     convert_layout_to_mask,
-    convert_layout_to_stride_mask,
     get_cts_by_dim,
     get_segment,
 )
