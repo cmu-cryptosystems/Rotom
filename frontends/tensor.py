@@ -674,8 +674,8 @@ class TensorTerm:
                                 row.append(input_tensor[in_c][x][y])
                             patch.append(row)
                         patch = np.array(patch)
-                        output_tensor[out_c][i][j] += int(
-                            np.sum(patch * filter_tensor[out_c])
+                        output_tensor[out_c][i][j] += np.sum(
+                            patch * filter_tensor[out_c]
                         )
 
         return output_tensor

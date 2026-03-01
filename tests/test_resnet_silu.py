@@ -131,11 +131,14 @@ class TestResNetOneLayer:
         args = get_default_args()
         args.n = 16
         args.rolls = True
-        args.conv_roll = True
         args.benchmark = "resnet_one_layer"
 
         expected = tensor_ir.eval(inputs)
         kernel = LayoutAssignment(tensor_ir, args).run()
+
+        for k in kernel.post_order():
+            print(k)
+        print()
         circuit_ir = Lower(kernel).run()
         assert circuit_ir is not None
 
