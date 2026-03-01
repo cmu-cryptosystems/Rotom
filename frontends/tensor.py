@@ -169,6 +169,9 @@ class TensorTerm:
                     self._str_cache = f"({self.cs[0]}[{self.cs[1]}])"
                 case TensorOp.CONV2D:
                     self._str_cache = f"(conv2d {str(self.cs[0])} {str(self.cs[1])})"
+                case TensorOp.POLY:
+                    func = self.cs[1] if len(self.cs) > 1 else "identity"
+                    self._str_cache = f"(poly {cs} {func!r})"
                 case _:
                     self._str_cache = f"({self.op} {cs})"
         return self._str_cache
@@ -353,24 +356,34 @@ class TensorTerm:
         """
         return TensorTerm(TensorOp.TRANSPOSE, [self], layout)
 
-    def Poly(self, layout=None):
-        """Apply polynomial approximation.
+    def poly(self, func=None, layout=None):
+        """Apply a polynomial or named function element-wise.
 
         Args:
+            func: Optional. One of:
+                - None or "identity": output = input
+                - callable: any Python function (x) -> array, same shape. Used for
+                  eval only; not serializable.
+                - "silu": SiLU (Swish) x * sigmoid(x), or a polynomial approximation
+                - ("batchnorm", mean_key, var_key, gamma_key, beta_key): BatchNorm
+                  with parameter names for inputs dict; eps=1e-5 used internally
+                - list or tuple of floats [c0, c1, c2, ...]: polynomial
+                  c0 + c1*x + c2*x^2 + ... applied element-wise
             layout (str, optional): Tensor layout string for the result
 
         Returns:
-            TensorTerm: A new tensor term representing polynomial approximation
+            TensorTerm: A new tensor term representing the Poly operation
 
         Example:
-            >>> b = a.Poly()  # Polynomial approximation of a
-            >>> c = a.Poly(layout="[0:4:1][1:4:1]")  # With layout
-
-        Note:
-            This is a placeholder, as polynomial approximation is not supported yet.
-            This will be replaced by a proper polynomial approximation implementation.
+            >>> b = a.poly()  # identity
+            >>> c = a.poly("silu")
+            >>> d = a.poly([0, 1, 0.1])  # x + 0.1*x^2
+            >>> e = x.poly(("batchnorm", "mean", "var", "gamma", "beta"))
+            >>> f = x.poly(lambda t: gamma * (t - mean) / np.sqrt(var + 1e-5) + beta)
         """
-        return TensorTerm(TensorOp.POLY, [self], layout)
+        if func is None:
+            func = "identity"
+        return TensorTerm(TensorOp.POLY, [self, func], layout)
 
     def reshape(self, dim, shape, layout=None):
         """Reshape the tensor.
@@ -468,6 +481,27 @@ class TensorTerm:
             >>> d = TensorTerm.conv2d(input, filter, 1, "same", layout="[0:32:1][1:32:1][2:64:1]")
         """
         return TensorTerm(TensorOp.CONV2D, [a, b, stride, padding], layout)
+
+    @staticmethod
+    def batchnorm(x, mean_key, var_key, gamma_key, beta_key, eps=1e-5):
+        """BatchNorm via Poly: gamma * (x - mean) / sqrt(var + eps) + beta.
+
+        Parameters are looked up from the inputs dict by key. Use poly() with
+        func=("batchnorm", mean_key, var_key, gamma_key, beta_key[, eps]) for eval.
+
+        Args:
+            x (TensorTerm): Input tensor
+            mean_key (str): Key for mean in inputs
+            var_key (str): Key for variance in inputs
+            gamma_key (str): Key for gamma (scale) in inputs
+            beta_key (str): Key for beta (shift) in inputs
+            eps (float): Small constant for numerical stability (default 1e-5)
+
+        Returns:
+            TensorTerm: Poly term that evaluates to BatchNorm(x) when eval(inputs) is called
+        """
+        func = ("batchnorm", mean_key, var_key, gamma_key, beta_key, eps)
+        return TensorTerm(TensorOp.POLY, [x, func])
 
     def round_to_ceiling_power_of_2(self, n):
         """Round a number up to the next power of 2.
@@ -580,17 +614,33 @@ class TensorTerm:
             pass
         elif padding == "same":
             # Padding so that strided conv yields exactly h_o x w_o output
-            pad_top = math.floor(
-                (stride * (output_shape[1] - 1) - input_shape[1] + filter_shape[2]) / 2
+            pad_top = max(
+                0,
+                math.floor(
+                    (stride * (output_shape[1] - 1) - input_shape[1] + filter_shape[2])
+                    / 2
+                ),
             )
-            pad_bot = math.ceil(
-                (stride * (output_shape[1] - 1) - input_shape[1] + filter_shape[2]) / 2
+            pad_bot = max(
+                0,
+                math.ceil(
+                    (stride * (output_shape[1] - 1) - input_shape[1] + filter_shape[2])
+                    / 2
+                ),
             )
-            pad_left = math.floor(
-                (stride * (output_shape[2] - 1) - input_shape[2] + filter_shape[3]) / 2
+            pad_left = max(
+                0,
+                math.floor(
+                    (stride * (output_shape[2] - 1) - input_shape[2] + filter_shape[3])
+                    / 2
+                ),
             )
-            pad_right = math.ceil(
-                (stride * (output_shape[2] - 1) - input_shape[2] + filter_shape[3]) / 2
+            pad_right = max(
+                0,
+                math.ceil(
+                    (stride * (output_shape[2] - 1) - input_shape[2] + filter_shape[3])
+                    / 2
+                ),
             )
 
             padded_input_tensor = []
@@ -680,7 +730,8 @@ class TensorTerm:
             case TensorOp.MUL:
                 return env[self.cs[0]] * env[self.cs[1]]
             case TensorOp.SUM:
-                return np.sum(env[self.cs[0]], axis=self.cs[1], keepdims=True)
+                # keepdims=False so eval matches shape analysis (which drops reduced dim)
+                return np.sum(env[self.cs[0]], axis=self.cs[1], keepdims=False)
             case TensorOp.MATMUL:
                 return env[self.cs[0]] @ env[self.cs[1]]
             case TensorOp.TRANSPOSE:
@@ -724,11 +775,10 @@ class TensorTerm:
                 shape = {}
                 for i, s in enumerate(tensor.shape):
                     shape[i] = s
+                del shape[self.cs[1]]  # drop the dimension we're reshaping
                 for k, v in self.cs[2].items():
                     shape[k] = self.round_to_ceiling_power_of_2(v)
-                shape_list = []
-                for i in range(len(shape)):
-                    shape_list.append(shape[i])
+                shape_list = [shape[k] for k in sorted(shape.keys())]
                 return tensor.reshape(shape_list)
             case TensorOp.PERMUTE:
                 tensor = env[self.cs[0]]
@@ -736,6 +786,68 @@ class TensorTerm:
             case TensorOp.RESCALE:
                 scale_value = 2 ** self.cs[1]
                 return env[self.cs[0]] / scale_value
+            case TensorOp.POLY:
+                x = env[self.cs[0]]
+                func = self.cs[1] if len(self.cs) > 1 else "identity"
+                if callable(func):
+                    return np.asarray(func(x))
+                if func == "identity":
+                    return x
+                if func == "silu":
+                    return x * (1.0 / (1.0 + np.exp(-np.clip(x, -20, 20))))
+                if (
+                    isinstance(func, tuple)
+                    and len(func) >= 5
+                    and func[0] == "batchnorm"
+                ):
+                    _, mean_key, var_key, gamma_key, beta_key = func[:5]
+                    eps = float(func[5]) if len(func) > 5 else 1e-5
+                    mean = np.asarray(inputs[mean_key])
+                    var = np.asarray(inputs[var_key])
+                    gamma = np.asarray(inputs[gamma_key])
+                    beta = np.asarray(inputs[beta_key])
+                    # Infer channel dim: last for 2D (N,C), first for 3D+ (C,H,W)
+                    if x.ndim >= 3:
+                        ch_dim = x.shape[0]
+                        bc_shape = (ch_dim,) + (1,) * (x.ndim - 1)
+                    elif x.ndim == 2:
+                        ch_dim = x.shape[-1]
+                        bc_shape = (1, ch_dim)
+                    else:
+                        ch_dim = mean.size
+                        bc_shape = None
+                    if ch_dim > mean.size:
+                        pad_len = ch_dim - mean.size
+                        mean = np.concatenate(
+                            [mean, np.zeros(pad_len, dtype=mean.dtype)]
+                        )
+                        var = np.concatenate([var, np.ones(pad_len, dtype=var.dtype)])
+                        gamma = np.concatenate(
+                            [gamma, np.ones(pad_len, dtype=gamma.dtype)]
+                        )
+                        beta = np.concatenate(
+                            [beta, np.zeros(pad_len, dtype=beta.dtype)]
+                        )
+                    if bc_shape is not None:
+                        mean = mean.reshape(bc_shape)
+                        var = var.reshape(bc_shape)
+                        gamma = gamma.reshape(bc_shape)
+                        beta = beta.reshape(bc_shape)
+                    inv_std = 1.0 / np.sqrt(var + eps)
+                    return gamma * (x - mean) * inv_std + beta
+                if isinstance(func, (list, tuple)) and len(func) > 0:
+                    try:
+                        coeffs = [float(c) for c in func]
+                    except (TypeError, ValueError):
+                        coeffs = None
+                    if coeffs is not None:
+                        out = np.zeros_like(x, dtype=np.float64)
+                        for i, c in enumerate(coeffs):
+                            out = out + c * (x.astype(np.float64) ** i)
+                        return out
+                raise NotImplementedError(
+                    f"Poly func {func!r} not implemented for eval"
+                )
             case _:
                 raise NotImplementedError(self.op)
 

@@ -430,13 +430,25 @@ class TestEdgeCases:
         padded_shape = shape_analyzer.get_padded_shape(a)
         assert padded_shape == [128, 256]  # 100 -> 128, 200 -> 256
 
+    def test_poly_preserves_shape(self):
+        """Test that POLY preserves input shape in shape analysis."""
+        a = TensorTerm(TensorOp.TENSOR, ["a", [3, 4], True])
+        poly_op = TensorTerm(TensorOp.POLY, [a, "identity"])
+
+        shape_analyzer = Shape(poly_op)
+        shape_analyzer.run()
+
+        assert shape_analyzer.get_shape(poly_op) == [3, 4]
+        assert shape_analyzer.get_padded_shape(poly_op) == [4, 4]
+
     def test_unsupported_operation(self):
         """Test that unsupported operations raise NotImplementedError."""
+        # Use a fake op value that is not in TensorOp to trigger NotImplementedError
         a = TensorTerm(TensorOp.TENSOR, ["a", [3, 4], True])
-        # Create an operation with an unsupported TensorOp
         unsupported_op = TensorTerm(
-            TensorOp.POLY, [a]
-        )  # POLY is not implemented in shape analysis
+            TensorOp.TENSOR, ["a", [3, 4], True]
+        )  # We need an op that doesn't exist in shape - use a custom term
+        unsupported_op.op = "UnsupportedOp"
 
         shape_analyzer = Shape(unsupported_op)
 

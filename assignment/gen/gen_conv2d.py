@@ -353,9 +353,9 @@ def gen_conv2d(term, cs_kernels, shapes):
     output_kernels = set()
     for a_kernel in cs_kernels:
         # enforce row-major layout
-        # sort dims by dim, ascending order
+        # sort dims by dim, ascending order (None last)
         a_dims = a_kernel.layout.get_dims().copy()
-        a_dims.sort(key=lambda x: x.dim)
+        a_dims.sort(key=lambda x: (x.dim is None, x.dim if x.dim is not None else 0))
         if sorted(a_dims) != a_kernel.layout.get_dims():
             continue
 

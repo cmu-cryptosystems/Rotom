@@ -113,10 +113,14 @@ def traverse_ct_dims(ct_dims):
 
     output_offsets = []
     for offset in indices:
-        # Get tile size for each dimension, default to 1 if not found
+        for dim in offset:
+            if dim not in tile_sizes:
+                raise ValueError(
+                    f"Strassen tile size for dimension {dim} not found (tile_sizes keys: "
+                    f"{list(tile_sizes.keys())}). Do not default silently."
+                )
         dim0_tile = tile_sizes.get(0, 1)
         dim1_tile = tile_sizes.get(1, 1)
-
         dim0_start = offset.get(0, 0)
         dim1_start = offset.get(1, 0)
 

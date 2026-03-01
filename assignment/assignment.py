@@ -26,6 +26,7 @@ from assignment.gen.gen_block_matmul import gen_block_matmul
 from assignment.gen.gen_conv2d import gen_conv2d, gen_conv2d_roll
 from assignment.gen.gen_index import gen_index
 from assignment.gen.gen_permute import gen_permute
+from assignment.gen.gen_poly import gen_poly
 from assignment.gen.gen_rescale import gen_rescale
 from assignment.gen.gen_reshape import gen_reshape
 from assignment.gen.gen_strassens import gen_strassens
@@ -171,7 +172,6 @@ class LayoutAssignment:
             case TensorOp.TRANSPOSE:
                 kernels = gen_transpose(term, cs_kernels[0])
             case TensorOp.CONV2D:
-                assert self.roll_flag
                 cs_shapes = self.get_unpadded_cs_shapes(term)
                 if self.conv_roll:
                     kernels = gen_conv2d_roll(term, cs_kernels[0], cs_shapes)
@@ -188,7 +188,7 @@ class LayoutAssignment:
             case TensorOp.BLOCK_MATMUL:
                 kernels = gen_block_matmul(term, cs_kernels)
             case TensorOp.POLY:
-                raise NotImplementedError(term.op)
+                kernels = gen_poly(term, cs_kernels[0])
             case _:
                 raise NotImplementedError(term.op)
         assert kernels

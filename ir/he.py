@@ -74,7 +74,7 @@ class HETerm:
         hash: Computed hash for term identity and comparison
     """
 
-    def __init__(self, op, cs, secret, metadata=""):
+    def __init__(self, op, cs, secret, metadata="", poly_func=None):
         """
         Create a homomorphic encryption term.
 
@@ -83,6 +83,9 @@ class HETerm:
             cs: List of child terms (operands)
             secret: Whether this term contains secret data
             metadata: Additional metadata string
+            poly_func: For POLY only: the polynomial descriptor from the tensor term
+                (e.g. "identity", "silu", ("batchnorm", ...), or list of coeffs).
+                Used by the toy backend to apply the actual function.
 
         Raises:
             ValueError: If cs is a tuple instead of a list
@@ -91,6 +94,7 @@ class HETerm:
         self.op = op
         self.cs = cs
         self.metadata = metadata
+        self.poly_func = poly_func if op == HEOp.POLY else None
 
         assert isinstance(secret, bool)
         self.secret = secret
@@ -106,6 +110,8 @@ class HETerm:
             or self.op == HEOp.PUNCTURED_PACK
         ):
             self.hash = hash(f"{self.op}:{cs_hashes}:{self.metadata}")
+        elif self.op == HEOp.POLY and self.poly_func is not None:
+            self.hash = hash(f"{self.op}:{cs_hashes}:{repr(self.poly_func)}")
         else:
             self.hash = hash(f"{self.op}:{cs_hashes}")
 

@@ -130,7 +130,13 @@ class Shape:
                     c_shape = list(a_shape[:-1]) + [1]
                 else:
                     # ND × ND: standard batched matmul
-                    assert a_shape[-1] == b_shape[-2]
+                    assert a_shape[-1] == b_shape[-2], (
+                        f"MATMUL padded inner dim mismatch: left padded_shape={a_shape} "
+                        f"(last={a_shape[-1]}), right padded_shape={b_shape} "
+                        f"(second-to-last={b_shape[-2]}). "
+                        f"Left get_shape={self.get_shape(term.cs[0])}, "
+                        f"right get_shape={self.get_shape(term.cs[1])}."
+                    )
                     c_shape = list(a_shape[:-1]) + list(b_shape[:-2]) + [b_shape[-1]]
 
                 return c_shape
@@ -148,7 +154,14 @@ class Shape:
                 return a_shape
             case TensorOp.RESHAPE:
                 a_shape = copy(self.padded_shapes[term.cs[0]])
-                del a_shape[term.cs[1]]
+                dim_to_del = term.cs[1]
+                if dim_to_del >= len(a_shape):
+                    raise ValueError(
+                        f"RESHAPE: dimension to delete {dim_to_del} out of range for "
+                        f"input padded shape (rank {len(a_shape)}): {a_shape}. "
+                        "Use a dimension index that exists."
+                    )
+                del a_shape[dim_to_del]
                 return a_shape + [
                     round_to_ceiling_power_of_2(s) for s in term.cs[2].values()
                 ]
@@ -201,11 +214,16 @@ class Shape:
             case TensorOp.SUM | TensorOp.PRODUCT:
                 a_shape = copy(self.padded_shapes[term.cs[0]])
                 dim_idx = term.cs[1]
-                # Remove the dimension being reduced over
+                if dim_idx >= len(a_shape):
+                    raise ValueError(
+                        f"SUM/PRODUCT: reduction dimension {dim_idx} out of range for "
+                        f"input padded shape (rank {len(a_shape)}): {a_shape}. "
+                        "After a prior sum the rank is reduced; use the remaining dimension index (e.g. sum(1) twice for two reductions)."
+                    )
                 result_shape = a_shape[:dim_idx] + a_shape[dim_idx + 1 :]
                 return result_shape
-            case TensorOp.RESCALE:
-                # Rescale preserves the shape of the input tensor
+            case TensorOp.RESCALE | TensorOp.POLY:
+                # Preserves the shape of the input tensor
                 return copy(self.padded_shapes[term.cs[0]])
             case _:
                 raise NotImplementedError(term.op)
@@ -302,12 +320,16 @@ class Shape:
                 shape_map = {}
                 for i, shape in enumerate(a_shape):
                     shape_map[i] = shape
-                del shape_map[term.cs[1]]
+                dim_to_del = term.cs[1]
+                if dim_to_del not in shape_map:
+                    raise ValueError(
+                        f"RESHAPE: dimension to delete {dim_to_del} not in input shape "
+                        f"(rank {len(a_shape)}): {a_shape}. Use a dimension index that exists."
+                    )
+                del shape_map[dim_to_del]
                 for k, v in term.cs[2].items():
                     shape_map[k] = v
-                new_shape = []
-                for i in range(len(shape_map)):
-                    new_shape.append(shape_map[i])
+                new_shape = [shape_map[k] for k in sorted(shape_map.keys())]
                 return new_shape
             case TensorOp.PERMUTE:
                 a = term.cs[0]
@@ -332,9 +354,16 @@ class Shape:
                 a = term.cs[0]
                 a_shape = copy(self.get_shape(a))
                 dim_idx = term.cs[1]
-                # Remove the dimension being reduced over
+                if dim_idx >= len(a_shape):
+                    raise ValueError(
+                        f"SUM/PRODUCT: reduction dimension {dim_idx} out of range for "
+                        f"input shape (rank {len(a_shape)}): {a_shape}. "
+                        "After a prior sum the rank is reduced; use the remaining dimension index."
+                    )
                 result_shape = a_shape[:dim_idx] + a_shape[dim_idx + 1 :]
                 return result_shape
+            case TensorOp.POLY:
+                return copy(self.get_shape(term.cs[0]))
             case _:
                 raise NotImplementedError(term.op)
 

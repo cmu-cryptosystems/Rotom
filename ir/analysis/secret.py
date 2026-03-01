@@ -101,6 +101,7 @@ class Secret:
             case (
                 TensorOp.TRANSPOSE
                 | TensorOp.SUM
+                | TensorOp.POLY
                 | TensorOp.RESHAPE
                 | TensorOp.PERMUTE
                 | TensorOp.INDEX

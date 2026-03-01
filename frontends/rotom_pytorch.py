@@ -148,14 +148,10 @@ class Tensor:
     ):
         """Sum along dimension."""
         if dim is None:
-            # Sum all dimensions
+            # Sum all dimensions: repeatedly sum over dimension 0 so shape analysis and eval agree (no keepdims).
             result = self
-            for d in range(len(self.shape)):
-                result = result.sum(d, keepdim=True, layout=layout)
-            if not keepdim:
-                # For now, return the result with keepdim=True since squeeze is not implemented
-                # TODO: Implement squeeze and then use it here
-                pass
+            for _ in range(len(self.shape)):
+                result = result.sum(0, keepdim=keepdim, layout=layout)
             return result
 
         result_term = self._tensor_term.sum(dim, layout=layout)
