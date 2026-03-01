@@ -168,7 +168,7 @@ def run_benchmark_or_microbenchmark(args):
         # Run backend with result checking
         runtime = 0
         if args.backend.lower() == "toy":
-            results = Toy(circuit_ir, inputs, args, root_kernel=kernel).run()
+            results = Toy(circuit_ir, inputs, args).run()
             check_results(tensor_ir, inputs, kernel, results, runtime, args)
         elif args.backend.lower() == "ckks":
             runtime, results = CKKS(circuit_ir, inputs, args).run()

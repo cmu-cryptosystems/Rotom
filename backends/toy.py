@@ -249,7 +249,6 @@ class Toy:
                 raise NotImplementedError(term.op)
 
     def run(self):
-        all_results = {}  # term -> list of result vectors (when root_kernel is set)
         results = []
         for term, cts in self.circuit_ir.items():
             results = []
@@ -273,22 +272,12 @@ class Toy:
             else:
                 expected = apply_layout(eval_result, term.layout)
 
-            if self.root_kernel is not None:
-                all_results[term] = list(results)
-
             # skip checks for split rolls, replicate
             if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE]:
                 continue
 
-            # When root_kernel is set, only value-check the root term (others may differ by layout/ordering)
-            if self.root_kernel is not None and term != self.root_kernel:
-                continue
-
-            # Check if values are close instead of exact equality.
-            # Use looser tolerance when root has POLY with batchnorm (toy uses single-channel params per vector).
+            # Check if values are close instead of exact equality
             rtol, atol = 1e-2, 1e-2
-            if self.root_kernel is not None and term == self.root_kernel:
-                rtol, atol = 1e-1, 1e-1
             all_close = True
             max_diff = 0.0
 
@@ -317,12 +306,6 @@ class Toy:
 
             assert all_close, f"Values not close enough. Max diff: {max_diff}"
 
-        if self.root_kernel is not None:
-            if self.root_kernel not in all_results:
-                raise ValueError(
-                    f"root_kernel not in circuit_ir; keys: {list(self.circuit_ir.keys())}"
-                )
-            return all_results[self.root_kernel]
         return results
 
     def fuzz(self):

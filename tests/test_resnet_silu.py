@@ -139,7 +139,7 @@ class TestResNetOneLayer:
         circuit_ir = Lower(kernel).run()
         assert circuit_ir is not None
 
-        backend = Toy(circuit_ir, inputs, args, root_kernel=kernel)
+        backend = Toy(circuit_ir, inputs, args)
         results = backend.run()
 
         # Check toy output matches expected when layout produces same total size; else at least finite.
