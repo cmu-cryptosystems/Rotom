@@ -294,23 +294,29 @@ def add_replicated_dimensions(a_shape, b_shape):
     # We need to replicate for C_in (input channels) and spatial dims (H_f, W_f)
     # C_out (output channels) is handled separately in the output layout
 
-    replicated_dims = {}
+    replicated_dims = []
+    b_dims = []
+    c_out = b_shape[0] # Number of output channels
     c_in = b_shape[1]  # Number of input channels
     h_f = b_shape[2]  # Filter height
     w_f = b_shape[3]  # Filter width
 
-    # Replicate for input channels (but only if we need different filters per channel)
+    if c_out > 1:
+        replicated_dims.append(Dim(None, c_out, c_in * a_shape[1] * a_shape[2]))
+        b_dims.append(Dim(0, c_out, 1))
     if c_in > 1:
-        replicated_dims[1] = Dim(None, c_in, a_shape[1] * a_shape[2])
+        replicated_dims.append(Dim(None, c_in, a_shape[1] * a_shape[2]))
+        b_dims.append(Dim(1, c_in, 1))
 
     # Replicate for spatial dimensions based on INPUT shape
     if h_f > 1:
-        replicated_dims[2] = Dim(None, h_f, a_shape[2])
+        replicated_dims.append(Dim(None, h_f, a_shape[2]))
+        b_dims.append(Dim(2, h_f, 1))
 
     if w_f > 1:
-        replicated_dims[3] = Dim(None, w_f, 1)
-
-    return replicated_dims
+        replicated_dims.append(Dim(None, w_f, 1))
+        b_dims.append(Dim(3, w_f, 1))
+    return replicated_dims, b_dims
 
 
 def gen_conv2d(term, cs_kernels, shapes):
@@ -352,49 +358,36 @@ def gen_conv2d(term, cs_kernels, shapes):
 
     output_kernels = set()
     for a_kernel in cs_kernels:
-        # enforce row-major layout
-        # sort dims by dim, ascending order (None last)
-        a_dims = a_kernel.layout.get_dims().copy()
-        a_dims.sort(key=lambda x: (x.dim is None, x.dim if x.dim is not None else 0))
-        if sorted(a_dims) != a_kernel.layout.get_dims():
-            continue
-
         # assumes that a layout does not have any rolls applied to it
         if a_kernel.layout.rolls:
             continue
 
+        # guarantee that the a_kernel is in row-major order
+        a_dims = a_kernel.layout.get_dims()
+        a_dims.sort(key=lambda x: x.dim)
+        if a_dims != a_kernel.layout.get_dims():
+            continue
+
         # add replication dimensions to the a_kernel
-        replicated_dims = add_replicated_dimensions(a_shape, b_shape)
-
-        for dim in replicated_dims:
-            a_kernel = apply_replication(term.cs[0], a_kernel, replicated_dims[dim])
-
+        replicated_dims, b_dims = add_replicated_dimensions(a_shape, b_shape)
+        for dim in replicated_dims[::-1]:
+            a_kernel = apply_replication(term.cs[0], a_kernel, dim)
+    
         # since b is public, we can create a cs_kernel for b
         # and add metada information to help with packing the weights
-
-        # if a dim is None, then b should be either the channel dimension or filter dimension
-        # if a dim is >0, then b should be a repeated dimension
-        b_dims = []
-        b_index_order = []
         for dim in a_kernel.layout.get_dims():
-            if dim.dim == 1:
-                b_index_order.append(2)
-            if dim.dim == 2:
-                b_index_order.append(3)
+            if dim.dim is not None:
+                b_dims.append(Dim(None, dim.extent, 1))
 
-        b_dim_index = 0
-        r_offset = 1
-        # TODO: maybe use a dim_map to track extents instead
-        for dim in a_kernel.layout.get_dims():
-            if dim.dim is None and dim.dim_type == DimType.FILL:
-                b_dims.append(Dim(b_index_order[b_dim_index], dim.extent, 1))
-                b_dim_index += 1
-            elif dim.dim_type == DimType.FILL:
-                b_dims.append(Dim(None, dim.extent, r_offset))
-                r_offset *= dim.extent
-
+        assert len(b_dims) == len(a_kernel.layout.get_dims())
+           
         b_layout = Layout(b_term, [], b_dims, a_kernel.layout.n, False)
         b_kernel = Kernel(KernelOp.PUNCTURED_TENSOR, [], b_layout)
+
+        print(a_kernel)
+        print(b_kernel)
+
+
 
         # Output spatial size (depends on stride and padding)
         stride = term.cs[2]
@@ -417,24 +410,33 @@ def gen_conv2d(term, cs_kernels, shapes):
 
         # Output layout: only output dims [channel, height, width] so n divides product
         output_dims = []
-        if stride == 1:
-            if c_o > 1:
-                output_dims.append(Dim(0, c_o, stride))
-            output_dims.append(Dim(1, h_o_p2, stride))
-            output_dims.append(Dim(2, w_o_p2, stride))
-        elif stride == 2:
-            if c_o > 1:
-                output_dims.append(Dim(0, c_o, 1))
-            output_dims.append(Dim(1, h_o_p2, 1))
-            output_dims.append(Dim(None, stride, 1, DimType.EMPTY))
-            output_dims.append(Dim(2, w_o_p2, 1))
-            output_dims.append(Dim(None, stride, 1, DimType.EMPTY))
-        else:
-            raise NotImplementedError("stride not supported: " + str(stride))
+        for a_dim, b_dim in zip(copy(a_kernel.layout.get_dims()), copy(b_dims)):
+            if a_dim.dim_type == DimType.EMPTY:
+                output_dims.append(Dim(None, a_dim.extent, 1, DimType.EMPTY))
+            elif a_dim.dim in [0] or b_dim.dim in [1, 2, 3]:
+                # summation dimension (input channel or filter dims)
+                output_dims.append(Dim(None, a_dim.extent, 1, DimType.EMPTY))
+            elif a_dim.dim is None and b_dim.dim == 0:
+                # output channels only (b dims 1,2,3 are input channels and filter = summation)
+                output_dims.append(b_dim)
+            elif a_dim.dim is not None and b_dim.dim is None:
+                if stride == 1:
+                    output_dims.append(Dim(a_dim.dim, h_o_p2 if a_dim.dim == 1 else w_o_p2, 1))
+                elif stride == 2:
+                    output_dims.append(Dim(a_dim.dim, h_o_p2 if a_dim.dim == 1 else w_o_p2, 1))
+                    output_dims.append(Dim(None, stride, 1, DimType.EMPTY))
+                else:
+                    raise NotImplementedError("stride not supported: " + str(stride))
+            else:
+                output_dims.append(Dim(a_dim.dim, a_dim.extent, 1, DimType.FILL))
+          
         output_layout = Layout(
             term, [], output_dims, a_kernel.layout.n, a_kernel.layout.secret
         )
         kernel = Kernel(KernelOp.CONV2D, [a_kernel, b_kernel], output_layout)
         output_kernels.add(kernel)
+
+        print(f"kernel: {kernel}")
+        print()
 
     return output_kernels

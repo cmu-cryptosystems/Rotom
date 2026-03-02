@@ -62,7 +62,7 @@ def lower_conv2d(env, kernel):
             rot_1 = j * dim_map[1][2]
             rot_amts.append(rot_0 + rot_1 + rot_offset)
 
-    masks = []
+    filter_masks = []
     for i in range(b_shape[2]):
         for j in range(b_shape[3]):
             rot_0 = i * dim_map[0][2]
@@ -79,7 +79,19 @@ def lower_conv2d(env, kernel):
                 for l in range(segment_1):
                     if not 0 <= l + rot_1 - pad_left < segment_1:
                         mask[k * segment_1 + l] = 0
-            masks.append(mask)
+            filter_masks.append(mask)
+
+    # Replicate filter masks for each CT in b layout - use actual layout num_ct
+    num_filter_positions = b_shape[2] * b_shape[3]
+    b_num_cts = kernel.cs[1].layout.num_ct()
+    b_ct_dims = kernel.cs[1].layout.ct_dims
+    inner_stride = 1
+    if b_ct_dims and b_ct_dims[-1].dim is None:
+        inner_stride = b_ct_dims[-1].extent
+    masks = [
+        filter_masks[(ct_idx // inner_stride) % num_filter_positions]
+        for ct_idx in range(b_num_cts)
+    ]
 
     kernel.cs[1].layout.term.cs.append(masks)
     kernel.cs[1].layout.term.cs.append(rot_amts)
@@ -127,26 +139,33 @@ def lower_conv2d(env, kernel):
             a_rot_cs.append(a_cs[i] << rot_amts[i])
 
     # calculate the multiplications between ct
+    # Create products for all b positions; a_rot depends only on filter (i,j)
+    # b layout order: c_out, c_in, f_h, f_w, (R?) - filter dims 2,3 vary before R
+    f_h, f_w = b_shape[2], b_shape[3]
+    num_filter_positions = f_h * f_w
+    b_ct_dims = kernel.cs[1].layout.ct_dims
+    # Stride to skip within a filter position (e.g. R dim extent)
+    inner_stride = 1
+    if b_ct_dims and b_ct_dims[-1].dim is None:
+        inner_stride = b_ct_dims[-1].extent
     cts = {}
-    for i, (a, b) in enumerate(zip(a_rot_cs, b_cs[: len(a_rot_cs)])):
-        mul_term = a * b
-        cts[i] = mul_term
+    for b_idx, b_ct in enumerate(b_cs):
+        filter_idx = (b_idx // inner_stride) % num_filter_positions
+        rot_idx = min(filter_idx, len(a_rot_cs) - 1)
+        cts[b_idx] = a_rot_cs[rot_idx] * b_ct
 
-    # Create initial layout_cts with input layout
-    layout_cts = LayoutCiphertexts(layout=kernel.cs[0].layout, cts=cts)
+    # Use b layout for layout_cts - it has separate dims (c_out, c_in, f_h, f_w)
+    # so we can sum over c_in and filter dims while keeping c_out separate.
+    # a layout may merge these into [R:72:1] which would sum over c_out incorrectly.
+    # cts keys follow b_cs order which matches b layout.
+    layout_cts = LayoutCiphertexts(layout=kernel.cs[1].layout, cts=cts)
 
-    # OPTIMIZATION: Sum all filter position CTs together first (just additions, no rotations)
-    # After multiplication, we have 9 CTs (one per filter position)
-    # These should be summed to 1 CT using only additions
-    # Then we sum across channels (slot dimension) with 3 rotations
-
-    # Sum all None dimensions (filter dimensions) in ciphertext dimensions
-    # These correspond to filter positions and should be summed together
-    # Check which None dimensions exist in the layout
+    # Sum over c_in (dim 1), filter (dims 2,3), and R - keep c_out (dim 0) separate
+    # b layout: [0:4:1][1:2:1][2:3:1][3:3:1][R:2:1] = c_out, c_in, f_h, f_w, R
     filter_ct_dims = [
         dim
         for dim in layout_cts.layout.ct_dims
-        if dim.dim is None and dim.dim_type == DimType.FILL
+        if (dim.dim is None or dim.dim != 0) and dim.dim_type == DimType.FILL
     ]
     for ct_sum_dim in filter_ct_dims:
         if ct_sum_dim not in layout_cts.layout.ct_dims:
@@ -168,6 +187,7 @@ def lower_conv2d(env, kernel):
     # find summing dimension for input channels
     # the sum dimension should be the 0th dimension of kernel.cs[0]
     # the sum dimension also should be the 0th and 1st dimension of kernel.cs[1]
+
     sum_dims = [(0, 0), (0, None)]
     for sum_dim in sum_dims:
         ct_sum_dims, slot_sum_dims = find_sum_dim(
@@ -196,7 +216,15 @@ def lower_conv2d(env, kernel):
 
         # sum together slot dimensions per ciphertext
         for slot_sum_dim in slot_sum_dims:
-            segment = get_segment(slot_sum_dim, layout_cts.layout.slot_dims)
+            # slot_sum_dim is from input layout; use input if not in current layout
+            slot_dims = (
+                layout_cts.layout.slot_dims
+                if slot_sum_dim in layout_cts.layout.slot_dims
+                else kernel.cs[0].layout.slot_dims
+            )
+            if slot_sum_dim not in slot_dims:
+                continue
+            segment = get_segment(slot_sum_dim, slot_dims)
             extent = segment[1]
             mul_offset = segment[2]
             summed_cts = {}
