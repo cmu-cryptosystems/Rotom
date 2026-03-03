@@ -10,7 +10,6 @@ from frontends.tensor import TensorTerm
 def _conv2d_term(name, in_ch, out_ch, k, inputs, stride=1, padding="same"):
     """Create conv2d term and register its weights in inputs."""
     w_name = f"{name}_w"
-    inputs[w_name] = np.random.randn(out_ch, in_ch, k, k) * 0.1
     w_term = TensorTerm.Tensor(w_name, [out_ch, in_ch, k, k], False)
     return lambda x: TensorTerm.conv2d(x, w_term, stride, padding)
 

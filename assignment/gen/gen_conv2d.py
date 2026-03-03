@@ -304,6 +304,7 @@ def add_replicated_dimensions(a_shape, b_shape):
     if c_out > 1:
         replicated_dims.append(Dim(None, c_out, c_in * a_shape[1] * a_shape[2]))
         b_dims.append(Dim(0, c_out, 1))
+
     if c_in > 1:
         replicated_dims.append(Dim(None, c_in, a_shape[1] * a_shape[2]))
         b_dims.append(Dim(1, c_in, 1))
@@ -384,17 +385,11 @@ def gen_conv2d(term, cs_kernels, shapes):
         b_layout = Layout(b_term, [], b_dims, a_kernel.layout.n, False)
         b_kernel = Kernel(KernelOp.PUNCTURED_TENSOR, [], b_layout)
 
-        print(a_kernel)
-        print(b_kernel)
-
-
-
         # Output spatial size (depends on stride and padding)
         stride = term.cs[2]
         padding = term.cs[3]
         h_i, w_i = a_shape[1], a_shape[2]
         f_h, f_w = b_shape[2], b_shape[3]
-        c_o = b_shape[0]
         if padding == "valid":
             h_o = (h_i - f_h) // stride + 1
             w_o = (w_i - f_w) // stride + 1
@@ -435,8 +430,5 @@ def gen_conv2d(term, cs_kernels, shapes):
         )
         kernel = Kernel(KernelOp.CONV2D, [a_kernel, b_kernel], output_layout)
         output_kernels.add(kernel)
-
-        print(f"kernel: {kernel}")
-        print()
-
+        
     return output_kernels

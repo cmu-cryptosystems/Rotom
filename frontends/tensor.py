@@ -674,8 +674,11 @@ class TensorTerm:
                                 row.append(input_tensor[in_c][x][y])
                             patch.append(row)
                         patch = np.array(patch)
+                        # Multiply patch (from input channel in_c) by filter for that channel.
+                        # If filter has fewer input channels, broadcast (use last filter channel).
+                        f_in_idx = min(in_c, filter_shape[1] - 1)
                         output_tensor[out_c][i][j] += np.sum(
-                            patch * filter_tensor[out_c]
+                            patch * filter_tensor[out_c][f_in_idx]
                         )
 
         return output_tensor

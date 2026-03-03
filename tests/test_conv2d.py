@@ -176,27 +176,15 @@ class TestConvolution2D:
         args.rolls = True
         args.benchmark = "conv2d_resnet"
 
+        np.random.seed(125)
         input_channels = 2
         output_channels = 4
         dim_size = 4
         f_size = 3
         padding = "same"
         inputs = {}
-        inputs["a"] = np.array(
-            [
-                [[i + j * dim_size for i in range(dim_size)] for j in range(dim_size)]
-                for _ in range(input_channels)
-            ]
-        ).astype(float)
-        inputs["b"] = np.array(
-            [
-                [
-                    [[1 for i in range(f_size)] for j in range(f_size)]
-                    for _ in range(input_channels)
-                ]
-                for _ in range(output_channels)
-            ]
-        ).astype(float)
+        inputs["a"] = np.random.randint(0, 5, (input_channels, dim_size, dim_size)).astype(float)
+        inputs["b"] = np.random.randint(0, 3, (output_channels, input_channels, f_size, f_size)).astype(float)
 
         tensor_ir = self._create_convolution_computation(
             dim_size, input_channels, output_channels, input_channels, f_size, f_size, 1, padding
