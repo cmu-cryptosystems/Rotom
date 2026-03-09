@@ -305,10 +305,6 @@ def add_replicated_dimensions(a_shape, b_shape):
         replicated_dims.append(Dim(None, c_out, c_in * a_shape[1] * a_shape[2]))
         b_dims.append(Dim(0, c_out, 1))
 
-    if c_in > 1:
-        replicated_dims.append(Dim(None, c_in, a_shape[1] * a_shape[2]))
-        b_dims.append(Dim(1, c_in, 1))
-
     # Replicate for spatial dimensions based on INPUT shape
     if h_f > 1:
         replicated_dims.append(Dim(None, h_f, a_shape[2]))
@@ -363,9 +359,9 @@ def gen_conv2d(term, cs_kernels, shapes):
         if a_kernel.layout.rolls:
             continue
 
-        # guarantee that the a_kernel is in row-major order
+        # guarantee that the a_kernel is in row-major order (dims with dim=None sort first)
         a_dims = a_kernel.layout.get_dims()
-        a_dims.sort(key=lambda x: x.dim)
+        a_dims.sort(key=lambda x: (x.dim is not None, x.dim if x.dim is not None else 0))
         if a_dims != a_kernel.layout.get_dims():
             continue
 
@@ -373,12 +369,17 @@ def gen_conv2d(term, cs_kernels, shapes):
         replicated_dims, b_dims = add_replicated_dimensions(a_shape, b_shape)
         for dim in replicated_dims[::-1]:
             a_kernel = apply_replication(term.cs[0], a_kernel, dim)
-    
+
+
         # since b is public, we can create a cs_kernel for b
         # and add metada information to help with packing the weights
         for dim in a_kernel.layout.get_dims():
-            if dim.dim is not None:
+            if dim.dim == 0:
+                b_dims.append(Dim(1, dim.extent, 1))
+            elif dim.dim is not None:
                 b_dims.append(Dim(None, dim.extent, 1))
+            elif dim.dim_type == DimType.EMPTY:
+                b_dims.append(Dim(None, dim.extent, 1, DimType.EMPTY))
 
         assert len(b_dims) == len(a_kernel.layout.get_dims())
            
@@ -430,5 +431,10 @@ def gen_conv2d(term, cs_kernels, shapes):
         )
         kernel = Kernel(KernelOp.CONV2D, [a_kernel, b_kernel], output_layout)
         output_kernels.add(kernel)
-        
+
+        print("a_kernel:", a_kernel)
+        print("b_kernel:", b_kernel)
+        print("kernel:", kernel)
+        print()
+        # exit(0)
     return output_kernels

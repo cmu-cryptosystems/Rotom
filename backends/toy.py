@@ -153,7 +153,7 @@ class Toy:
     def eval_mul(self, term):
         return [a * b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
-    def _apply_poly_to_vector(self, vec, poly_func):
+    def _apply_poly_to_vector(self, vec, poly_func, poly_channel=None):
         """Apply polynomial descriptor element-wise to a list of values. Uses self.inputs for batchnorm."""
         if poly_func is None or poly_func == "identity":
             return list(vec)
@@ -172,8 +172,9 @@ class Toy:
             var = np.asarray(self.inputs[var_key]).flatten()
             gamma = np.asarray(self.inputs[gamma_key]).flatten()
             beta = np.asarray(self.inputs[beta_key]).flatten()
-            # Use first channel params for all elements (packed vector has no channel layout)
-            m, vv, g, b = float(mean[0]), float(var[0]), float(gamma[0]), float(beta[0])
+            # Use per-channel params when poly_channel is set (one CT per channel); else first channel
+            ch = 0 if poly_channel is None else min(int(poly_channel), len(mean) - 1)
+            m, vv, g, b = float(mean[ch]), float(var[ch]), float(gamma[ch]), float(beta[ch])
             inv_std = 1.0 / np.sqrt(vv + eps)
             return [float(g * (x - m) * inv_std + b) for x in vec]
         if isinstance(poly_func, (list, tuple)) and len(poly_func) > 0:
@@ -194,7 +195,8 @@ class Toy:
         """Apply the actual POLY function when term.poly_func is set (from lowering); else identity."""
         vec = self.env[term.cs[0]]
         poly_func = getattr(term, "poly_func", None)
-        return self._apply_poly_to_vector(vec, poly_func)
+        poly_channel = getattr(term, "poly_channel", None)
+        return self._apply_poly_to_vector(vec, poly_func, poly_channel=poly_channel)
 
     def eval_rescale(self, term):
         """Evaluate a rescale operation.

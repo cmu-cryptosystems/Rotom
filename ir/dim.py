@@ -81,19 +81,40 @@ class Dim:
 
     def parse(string_repr):
         """Parser function to transform a string-represented Dimension
-        into a Dimension object
+        into a Dimension object.
+
+        Supported forms (with brackets included in string_repr):
+        - "[i]"           -> Dim(None, i, 1, FILL)
+        - "[G:n]"         -> Dim(None, n, 1, EMPTY)
+        - "[i:n:s]"       -> Dim(i, n, s, FILL)
+        - "[R:n]"         -> Dim(None, n, 1, FILL)      (replication, stride 1)
+        - "[R:n:s]"       -> Dim(None, n, s, FILL)      (replication, explicit stride)
         """
         terms = string_repr.replace("[", "").replace("]", "").split(":")
+
+        # Single extent, no dim index
         if len(terms) == 1:
             return Dim(None, int(terms[0]), 1, dim_type=DimType.FILL)
-        elif len(terms) == 2 and terms[0] == "G":
+
+        # Gap / empty dimension
+        if len(terms) == 2 and terms[0] == "G":
             return Dim(None, int(terms[1]), 1, dim_type=DimType.EMPTY)
-        elif len(terms) == 3:
+
+        # Replication dimension with implicit stride 1: [R:n]
+        if len(terms) == 2 and terms[0] == "R":
+            return Dim(None, int(terms[1]), 1, dim_type=DimType.FILL)
+
+        # Three-term forms
+        if len(terms) == 3:
+            # Replication dimension with explicit stride: [R:n:s]
+            if terms[0] == "R":
+                return Dim(None, int(terms[1]), int(terms[2]), dim_type=DimType.FILL)
+            # Regular filled dimension: [i:n:s]
             return Dim(
                 int(terms[0]), int(terms[1]), int(terms[2]), dim_type=DimType.FILL
             )
-        else:
-            raise NotImplementedError(string_repr)
+
+        raise NotImplementedError(string_repr)
 
     def __repr__(self):
         """String representation of the dimension"""

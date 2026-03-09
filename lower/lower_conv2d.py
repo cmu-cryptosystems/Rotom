@@ -12,6 +12,8 @@ from lower.lower_util import find_sum_dim, rotate_and_sum
 from util.layout_util import (
     convert_layout_to_mask,
     get_cts_by_dim,
+    get_dim_indices,
+    get_dim_map,
     get_segment,
 )
 from util.shape_util import get_term_shape
@@ -62,7 +64,7 @@ def lower_conv2d(env, kernel):
             rot_0 = i * dim_map[0][2]
             rot_1 = j * dim_map[1][2]
             rot_amts.append(rot_0 + rot_1 + rot_offset)
-
+    
     filter_masks = []
     for i in range(b_shape[2]):
         for j in range(b_shape[3]):
@@ -82,17 +84,23 @@ def lower_conv2d(env, kernel):
                         mask[k * segment_1 + l] = 0
             filter_masks.append(mask)
 
-    # Replicate filter masks for each CT in b layout - use actual layout num_ct
+    # Replicate filter masks for each CT in b layout - use layout to get filter position per ct_idx
     num_filter_positions = b_shape[2] * b_shape[3]
     b_num_cts = kernel.cs[1].layout.num_ct()
     b_ct_dims = kernel.cs[1].layout.ct_dims
     inner_stride = 1
     if b_ct_dims and b_ct_dims[-1].dim is None:
         inner_stride = b_ct_dims[-1].extent
-    masks = [
-        filter_masks[(ct_idx // inner_stride) % num_filter_positions]
-        for ct_idx in range(b_num_cts)
-    ]
+    dim_indices_masks = get_dim_indices(b_ct_dims)
+    dim_map_masks = get_dim_map(b_ct_dims)
+    dim_to_pos_masks = {dim.dim: dim_map_masks[dim] for dim in b_ct_dims if dim.dim is not None}
+    f_w_extent_masks = b_shape[3]
+    masks = []
+    for ct_idx in range(b_num_cts):
+        f_h = dim_indices_masks[dim_to_pos_masks[2]][ct_idx] if 2 in dim_to_pos_masks else 0
+        f_w = dim_indices_masks[dim_to_pos_masks[3]][ct_idx] if 3 in dim_to_pos_masks else 0
+        filter_idx = f_h * f_w_extent_masks + f_w
+        masks.append(filter_masks[filter_idx])
 
     kernel.cs[1].layout.term.cs.append(masks)
     kernel.cs[1].layout.term.cs.append(rot_amts)
@@ -149,25 +157,27 @@ def lower_conv2d(env, kernel):
             a_rot_cs.append(a_cs[i] << rot_amts[i])
 
     # calculate the multiplications between ct
-    # Create products for all b positions; a_rot depends on (c_in, filter_position)
-    # b layout order: c_out, c_in, f_h, f_w, (R?) - filter dims 2,3 vary before R
-    c_in_stride = num_filter_positions * inner_stride
+    # Create products for all b positions; a_rot depends on (c_in, filter_position).
+    # Decode b_idx from b's layout so we get correct (c_in, f_h, f_w) regardless of ct_dims order.
+    b_ct_dims = kernel.cs[1].layout.ct_dims
+    dim_indices = get_dim_indices(b_ct_dims)
+    dim_map = get_dim_map(b_ct_dims)
+    # Tensor dims: 0=c_out, 1=c_in, 2=f_h, 3=f_w. Find which ct_dim has each.
+    dim_to_pos = {dim.dim: dim_map[dim] for dim in b_ct_dims if dim.dim is not None}
+    f_h_extent = b_shape[2]
+    f_w_extent = b_shape[3]
     cts = {}
     for b_idx, b_ct in enumerate(b_cs):
-        filter_idx = (b_idx // inner_stride) % num_filter_positions
-        c_in = (b_idx // c_in_stride) % c_in_count
+        c_in = dim_indices[dim_to_pos[1]][b_idx] if 1 in dim_to_pos else 0
+        f_h = dim_indices[dim_to_pos[2]][b_idx] if 2 in dim_to_pos else 0
+        f_w = dim_indices[dim_to_pos[3]][b_idx] if 3 in dim_to_pos else 0
+        filter_idx = f_h * f_w_extent + f_w
         rot_idx = c_in * num_filter_positions + filter_idx
         rot_idx = min(rot_idx, len(a_rot_cs) - 1)
         cts[b_idx] = a_rot_cs[rot_idx] * b_ct
 
-    # Use b layout for layout_cts - it has separate dims (c_out, c_in, f_h, f_w)
-    # so we can sum over c_in and filter dims while keeping c_out separate.
-    # a layout may merge these into [R:72:1] which would sum over c_out incorrectly.
-    # cts keys follow b_cs order which matches b layout.
+    # find summation dimensions from b layout
     b_layout_cts = LayoutCiphertexts(layout=kernel.cs[1].layout, cts=cts)
-
-    # Sum over c_in (dim 1), filter (dims 2,3), and R - keep c_out (dim 0) separate
-    # b layout: [0:4:1][1:2:1][2:3:1][3:3:1][R:2:1] = c_out, c_in, f_h, f_w, R
     filter_ct_dims = [
         dim
         for dim in b_layout_cts.layout.ct_dims
@@ -179,7 +189,6 @@ def lower_conv2d(env, kernel):
     for a_dim, b_dim in zip(kernel.cs[0].layout.get_dims(), kernel.cs[1].layout.get_dims()):
         if b_dim not in filter_ct_dims:
             filter_a_dims.append(a_dim)
-
     
     for ct_sum_dim in filter_ct_dims:
         if ct_sum_dim not in b_layout_cts.layout.ct_dims:
@@ -197,55 +206,33 @@ def lower_conv2d(env, kernel):
         new_layout = create_layout_without_dims(b_layout_cts.layout, [ct_sum_dim])
         b_layout_cts = LayoutCiphertexts(layout=new_layout, cts=sum_cts)
 
+    # rename b_layout_cts to a_layout_cts, and use a's layout
     a_layout = Layout(kernel.cs[0].layout.term, [], filter_a_dims, kernel.cs[0].layout.n, kernel.cs[0].layout.secret)
     a_layout_cts = LayoutCiphertexts(layout=a_layout, cts=b_layout_cts.cts)
 
+
     # find summing dimension for input channels
-    # the sum dimension should be the 0th dimension of kernel.cs[0]
-    # the sum dimension also should be the 0th and 1st dimension of kernel.cs[1]
-    sum_dims = [(0, 0), (0, None)]
-    for sum_dim in sum_dims:
-        _, slot_sum_dims = find_sum_dim(
-            kernel.cs[sum_dim[0]].layout, sum_dim[1]
+    _, slot_sum_dims = find_sum_dim(kernel.cs[0].layout, 0)
+
+    # sum together slot dimensions per ciphertext
+    for slot_sum_dim in slot_sum_dims:
+        # slot_sum_dim is from input layout; use input if not in current layout
+        slot_dims = (
+            a_layout_cts.layout.slot_dims
+            if slot_sum_dim in a_layout_cts.layout.slot_dims
+            else kernel.cs[0].layout.slot_dims
         )
-
-        # sum together slot dimensions per ciphertext
-        for slot_sum_dim in slot_sum_dims:
-            # slot_sum_dim is from input layout; use input if not in current layout
-            slot_dims = (
-                a_layout_cts.layout.slot_dims
-                if slot_sum_dim in a_layout_cts.layout.slot_dims
-                else kernel.cs[0].layout.slot_dims
-            )
-            if slot_sum_dim not in slot_dims:
-                continue
-            segment = get_segment(slot_sum_dim, slot_dims)
-            extent = segment[1]
-            mul_offset = segment[2]
-            summed_cts = {}
-            # Standard rotation strategy for channel summation
-            # (The rotation lifting optimization is about reducing filter alignment rotations,
-            #  not channel summation rotations)
-            for index, term in a_layout_cts.cts.items():
-                summed_cts[index] = rotate_and_sum(term, extent, mul_offset)
-
-            # Create new layout without the summed dimension
-            new_layout = create_layout_without_dims(a_layout_cts.layout, [slot_sum_dim])
-            a_layout_cts = LayoutCiphertexts(layout=new_layout, cts=summed_cts)
-
-    # select ciphertexts by the input channel
-    for dim in a_layout_cts.layout.dims:
-        if dim.dim != 0: continue
-        ct_groups = get_cts_by_dim(a_layout_cts, dim)
-
-        # keep only the first group 
-        new_cts = {}
-        for index, ct_group in enumerate(ct_groups):
-            new_cts[index] = ct_group[0]
-        
-        # update the layout ciphertexts
-        new_layout = create_layout_without_dims(a_layout_cts.layout, [dim])
-        a_layout_cts = LayoutCiphertexts(layout=new_layout, cts=new_cts)
+        if slot_sum_dim not in slot_dims:
+            continue
+        segment = get_segment(slot_sum_dim, slot_dims)
+        extent = segment[1]
+        mul_offset = segment[2]
+        summed_cts = {}
+        for index, term in a_layout_cts.cts.items():
+            summed_cts[index] = rotate_and_sum(term, extent, mul_offset)
+        # Create new layout without the summed dimension
+        new_layout = create_layout_without_dims(a_layout_cts.layout, [slot_sum_dim])
+        a_layout_cts = LayoutCiphertexts(layout=new_layout, cts=summed_cts)    
 
     layout_cts = LayoutCiphertexts(layout=kernel.layout, cts=a_layout_cts.cts)
 
