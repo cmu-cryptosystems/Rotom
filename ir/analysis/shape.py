@@ -155,12 +155,6 @@ class Shape:
             case TensorOp.RESHAPE:
                 a_shape = copy(self.padded_shapes[term.cs[0]])
                 dim_to_del = term.cs[1]
-                if dim_to_del >= len(a_shape):
-                    raise ValueError(
-                        f"RESHAPE: dimension to delete {dim_to_del} out of range for "
-                        f"input padded shape (rank {len(a_shape)}): {a_shape}. "
-                        "Use a dimension index that exists."
-                    )
                 del a_shape[dim_to_del]
                 return a_shape + [
                     round_to_ceiling_power_of_2(s) for s in term.cs[2].values()
@@ -214,12 +208,6 @@ class Shape:
             case TensorOp.SUM | TensorOp.PRODUCT:
                 a_shape = copy(self.padded_shapes[term.cs[0]])
                 dim_idx = term.cs[1]
-                if dim_idx >= len(a_shape):
-                    raise ValueError(
-                        f"SUM/PRODUCT: reduction dimension {dim_idx} out of range for "
-                        f"input padded shape (rank {len(a_shape)}): {a_shape}. "
-                        "After a prior sum the rank is reduced; use the remaining dimension index (e.g. sum(1) twice for two reductions)."
-                    )
                 result_shape = a_shape[:dim_idx] + a_shape[dim_idx + 1 :]
                 return result_shape
             case TensorOp.RESCALE | TensorOp.POLY:
@@ -321,11 +309,6 @@ class Shape:
                 for i, shape in enumerate(a_shape):
                     shape_map[i] = shape
                 dim_to_del = term.cs[1]
-                if dim_to_del not in shape_map:
-                    raise ValueError(
-                        f"RESHAPE: dimension to delete {dim_to_del} not in input shape "
-                        f"(rank {len(a_shape)}): {a_shape}. Use a dimension index that exists."
-                    )
                 del shape_map[dim_to_del]
                 for k, v in term.cs[2].items():
                     shape_map[k] = v
@@ -354,12 +337,6 @@ class Shape:
                 a = term.cs[0]
                 a_shape = copy(self.get_shape(a))
                 dim_idx = term.cs[1]
-                if dim_idx >= len(a_shape):
-                    raise ValueError(
-                        f"SUM/PRODUCT: reduction dimension {dim_idx} out of range for "
-                        f"input shape (rank {len(a_shape)}): {a_shape}. "
-                        "After a prior sum the rank is reduced; use the remaining dimension index."
-                    )
                 result_shape = a_shape[:dim_idx] + a_shape[dim_idx + 1 :]
                 return result_shape
             case TensorOp.POLY:

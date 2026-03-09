@@ -291,8 +291,8 @@ def add_replicated_dimensions(a_shape, b_shape):
     # and rolled to align with the b_kernel
     #
     # b_shape is always [C_out, C_in, H_f, W_f] in 4D form
-    # We need to replicate for C_in (input channels) and spatial dims (H_f, W_f)
-    # C_out (output channels) is handled separately in the output layout
+    # We need to match the dimensions for C_in (input channels),
+    # then replicate for spatial dimensions (H_f, W_f), and C_out (output channels)
 
     replicated_dims = []
     b_dims = []
@@ -301,11 +301,12 @@ def add_replicated_dimensions(a_shape, b_shape):
     h_f = b_shape[2]  # Filter height
     w_f = b_shape[3]  # Filter width
 
+    # Replicate output channels
     if c_out > 1:
         replicated_dims.append(Dim(None, c_out, c_in * a_shape[1] * a_shape[2]))
         b_dims.append(Dim(0, c_out, 1))
 
-    # Replicate for spatial dimensions based on INPUT shape
+    # Replicate spatial dimensions
     if h_f > 1:
         replicated_dims.append(Dim(None, h_f, a_shape[2]))
         b_dims.append(Dim(2, h_f, 1))
@@ -313,6 +314,8 @@ def add_replicated_dimensions(a_shape, b_shape):
     if w_f > 1:
         replicated_dims.append(Dim(None, w_f, 1))
         b_dims.append(Dim(3, w_f, 1))
+
+    # Return the replicated dimensions and the b_dims
     return replicated_dims, b_dims
 
 
@@ -359,7 +362,9 @@ def gen_conv2d(term, cs_kernels, shapes):
         if a_kernel.layout.rolls:
             continue
 
-        # guarantee that the a_kernel is in row-major order (dims with dim=None sort first)
+        # NOTE: we assume that the a_kernel is in row-major order (dims with dim=None sort first)
+        # - This constraint can be relaxed later if needed
+        # - The actual assignment rolls the row-major layout to align with the b_kernel
         a_dims = a_kernel.layout.get_dims()
         a_dims.sort(
             key=lambda x: (x.dim is not None, x.dim if x.dim is not None else 0)
@@ -367,12 +372,12 @@ def gen_conv2d(term, cs_kernels, shapes):
         if a_dims != a_kernel.layout.get_dims():
             continue
 
-        # add replication dimensions to the a_kernel
+        # Add replication dimensions to the a_kernel
         replicated_dims, b_dims = add_replicated_dimensions(a_shape, b_shape)
         for dim in replicated_dims[::-1]:
             a_kernel = apply_replication(term.cs[0], a_kernel, dim)
 
-        # since b is public, we can create a cs_kernel for b
+        # Since b is public, we can create a cs_kernel for b
         # and add metada information to help with packing the weights
         for dim in a_kernel.layout.get_dims():
             if dim.dim == 0:
@@ -436,10 +441,4 @@ def gen_conv2d(term, cs_kernels, shapes):
         )
         kernel = Kernel(KernelOp.CONV2D, [a_kernel, b_kernel], output_layout)
         output_kernels.add(kernel)
-
-        print("a_kernel:", a_kernel)
-        print("b_kernel:", b_kernel)
-        print("kernel:", kernel)
-        print()
-        # exit(0)
     return output_kernels

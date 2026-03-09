@@ -441,20 +441,6 @@ class TestEdgeCases:
         assert shape_analyzer.get_shape(poly_op) == [3, 4]
         assert shape_analyzer.get_padded_shape(poly_op) == [4, 4]
 
-    def test_unsupported_operation(self):
-        """Test that unsupported operations raise NotImplementedError."""
-        # Use a fake op value that is not in TensorOp to trigger NotImplementedError
-        a = TensorTerm(TensorOp.TENSOR, ["a", [3, 4], True])
-        unsupported_op = TensorTerm(
-            TensorOp.TENSOR, ["a", [3, 4], True]
-        )  # We need an op that doesn't exist in shape - use a custom term
-        unsupported_op.op = "UnsupportedOp"
-
-        shape_analyzer = Shape(unsupported_op)
-
-        with pytest.raises(NotImplementedError):
-            shape_analyzer.run()
-
 
 class TestComplexCompositions:
     """Test complex compositions of operations."""

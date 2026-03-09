@@ -8,15 +8,12 @@ def check_results(tensor_ir, inputs, kernel, results, runtime, args):
     """Check results of the benchmark"""
     expected_cts = apply_layout(tensor_ir.eval(inputs), kernel.layout)
 
-    # Toy backend uses approximate POLY (e.g. SiLU); use looser tolerance
-    rtol = atol = 1e-1 if getattr(args, "backend", "").lower() == "toy" else 1e-2
-
     # Check if values are close instead of exact equality
     all_close = True
     max_diff = 0.0
 
     for expected, result in zip(expected_cts, results):
-        if not np.allclose(expected, result, rtol=rtol, atol=atol):
+        if not np.allclose(expected, result, rtol=1e-2, atol=1e-2):
             all_close = False
             diff = np.array(expected) - np.array(result)
             max_diff = max(max_diff, np.max(np.abs(diff)))

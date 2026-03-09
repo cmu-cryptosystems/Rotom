@@ -36,17 +36,9 @@ def gen_sum(term, kernels):
     output_kernels = set()
     for kernel in kernels:
         kernel = copy(kernel)
-        dims = copy(kernel.layout.get_dims())
-        if not any(d.dim == sum_dim_idx for d in dims):
-            layout_dims = [d.dim for d in dims]
-            raise ValueError(
-                f"Sum dimension {sum_dim_idx} not in layout (dims {layout_dims}). "
-                "Reduce over a dimension that exists (e.g. after a prior sum, use the "
-                "remaining last dimension)."
-            )
         new_dims = []
         sum_dims = []
-        for dim in dims:
+        for dim in copy(kernel.layout.get_dims()):
             if dim.dim == sum_dim_idx:
                 sum_dims.append(copy(dim))
                 new_dim = dim

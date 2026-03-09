@@ -148,7 +148,7 @@ class Tensor:
     ):
         """Sum along dimension."""
         if dim is None:
-            # Sum all dimensions: repeatedly sum over dimension 0 so shape analysis and eval agree (no keepdims).
+            # Sum all dimensions
             result = self
             for _ in range(len(self.shape)):
                 result = result.sum(0, keepdim=keepdim, layout=layout)

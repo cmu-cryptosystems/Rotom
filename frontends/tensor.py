@@ -357,7 +357,7 @@ class TensorTerm:
         return TensorTerm(TensorOp.TRANSPOSE, [self], layout)
 
     def poly(self, func=None, layout=None):
-        """Apply a polynomial or named function element-wise.
+        """Apply a polynomial approximation or named function element-wise.
 
         Args:
             func: Optional. One of:
@@ -733,7 +733,6 @@ class TensorTerm:
             case TensorOp.MUL:
                 return env[self.cs[0]] * env[self.cs[1]]
             case TensorOp.SUM:
-                # keepdims=False so eval matches shape analysis (which drops reduced dim)
                 return np.sum(env[self.cs[0]], axis=self.cs[1], keepdims=False)
             case TensorOp.MATMUL:
                 return env[self.cs[0]] @ env[self.cs[1]]

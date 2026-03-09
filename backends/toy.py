@@ -78,7 +78,7 @@ class Toy:
         packing_idx = int(metadata_parts[0])
         vector = self.input_cache[(layout.term, layout)][packing_idx]
 
-        # Check if this pack has pre-rotation metadata (e2_o1 optimization)
+        # Check if this pack has pre-rotation metadata
         rot_amt = None
         for part in metadata_parts:
             if part.startswith("rot:"):
@@ -284,12 +284,11 @@ class Toy:
                 continue
 
             # Check if values are close instead of exact equality
-            rtol, atol = 1e-2, 1e-2
             all_close = True
             max_diff = 0.0
 
             for expected_vec, result_vec in zip(expected, results):
-                if not np.allclose(expected_vec, result_vec, rtol=rtol, atol=atol):
+                if not np.allclose(expected_vec, result_vec, rtol=1e-2, atol=1e-2):
                     all_close = False
                     diff = np.array(expected_vec) - np.array(result_vec)
                     max_diff = max(max_diff, np.max(np.abs(diff)))

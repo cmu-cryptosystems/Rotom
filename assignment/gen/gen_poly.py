@@ -1,5 +1,5 @@
 """
-Poly operation layout generation utilities.
+Polynomial approximations.
 
 Poly applies an element-wise polynomial or named function (e.g. identity,
 silu, batchnorm). The output has the same layout as the input.
