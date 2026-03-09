@@ -29,6 +29,7 @@ from benchmarks.rotom_benchmarks.logreg import logreg
 from benchmarks.rotom_benchmarks.matmul.matmul_128_64 import matmul_128_64
 from benchmarks.rotom_benchmarks.matmul.matmul_256_128 import matmul_256_128
 from benchmarks.rotom_benchmarks.mlp_mnist import mlp_mnist
+from benchmarks.rotom_benchmarks.resnet_silu import resnet_silu, resnet_silu_one_layer
 from benchmarks.rotom_benchmarks.ttm import ttm
 
 # Import Rotom
@@ -124,6 +125,12 @@ def run_benchmark_or_microbenchmark(args):
                 args.n = n
             case "mlp_mnist":
                 tensor_ir, inputs = mlp_mnist()
+                args.n = n
+            case "resnet_silu":
+                tensor_ir, inputs, n = resnet_silu()
+                args.n = n
+            case "resnet_silu_one_layer":
+                tensor_ir, inputs, n = resnet_silu_one_layer()
                 args.n = n
             case "ttm":
                 tensor_ir, inputs = ttm()

@@ -600,7 +600,6 @@ def apply_layout(pt_tensor, layout):
 def apply_punctured_layout(pt_tensor, layout):
     """apply a layout to a pt tensor"""
     cts = apply_layout(pt_tensor, layout)
-
     # make the punctured matrix holey!
     masks = layout.term.cs[4]
     assert len(cts) == len(masks)

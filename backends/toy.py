@@ -153,8 +153,55 @@ class Toy:
     def eval_mul(self, term):
         return [a * b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
+    def _apply_poly_to_vector(self, vec, poly_func, poly_channel=None):
+        """Apply polynomial descriptor element-wise to a list of values. Uses self.inputs for batchnorm."""
+        if poly_func is None or poly_func == "identity":
+            return list(vec)
+        if poly_func == "silu":
+            return [
+                float(v * (1.0 / (1.0 + np.exp(-np.clip(v, -20, 20))))) for v in vec
+            ]
+        if (
+            isinstance(poly_func, tuple)
+            and len(poly_func) >= 5
+            and poly_func[0] == "batchnorm"
+        ):
+            _, mean_key, var_key, gamma_key, beta_key = poly_func[:5]
+            eps = float(poly_func[5]) if len(poly_func) > 5 else 1e-5
+            mean = np.asarray(self.inputs[mean_key]).flatten()
+            var = np.asarray(self.inputs[var_key]).flatten()
+            gamma = np.asarray(self.inputs[gamma_key]).flatten()
+            beta = np.asarray(self.inputs[beta_key]).flatten()
+            # Use per-channel params when poly_channel is set (one CT per channel); else first channel
+            ch = 0 if poly_channel is None else min(int(poly_channel), len(mean) - 1)
+            m, vv, g, b = (
+                float(mean[ch]),
+                float(var[ch]),
+                float(gamma[ch]),
+                float(beta[ch]),
+            )
+            inv_std = 1.0 / np.sqrt(vv + eps)
+            return [float(g * (x - m) * inv_std + b) for x in vec]
+        if isinstance(poly_func, (list, tuple)) and len(poly_func) > 0:
+            try:
+                coeffs = [float(c) for c in poly_func]
+            except (TypeError, ValueError):
+                return list(vec)
+            out = []
+            for x in vec:
+                y = 0.0
+                for i, c in enumerate(coeffs):
+                    y += c * (float(x) ** i)
+                out.append(y)
+            return out
+        return list(vec)
+
     def eval_poly(self, term):
-        return self.env[term.cs[0]]
+        """Apply the actual POLY function when term.poly_func is set (from lowering); else identity."""
+        vec = self.env[term.cs[0]]
+        poly_func = getattr(term, "poly_func", None)
+        poly_channel = getattr(term, "poly_channel", None)
+        return self._apply_poly_to_vector(vec, poly_func, poly_channel=poly_channel)
 
     def eval_rescale(self, term):
         """Evaluate a rescale operation.
@@ -264,6 +311,7 @@ class Toy:
                 print("expected layout:", term.layout)
 
             assert all_close, f"Values not close enough. Max diff: {max_diff}"
+
         return results
 
     def fuzz(self):

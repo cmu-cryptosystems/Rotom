@@ -69,10 +69,13 @@ class Layout:
             elif dim.extent == n:
                 self.slot_dims.insert(0, dim)
                 n //= dim.extent
-            else:
-                assert n % dim.extent == 0
+            elif n % dim.extent == 0:
                 n //= dim.extent
                 self.slot_dims.insert(0, dim)
+            else:
+                # extent does not divide n (e.g. odd input channels); keep in ct_dims only
+                # so slot_dims can remain power-of-2 and n is unchanged
+                self.ct_dims.insert(0, dim)
         if n > 1:
             self.slot_dims.insert(0, Dim.parse(f"G:{n}"))
 
@@ -222,23 +225,14 @@ class Layout:
             ct_dims_str = parts[0].strip()
             dims_str = parts[1].strip()
 
-        # Parse ciphertext dimensions
+        # Parse ciphertext dimensions (including replication and gaps)
         if ct_dims_str:
             ct_dim_matches = re.findall(r"\[([^\]]+)\]", ct_dims_str)
             for match in ct_dim_matches:
-                if match.startswith("R:"):
-                    # Handle replication dimension
-                    extent = int(match.split(":")[1])
-                    dims.append(Dim(None, extent, 1, DimType.FILL))
-                elif match.startswith("G:"):
-                    # Handle empty dimension
-                    extent = int(match.split(":")[1])
-                    dims.append(Dim(None, extent, 1, DimType.EMPTY))
-                else:
-                    # Handle regular dimension (e.g., [1:4:1])
-                    dims.append(Dim.parse(f"[{match}]"))
+                # Delegate all parsing (R, G, regular dims) to Dim.parse
+                dims.append(Dim.parse(f"[{match}]"))
 
-        # Parse slot dimensions
+        # Parse slot dimensions (may also include R / G forms)
         slot_dim_matches = re.findall(r"\[([^\]]+)\]", dims_str)
         for match in slot_dim_matches:
             dims.append(Dim.parse(f"[{match}]"))

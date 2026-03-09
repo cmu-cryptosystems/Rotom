@@ -180,23 +180,23 @@ class TestTensorShapeOperations:
 
     def test_sum_operation(self):
         """Test sum operation."""
-        # Sum along dimension 0
+        # Sum along dimension 0 (keepdims=False)
         result = self.a.sum(0)
         inputs = {self.a.name: self.a.data}
         eval_result = result.eval(inputs)
-        expected = np.array([[5, 7, 9, 0]])  # Padded to power of 2, keepdims=True
+        expected = np.array([5, 7, 9, 0])  # Padded to power of 2
         assert np.array_equal(eval_result, expected)
 
-        # Sum along dimension 1
+        # Sum along dimension 1 (keepdims=False)
         result = self.a.sum(1)
         eval_result = result.eval(inputs)
-        expected = np.array([[6], [15]])  # keepdims=True, padded to power of 2
+        expected = np.array([6, 15])  # padded to power of 2
         assert np.array_equal(eval_result, expected)
 
-        # Sum all elements
+        # Sum all elements (repeated sum over dim 0; keepdims=False -> scalar)
         result = self.a.sum()
         eval_result = result.eval(inputs)
-        expected = np.array([[21]])  # keepdim=True since squeeze is not implemented
+        expected = np.array(21)
         assert np.array_equal(eval_result, expected)
 
     def test_mean_operation(self):

@@ -200,14 +200,14 @@ class TestTensorMethodsLayout:
 
     def test_poly_without_layout(self):
         """Test Poly without layout."""
-        result = self.a.Poly()
+        result = self.a.poly()
         assert result.layout is None
         assert result.op == TensorOp.POLY
 
     def test_poly_with_layout(self):
         """Test Poly with layout parameter."""
         layout = "[0:4:1][1:4:1]"
-        result = self.a.Poly(layout=layout)
+        result = self.a.poly(layout=layout)
         assert result.layout == layout
         assert result.op == TensorOp.POLY
 
