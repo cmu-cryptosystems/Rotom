@@ -57,9 +57,6 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
         )
         inputs["b"] = np.array([i for i in range(size)])
 
-        print(inputs["a"].shape)
-        print(inputs["b"].shape)
-
         self._run_test_case(inputs, args, backend)
 
     def test_matvecmul_ct_pt_64x64_64x1(self, backend):
@@ -76,8 +73,5 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
             [[np.random.randint(0, 2) for j in range(size)] for i in range(size)]
         )
         inputs["b"] = np.array([np.random.randint(0, 2) for i in range(size)])
-
-        print(inputs["a"].shape)
-        print(inputs["b"].shape)
 
         self._run_test_case(inputs, args, backend)

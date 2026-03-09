@@ -76,7 +76,8 @@ def get_dim_indices(dims):
 def layout_to_shape_indices(layout):
     dims = layout.ct_dims
     dim_indices = get_dim_indices(dims)
-    unique_dims = len(set(dim.dim for dim in layout.get_dims()))
+    # Only count non-None dims (replicated/empty dims don't contribute to shape indices)
+    unique_dims = len(set(dim.dim for dim in layout.get_dims() if dim.dim is not None))
 
     # keep only the pertinent dims
     indices_map = {}
@@ -105,6 +106,17 @@ def layout_to_shape_indices(layout):
             (a, b, c, d)
             for a, b, c, d in zip(
                 indices_map[0], indices_map[1], indices_map[2], indices_map[3]
+            )
+        ]
+    elif unique_dims == 5:
+        return [
+            (a, b, c, d, e)
+            for a, b, c, d, e in zip(
+                indices_map[0],
+                indices_map[1],
+                indices_map[2],
+                indices_map[3],
+                indices_map[4],
             )
         ]
     else:

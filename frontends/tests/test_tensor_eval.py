@@ -176,7 +176,7 @@ class TestReductionOperationsEvaluation:
 
         result = b.eval(inputs)
         # Input gets padded to (2,4), then sum along dim 0
-        expected = np.array([[5, 7, 9, 0]])  # keepdims=True
+        expected = np.array([5, 7, 9, 0])
 
         np.testing.assert_array_equal(result, expected)
 
@@ -189,7 +189,7 @@ class TestReductionOperationsEvaluation:
 
         result = b.eval(inputs)
         # Input gets padded to (2,4), then sum along dim 0
-        expected = np.array([[5, 7, 9, 0]])  # keepdims=True
+        expected = np.array([5, 7, 9, 0])
 
         np.testing.assert_array_equal(result, expected)
 
@@ -201,12 +201,12 @@ class TestReductionOperationsEvaluation:
 
         # Sum along dimension 0
         sum_0 = a.sum(0).eval(inputs)
-        expected_0 = np.array([[5, 7, 9, 0]])  # padded to (2,4) first
+        expected_0 = np.array([5, 7, 9, 0])  # padded to (2,4) first
         np.testing.assert_array_equal(sum_0, expected_0)
 
         # Sum along dimension 1
         sum_1 = a.sum(1).eval(inputs)
-        expected_1 = np.array([[6], [15]])  # keepdims=True, padded input
+        expected_1 = np.array([6, 15])  # padded input
         np.testing.assert_array_equal(sum_1, expected_1)
 
 
@@ -298,7 +298,7 @@ class TestIndexingEvaluation:
     def test_slice_indexing_rows(self):
         """Test slice indexing along the first dimension (rows)."""
         a = TensorTerm.Tensor("a", [2, 3], True)
-        b = a[0:1]  # slice first row (keep dimension)
+        b = a[0:1]  # slice first row
 
         inputs = {"a": np.array([[1, 2, 3], [4, 5, 6]])}
 

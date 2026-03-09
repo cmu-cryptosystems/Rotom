@@ -26,6 +26,7 @@ from assignment.gen.gen_block_matmul import gen_block_matmul
 from assignment.gen.gen_conv2d import gen_conv2d, gen_conv2d_roll
 from assignment.gen.gen_index import gen_index
 from assignment.gen.gen_permute import gen_permute
+from assignment.gen.gen_poly import gen_poly
 from assignment.gen.gen_rescale import gen_rescale
 from assignment.gen.gen_reshape import gen_reshape
 from assignment.gen.gen_strassens import gen_strassens
@@ -143,35 +144,11 @@ class LayoutAssignment:
                         cs_shapes,
                         self.roll_flag,
                     )
-                    # Debug: Print candidate kernels for MATMUL
-                    if term.op == TensorOp.MATMUL:
-                        print(f"\n=== Candidate kernels for MATMUL {term} ===")
-                        print(f"roll_flag: {self.roll_flag}")
-                        print(f"Total candidate kernels: {len(kernels)}")
-                        kernels_with_rolls = [k for k in kernels if k.layout.rolls]
-                        kernels_without_rolls = [
-                            k for k in kernels if not k.layout.rolls
-                        ]
-                        print(f"Kernels with rolls: {len(kernels_with_rolls)}")
-                        print(f"Kernels without rolls: {len(kernels_without_rolls)}")
-                        for i, kernel in enumerate(kernels):
-                            has_rolls = bool(kernel.layout.rolls)
-                            print(
-                                f"\nKernel {i+1}: {'HAS ROLLS' if has_rolls else 'NO ROLLS'}"
-                            )
-                            print(f"  Layout: {kernel.layout}")
-                            print(f"  Rolls: {kernel.layout.rolls}")
-                            if has_rolls:
-                                print(
-                                    f"  Roll details: {[str(r) for r in kernel.layout.rolls]}"
-                                )
-                        print("=" * 60)
             case TensorOp.SUM:
                 kernels = gen_sum(term, cs_kernels[0])
             case TensorOp.TRANSPOSE:
                 kernels = gen_transpose(term, cs_kernels[0])
             case TensorOp.CONV2D:
-                assert self.roll_flag
                 cs_shapes = self.get_unpadded_cs_shapes(term)
                 if self.conv_roll:
                     kernels = gen_conv2d_roll(term, cs_kernels[0], cs_shapes)
@@ -188,7 +165,7 @@ class LayoutAssignment:
             case TensorOp.BLOCK_MATMUL:
                 kernels = gen_block_matmul(term, cs_kernels)
             case TensorOp.POLY:
-                raise NotImplementedError(term.op)
+                kernels = gen_poly(term, cs_kernels[0])
             case _:
                 raise NotImplementedError(term.op)
         assert kernels

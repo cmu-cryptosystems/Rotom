@@ -113,7 +113,6 @@ def traverse_ct_dims(ct_dims):
 
     output_offsets = []
     for offset in indices:
-        # Get tile size for each dimension, default to 1 if not found
         dim0_tile = tile_sizes.get(0, 1)
         dim1_tile = tile_sizes.get(1, 1)
 

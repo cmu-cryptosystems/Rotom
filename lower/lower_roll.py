@@ -265,9 +265,11 @@ def lower_bsgs_roll(env, kernel):
         for i, index in enumerate(rolled_indices_by_cts[ct_index]):
             key = tuple(index)
             if key not in base_map or len(base_map[key]) == 0:
-                # Safety fallback: shouldn't happen after crosses_ct detection,
-                # but falling back keeps us correct.
-                return lower_roll(env, kernel)
+                raise ValueError(
+                    "lower_roll: base_map has no entry for key or list is empty; "
+                    "do not fall back silently. Key=%s, base_map keys=%s."
+                    % (key, list(base_map.keys()))
+                )
             rot_amt = base_map[key][0] - i
             base_map[key] = base_map[key][1:]
             if rot_amt not in rots:

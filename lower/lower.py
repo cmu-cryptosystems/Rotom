@@ -25,6 +25,7 @@ from lower.lower_mask_tensor import lower_punctured_tensor
 from lower.lower_matmul import lower_bsgs_matmul, lower_matmul
 from lower.lower_mul import lower_mul
 from lower.lower_permute import lower_permute
+from lower.lower_poly import lower_poly
 from lower.lower_reorder import lower_reorder
 from lower.lower_replicate import lower_replicate
 from lower.lower_rescale import lower_rescale
@@ -109,6 +110,8 @@ class Lower:
                     self.env[term] = lower_combine(self.env, term)
                 case KernelOp.RESCALE:
                     self.env[term] = lower_rescale(self.env, term)
+                case KernelOp.POLY:
+                    self.env[term] = lower_poly(self.env, term)
                 case _:
                     raise NotImplementedError(term.op)
 
