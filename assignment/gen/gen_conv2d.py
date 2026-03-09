@@ -296,7 +296,7 @@ def add_replicated_dimensions(a_shape, b_shape):
 
     replicated_dims = []
     b_dims = []
-    c_out = b_shape[0] # Number of output channels
+    c_out = b_shape[0]  # Number of output channels
     c_in = b_shape[1]  # Number of input channels
     h_f = b_shape[2]  # Filter height
     w_f = b_shape[3]  # Filter width
@@ -361,7 +361,9 @@ def gen_conv2d(term, cs_kernels, shapes):
 
         # guarantee that the a_kernel is in row-major order (dims with dim=None sort first)
         a_dims = a_kernel.layout.get_dims()
-        a_dims.sort(key=lambda x: (x.dim is not None, x.dim if x.dim is not None else 0))
+        a_dims.sort(
+            key=lambda x: (x.dim is not None, x.dim if x.dim is not None else 0)
+        )
         if a_dims != a_kernel.layout.get_dims():
             continue
 
@@ -369,7 +371,6 @@ def gen_conv2d(term, cs_kernels, shapes):
         replicated_dims, b_dims = add_replicated_dimensions(a_shape, b_shape)
         for dim in replicated_dims[::-1]:
             a_kernel = apply_replication(term.cs[0], a_kernel, dim)
-
 
         # since b is public, we can create a cs_kernel for b
         # and add metada information to help with packing the weights
@@ -382,7 +383,7 @@ def gen_conv2d(term, cs_kernels, shapes):
                 b_dims.append(Dim(None, dim.extent, 1, DimType.EMPTY))
 
         assert len(b_dims) == len(a_kernel.layout.get_dims())
-           
+
         b_layout = Layout(b_term, [], b_dims, a_kernel.layout.n, False)
         b_kernel = Kernel(KernelOp.PUNCTURED_TENSOR, [], b_layout)
 
@@ -417,15 +418,19 @@ def gen_conv2d(term, cs_kernels, shapes):
                 output_dims.append(b_dim)
             elif a_dim.dim is not None and b_dim.dim is None:
                 if stride == 1:
-                    output_dims.append(Dim(a_dim.dim, h_o_p2 if a_dim.dim == 1 else w_o_p2, 1))
+                    output_dims.append(
+                        Dim(a_dim.dim, h_o_p2 if a_dim.dim == 1 else w_o_p2, 1)
+                    )
                 elif stride == 2:
-                    output_dims.append(Dim(a_dim.dim, h_o_p2 if a_dim.dim == 1 else w_o_p2, 1))
+                    output_dims.append(
+                        Dim(a_dim.dim, h_o_p2 if a_dim.dim == 1 else w_o_p2, 1)
+                    )
                     output_dims.append(Dim(None, stride, 1, DimType.EMPTY))
                 else:
                     raise NotImplementedError("stride not supported: " + str(stride))
             else:
                 output_dims.append(Dim(a_dim.dim, a_dim.extent, 1, DimType.FILL))
-          
+
         output_layout = Layout(
             term, [], output_dims, a_kernel.layout.n, a_kernel.layout.secret
         )

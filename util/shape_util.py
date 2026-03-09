@@ -112,7 +112,11 @@ def layout_to_shape_indices(layout):
         return [
             (a, b, c, d, e)
             for a, b, c, d, e in zip(
-                indices_map[0], indices_map[1], indices_map[2], indices_map[3], indices_map[4]
+                indices_map[0],
+                indices_map[1],
+                indices_map[2],
+                indices_map[3],
+                indices_map[4],
             )
         ]
     else:

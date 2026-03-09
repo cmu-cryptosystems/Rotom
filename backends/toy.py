@@ -174,7 +174,12 @@ class Toy:
             beta = np.asarray(self.inputs[beta_key]).flatten()
             # Use per-channel params when poly_channel is set (one CT per channel); else first channel
             ch = 0 if poly_channel is None else min(int(poly_channel), len(mean) - 1)
-            m, vv, g, b = float(mean[ch]), float(var[ch]), float(gamma[ch]), float(beta[ch])
+            m, vv, g, b = (
+                float(mean[ch]),
+                float(var[ch]),
+                float(gamma[ch]),
+                float(beta[ch]),
+            )
             inv_std = 1.0 / np.sqrt(vv + eps)
             return [float(g * (x - m) * inv_std + b) for x in vec]
         if isinstance(poly_func, (list, tuple)) and len(poly_func) > 0:

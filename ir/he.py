@@ -113,7 +113,9 @@ class HETerm:
         ):
             self.hash = hash(f"{self.op}:{cs_hashes}:{self.metadata}")
         elif self.op == HEOp.POLY and self.poly_func is not None:
-            self.hash = hash(f"{self.op}:{cs_hashes}:{repr(self.poly_func)}:{self.poly_channel}")
+            self.hash = hash(
+                f"{self.op}:{cs_hashes}:{repr(self.poly_func)}:{self.poly_channel}"
+            )
         else:
             self.hash = hash(f"{self.op}:{cs_hashes}")
 

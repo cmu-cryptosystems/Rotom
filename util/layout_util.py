@@ -596,6 +596,7 @@ def apply_layout(pt_tensor, layout):
         cts.append(ct)
     return cts
 
+
 def apply_punctured_layout(pt_tensor, layout):
     """apply a layout to a pt tensor"""
     cts = apply_layout(pt_tensor, layout)

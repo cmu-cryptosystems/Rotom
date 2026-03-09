@@ -64,7 +64,7 @@ def lower_conv2d(env, kernel):
             rot_0 = i * dim_map[0][2]
             rot_1 = j * dim_map[1][2]
             rot_amts.append(rot_0 + rot_1 + rot_offset)
-    
+
     filter_masks = []
     for i in range(b_shape[2]):
         for j in range(b_shape[3]):
@@ -93,12 +93,22 @@ def lower_conv2d(env, kernel):
         inner_stride = b_ct_dims[-1].extent
     dim_indices_masks = get_dim_indices(b_ct_dims)
     dim_map_masks = get_dim_map(b_ct_dims)
-    dim_to_pos_masks = {dim.dim: dim_map_masks[dim] for dim in b_ct_dims if dim.dim is not None}
+    dim_to_pos_masks = {
+        dim.dim: dim_map_masks[dim] for dim in b_ct_dims if dim.dim is not None
+    }
     f_w_extent_masks = b_shape[3]
     masks = []
     for ct_idx in range(b_num_cts):
-        f_h = dim_indices_masks[dim_to_pos_masks[2]][ct_idx] if 2 in dim_to_pos_masks else 0
-        f_w = dim_indices_masks[dim_to_pos_masks[3]][ct_idx] if 3 in dim_to_pos_masks else 0
+        f_h = (
+            dim_indices_masks[dim_to_pos_masks[2]][ct_idx]
+            if 2 in dim_to_pos_masks
+            else 0
+        )
+        f_w = (
+            dim_indices_masks[dim_to_pos_masks[3]][ct_idx]
+            if 3 in dim_to_pos_masks
+            else 0
+        )
         filter_idx = f_h * f_w_extent_masks + f_w
         masks.append(filter_masks[filter_idx])
 
@@ -186,10 +196,12 @@ def lower_conv2d(env, kernel):
 
     # get the output layout according to a_dims
     filter_a_dims = []
-    for a_dim, b_dim in zip(kernel.cs[0].layout.get_dims(), kernel.cs[1].layout.get_dims()):
+    for a_dim, b_dim in zip(
+        kernel.cs[0].layout.get_dims(), kernel.cs[1].layout.get_dims()
+    ):
         if b_dim not in filter_ct_dims:
             filter_a_dims.append(a_dim)
-    
+
     for ct_sum_dim in filter_ct_dims:
         if ct_sum_dim not in b_layout_cts.layout.ct_dims:
             continue
@@ -207,9 +219,14 @@ def lower_conv2d(env, kernel):
         b_layout_cts = LayoutCiphertexts(layout=new_layout, cts=sum_cts)
 
     # rename b_layout_cts to a_layout_cts, and use a's layout
-    a_layout = Layout(kernel.cs[0].layout.term, [], filter_a_dims, kernel.cs[0].layout.n, kernel.cs[0].layout.secret)
+    a_layout = Layout(
+        kernel.cs[0].layout.term,
+        [],
+        filter_a_dims,
+        kernel.cs[0].layout.n,
+        kernel.cs[0].layout.secret,
+    )
     a_layout_cts = LayoutCiphertexts(layout=a_layout, cts=b_layout_cts.cts)
-
 
     # find summing dimension for input channels
     _, slot_sum_dims = find_sum_dim(kernel.cs[0].layout, 0)
@@ -232,7 +249,7 @@ def lower_conv2d(env, kernel):
             summed_cts[index] = rotate_and_sum(term, extent, mul_offset)
         # Create new layout without the summed dimension
         new_layout = create_layout_without_dims(a_layout_cts.layout, [slot_sum_dim])
-        a_layout_cts = LayoutCiphertexts(layout=new_layout, cts=summed_cts)    
+        a_layout_cts = LayoutCiphertexts(layout=new_layout, cts=summed_cts)
 
     layout_cts = LayoutCiphertexts(layout=kernel.layout, cts=a_layout_cts.cts)
 

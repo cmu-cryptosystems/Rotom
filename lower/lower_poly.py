@@ -13,6 +13,14 @@ def lower_poly(env, kernel):
     cts = {}
     for k, v in input_cts.items():
         # Pass channel index for batchnorm so toy backend uses correct per-channel params
-        poly_channel = k if isinstance(poly_func, tuple) and poly_func and poly_func[0] == "batchnorm" else None
-        cts[k] = HETerm(HEOp.POLY, [v], v.secret, poly_func=poly_func, poly_channel=poly_channel)
+        poly_channel = (
+            k
+            if isinstance(poly_func, tuple)
+            and poly_func
+            and poly_func[0] == "batchnorm"
+            else None
+        )
+        cts[k] = HETerm(
+            HEOp.POLY, [v], v.secret, poly_func=poly_func, poly_channel=poly_channel
+        )
     return LayoutCiphertexts(layout=kernel.layout, cts=cts)
