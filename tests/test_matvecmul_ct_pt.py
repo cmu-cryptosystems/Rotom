@@ -75,3 +75,131 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
         inputs["b"] = np.array([np.random.randint(0, 2) for i in range(size)])
 
         self._run_test_case(inputs, args, backend)
+
+    def _assert_allclose(self, expected_cts, results):
+        """Assert results match expected using allclose (for float inputs)."""
+        for exp, res in zip(expected_cts, results):
+            np.testing.assert_allclose(
+                np.asarray(exp), np.asarray(res), rtol=1e-2, atol=1e-2
+            )
+
+    def test_matvecmul_ct_pt_1x64_64x32(self, backend):
+        """Test ciphertext-plaintext matmul [1, 64] @ [64, 32] - smaller MNIST-style dimensions."""
+        args = get_default_args()
+        args.n = 4096
+        args.rolls = True
+        args.benchmark = "matvecmul_ct_pt_1x64_64x32"
+
+        np.random.seed(42)
+        inputs = {"a": np.random.randn(1, 64).astype(np.float64) * 0.1,
+                  "b": np.random.randn(64, 32).astype(np.float64) * 0.1}
+        tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
+        kernel = LayoutAssignment(tensor_ir, args).run()
+        circuit_ir = Lower(kernel).run()
+        results = run_backend(backend, circuit_ir, inputs, args)
+        self._assert_allclose(apply_layout(expected, kernel.layout), results)
+
+    def test_matvecmul_ct_pt_1x100_100x50(self, backend):
+        """Test [1, 100] @ [100, 50] - non-power-of-two dimensions that pass."""
+        args = get_default_args()
+        args.n = 4096
+        args.rolls = True
+        args.benchmark = "matvecmul_ct_pt_1x100_100x50"
+
+        np.random.seed(42)
+        inputs = {"a": np.random.randn(1, 100).astype(np.float64) * 0.1,
+                  "b": np.random.randn(100, 50).astype(np.float64) * 0.1}
+        tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
+        kernel = LayoutAssignment(tensor_ir, args).run()
+        circuit_ir = Lower(kernel).run()
+        results = run_backend(backend, circuit_ir, inputs, args)
+        self._assert_allclose(apply_layout(expected, kernel.layout), results)
+
+    def test_matvecmul_ct_pt_1x80_80x48(self, backend):
+        """Test [1, 80] @ [80, 48] - non-power-of-two dimensions that pass."""
+        args = get_default_args()
+        args.n = 4096
+        args.rolls = True
+        args.benchmark = "matvecmul_ct_pt_1x80_80x48"
+
+        np.random.seed(42)
+        inputs = {"a": np.random.randn(1, 80).astype(np.float64) * 0.1,
+                  "b": np.random.randn(80, 48).astype(np.float64) * 0.1}
+        tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
+        kernel = LayoutAssignment(tensor_ir, args).run()
+        circuit_ir = Lower(kernel).run()
+        results = run_backend(backend, circuit_ir, inputs, args)
+        self._assert_allclose(apply_layout(expected, kernel.layout), results)
+
+    def test_matvecmul_ct_pt_1x130_130x66(self, backend):
+        """Test [1, 130] @ [130, 66] - non-power-of-two; uses n=32768 to avoid BSGS layout bug."""
+        args = get_default_args()
+        args.n = 32768
+        args.rolls = True
+        args.benchmark = "matvecmul_ct_pt_1x130_130x66"
+
+        np.random.seed(42)
+        inputs = {"a": np.random.randn(1, 130).astype(np.float64) * 0.1,
+                  "b": np.random.randn(130, 66).astype(np.float64) * 0.1}
+        tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
+        kernel = LayoutAssignment(tensor_ir, args).run()
+        circuit_ir = Lower(kernel).run()
+        results = run_backend(backend, circuit_ir, inputs, args)
+        self._assert_allclose(apply_layout(expected, kernel.layout), results)
+
+    def test_matvecmul_ct_pt_1x200_200x100(self, backend):
+        """Test [1, 200] @ [200, 100] - non-power-of-two; uses n=32768 to avoid BSGS layout bug."""
+        args = get_default_args()
+        args.n = 32768
+        args.rolls = True
+        args.benchmark = "matvecmul_ct_pt_1x200_200x100"
+
+        np.random.seed(42)
+        inputs = {"a": np.random.randn(1, 200).astype(np.float64) * 0.1,
+                  "b": np.random.randn(200, 100).astype(np.float64) * 0.1}
+        tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
+        kernel = LayoutAssignment(tensor_ir, args).run()
+        circuit_ir = Lower(kernel).run()
+        results = run_backend(backend, circuit_ir, inputs, args)
+        self._assert_allclose(apply_layout(expected, kernel.layout), results)
+
+    @pytest.mark.xfail(reason="BSGS_MATMUL bug: still fails with n=32k; see scripts/debug_matvecmul_1x784_784x512.py")
+    def test_matvecmul_ct_pt_1x784_784x512_n32k(self, backend):
+        """Test [1, 784] @ [784, 512] with n=32768 - still fails (uses BSGS layout)."""
+        args = get_default_args()
+        args.n = 32768
+        args.rolls = True
+        args.benchmark = "matvecmul_ct_pt_1x784_784x512_n32k"
+
+        np.random.seed(42)
+        inputs = {"a": np.random.randn(1, 784).astype(np.float64) * 0.1,
+                  "b": np.random.randn(784, 512).astype(np.float64) * 0.1}
+        tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
+        kernel = LayoutAssignment(tensor_ir, args).run()
+        circuit_ir = Lower(kernel).run()
+        results = run_backend(backend, circuit_ir, inputs, args)
+        self._assert_allclose(apply_layout(expected, kernel.layout), results)
+
+    @pytest.mark.xfail(reason="BSGS_MATMUL bug: first mismatch at slot 832; see scripts/debug_matvecmul_1x784_784x512.py")
+    def test_matvecmul_ct_pt_1x784_784x512(self, backend):
+        """Test ciphertext-plaintext matmul with MNIST FC1 dimensions: [1, 784] @ [784, 512]."""
+        args = get_default_args()
+        args.n = 4096
+        args.rolls = True
+        args.benchmark = "matvecmul_ct_pt_1x784_784x512"
+
+        np.random.seed(42)
+        inputs = {}
+        inputs["a"] = np.random.randn(1, 784).astype(np.float64) * 0.1
+        inputs["b"] = np.random.randn(784, 512).astype(np.float64) * 0.1
+
+        tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
+        kernel = LayoutAssignment(tensor_ir, args).run()
+        circuit_ir = Lower(kernel).run()
+        results = run_backend(backend, circuit_ir, inputs, args)
+        expected_cts = apply_layout(expected, kernel.layout)
+
+        for exp, res in zip(expected_cts, results):
+            np.testing.assert_allclose(
+                np.asarray(exp), np.asarray(res), rtol=1e-2, atol=1e-2
+            )

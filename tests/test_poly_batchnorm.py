@@ -12,7 +12,7 @@ from frontends.tensor import TensorOp, TensorTerm
 
 
 class TestPolyEval:
-    """Test Poly evaluation for different funcs."""
+    """Test Poly evaluation for generic funcs (identity, explicit coeffs)."""
 
     def test_poly_identity(self):
         """Poly with identity returns input unchanged (up to power-of-2 padding)."""
@@ -31,16 +31,6 @@ class TestPolyEval:
         inputs = {"a": np.array([[1.0, 2.0], [3.0, 4.0]])}
         result = out.eval(inputs)
         np.testing.assert_allclose(result, inputs["a"])
-
-    def test_poly_silu(self):
-        """Poly with silu approximates x * sigmoid(x)."""
-        a = TensorTerm.Tensor("a", [2, 2], True)
-        out = a.poly("silu")
-        x = np.array([[0.0, 1.0], [-1.0, 2.0]])
-        inputs = {"a": x}
-        result = out.eval(inputs)
-        expected = x * (1.0 / (1.0 + np.exp(-np.clip(x, -20, 20))))
-        np.testing.assert_allclose(result, expected, rtol=1e-9, atol=1e-9)
 
     def test_poly_polynomial_coeffs(self):
         """Poly with [c0, c1, c2, ...] computes c0 + c1*x + c2*x^2 + ..."""

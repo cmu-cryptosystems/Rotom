@@ -1,7 +1,6 @@
 from copy import copy as copy
 
 import numpy as np
-from _pytest._py.error import R
 
 from ir.dim import Dim, DimType
 from ir.layout import Layout
@@ -344,6 +343,9 @@ def get_segment(dim, dims):
 def get_cts_by_dim(layout_cts, dim):
     """Get ciphertext groups by dimension from LayoutCiphertexts.
 
+    For summation: groups cts that share the same index for other dimensions,
+    so each group can be summed over this dimension. One ct per dim value per group.
+
     Args:
         layout_cts: LayoutCiphertexts object containing layout and ciphertexts
         dim: Dim object to group by
@@ -351,7 +353,6 @@ def get_cts_by_dim(layout_cts, dim):
     Returns:
         List of lists of HETerm objects, grouped by the dimension
     """
-    # Access cts and layout from LayoutCiphertexts object
     cts = layout_cts.cts
     ct_dims = layout_cts.layout.ct_dims
     assert dim in ct_dims
@@ -381,30 +382,25 @@ def get_cts_by_dim(layout_cts, dim):
 
 
 def get_ct_idxs_by_dim(ct_dims, dim):
+    """Group ct indices by dimension value. Returns one group per dim value (e.g. [[0],[1],..] for 8 cts).
+    Uses original while-loop when num_ct == dim.extent (e.g. 4x4): one group with all indices."""
     assert dim in ct_dims
     ct_dim_map = get_dim_map(ct_dims)
     ct_dim_index = ct_dim_map[dim]
 
-    groups = []
     dim_indices = get_dim_indices(ct_dims)
-    indices = dim_indices[ct_dim_index]
-    while any(i is not None for i in indices):
-        group = []
-        for i in range(dim.extent):
-            for j in range(len(indices)):
-                if indices[j] == i:
-                    group.append(j)
-                    indices[j] = None
-                    break
-        groups.append(group)
+    indices = list(dim_indices[ct_dim_index])
 
-    ct_groups = []
-    for group in groups:
-        ct_group = []
-        for g in group:
-            ct_group.append(g)
-        ct_groups.append(ct_group)
-    return ct_groups
+    num_ct = len(indices)
+    if num_ct == dim.extent:
+        groups = [[j for j in range(num_ct)]]
+    else:
+        groups = []
+        for i in range(dim.extent):
+            group = [j for j in range(len(indices)) if indices[j] == i]
+            groups.append(group)
+
+    return [[g for g in group] for group in groups]
 
 
 def get_dim_indices(dims):
