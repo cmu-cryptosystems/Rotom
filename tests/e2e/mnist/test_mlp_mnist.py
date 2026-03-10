@@ -19,7 +19,7 @@ import pytest
 import torch
 
 from assignment.assignment import LayoutAssignment
-from benchmarks.rotom_benchmarks.mlp_mnist import mlp_mnist
+from benchmarks.rotom_benchmarks.mlp_mnist_square import mlp_mnist_square
 from frontends.tensor import TensorTerm
 from lower.lower import Lower
 from tests.conftest import assert_results_equal, run_backend
@@ -57,7 +57,7 @@ class TestMlpMnist:
         args.n = 16
         args.rolls = True
         args.benchmark = "mlp_mnist_4"
-        tensor_ir, inputs = mlp_mnist(hidden_size=4)
+        tensor_ir, inputs = mlp_mnist_square(hidden_size=4)
         self._run_test_case(tensor_ir, inputs, args, backend)
 
     @pytest.mark.parametrize("backend", ["toy"])
@@ -67,7 +67,7 @@ class TestMlpMnist:
         args.n = 16
         args.rolls = True
         args.benchmark = "mlp_mnist_16"
-        tensor_ir, inputs = mlp_mnist(hidden_size=16)
+        tensor_ir, inputs = mlp_mnist_square(hidden_size=16)
         self._run_test_case(tensor_ir, inputs, args, backend)
 
     @pytest.mark.parametrize("backend", ["toy"])
@@ -77,7 +77,7 @@ class TestMlpMnist:
         args.n = 4096
         args.rolls = True
         args.benchmark = "mlp_mnist_64"
-        tensor_ir, inputs = mlp_mnist(hidden_size=64)
+        tensor_ir, inputs = mlp_mnist_square(hidden_size=64)
         self._run_test_case(tensor_ir, inputs, args, backend)
 
 

@@ -23,7 +23,7 @@ import numpy as np
 from frontends.tensor import TensorTerm
 
 
-def mlp_mnist(hidden_size=1024):
+def mlp_mnist_square(hidden_size=1024):
     """
     Two-layer MLP with polynomial approx-ReLU:
 
