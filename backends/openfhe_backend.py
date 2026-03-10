@@ -40,12 +40,12 @@ class CKKS:
         self.margin_depth = 4
 
         # clean data path
-        if os.path.exists("./data"):
-            shutil.rmtree("./data")
-        os.mkdir("./data")
+        if os.path.exists("./modules"):
+            shutil.rmtree("./modules")
+        os.mkdir("./modules")
 
     def get_directory_size(self):
-        path = "./data"
+        path = "./modules"
         total_size = 0
         for dirpath, dirnames, filenames in os.walk(path):
             for file in filenames:
@@ -128,19 +128,21 @@ class CKKS:
 
     def serialize_context_and_keys(self):
         serType = BINARY
-        if not SerializeToFile("data/cryptocontext.txt", self.cc, serType):
+        if not SerializeToFile("modules/cryptocontext.txt", self.cc, serType):
             raise Exception(
                 "Error writing serialization of the crypto context to cryptocontext.txt"
             )
 
         # Serialize the relinearization key
-        if not self.cc.SerializeEvalMultKey("data/key-eval-mult.txt", serType):
+        if not self.cc.SerializeEvalMultKey("modules/key-eval-mult.txt", serType):
             raise Exception(
                 'Error writing serialization of the eval mult keys to "key-eval-mult.txt"'
             )
 
         # Serialize the rotation evaluation keys
-        if not self.cc.SerializeEvalAutomorphismKey("data/key-eval-rot.txt", serType):
+        if not self.cc.SerializeEvalAutomorphismKey(
+            "modules/key-eval-rot.txt", serType
+        ):
             raise Exception(
                 'Error writing serialization of the eval rotate keys to "key-eval-rot.txt"'
             )
@@ -158,11 +160,11 @@ class CKKS:
         return term.cs[0]
 
     def serialize_ct(self, term, ct):
-        if not SerializeToFile(f"data/{term}.txt", ct, BINARY):
+        if not SerializeToFile(f"modules/{term}.txt", ct, BINARY):
             raise Exception(f"Error writing serialization of {term}")
 
     def serialize_result(self, i, ct):
-        if not SerializeToFile(f"data/result_{i}.txt", ct, BINARY):
+        if not SerializeToFile(f"modules/result_{i}.txt", ct, BINARY):
             raise Exception(f"Error writing serialization of {i}")
 
     def eval_pack(self, term, encrypt=False, cache=False):
