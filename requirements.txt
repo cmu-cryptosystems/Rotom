@@ -8,6 +8,7 @@ matplotlib==3.10.5
 numpy==2.2.6
 openfhe==1.4.0.1.24.4
 packaging==25.0
+pandas==3.0.1
 pillow==11.3.0
 pluggy==1.6.0
 Pygments==2.19.2
