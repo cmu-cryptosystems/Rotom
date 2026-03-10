@@ -68,22 +68,16 @@ class Toy:
         """
         layout = term.cs[0]
         if (layout.term, layout) not in self.input_cache:
-            print(layout.term, layout, "not in cache...?")
             tensor = layout.term.eval(self.inputs)
             # apply layout to tensor
             packed_tensor = apply_layout(tensor, layout)
             self.input_cache[(layout.term, layout)] = packed_tensor
-        print("input_cache:", self.input_cache[(layout.term, layout)])
 
         # get packing index and return packed vector
         # Parse metadata: "packing_idx rot:rot_amt" or just "packing_idx"
         metadata_parts = term.metadata.split()
-        print("metadata_parts:", metadata_parts)
         packing_idx = int(metadata_parts[0])
         vector = self.input_cache[(layout.term, layout)][packing_idx]
-        print("packing_idx:", packing_idx)
-        print("vector:", vector)
-        print()
 
         # Check if this pack has pre-rotation metadata
         rot_amt = None
@@ -91,8 +85,6 @@ class Toy:
             if part.startswith("rot:"):
                 rot_amt = int(part.split(":")[1])
                 break
-
-        print("rot_amt:", rot_amt)
 
         # Apply rotation during packing if specified (cheaper than homomorphic rotation)
         if rot_amt is not None:
@@ -151,29 +143,15 @@ class Toy:
     def eval_rot(self, term):
         """positive == left rotate"""
         vector = self.env[term.cs[0]].copy()
-        print("eval_rot", term.cs[0], term.cs[1])
-        print(vector)
-        print([vector[(term.cs[1] + i) % len(vector)] for i in range(len(vector))])
-        print()
         return [vector[(term.cs[1] + i) % len(vector)] for i in range(len(vector))]
 
     def eval_add(self, term):
-        print("eval_add", term.cs[0], term.cs[1])
-        print(self.env[term.cs[0]])
-        print(self.env[term.cs[1]])
-        print([a + b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])])
-        print()
         return [a + b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
     def eval_sub(self, term):
         return [a - b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
     def eval_mul(self, term):
-        print("eval_mul", term.cs[0], term.cs[1])
-        print(self.env[term.cs[0]])
-        print(self.env[term.cs[1]])
-        print([a * b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])])
-        print()
         return [a * b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
 
     def _apply_poly_to_vector(self, vec, poly_func, poly_channel=None):
@@ -283,8 +261,6 @@ class Toy:
     def run(self):
         results = []
         for term, cts in self.circuit_ir.items():
-            print("term:", term)
-            print(cts.keys())
             results = []
             # Sort by ciphertext index to ensure consistent ordering
             for ct_idx in sorted(cts.keys()):
@@ -296,13 +272,8 @@ class Toy:
                         results.append(self.env[ct_term])
                 else:
                     for ct_term in ct.post_order():
-                        print("EVALUATING:", ct_term)
                         self.env[ct_term] = self.eval(ct_term)
-                        print("AFTER EVAL:")
-                        print(self.env[ct_term])
                     results.append(self.env[ct_term])
-            print("results:", results)
-            print(results)
 
             # Evaluate the tensor computation to get the expected result
             eval_result = term.layout.term.eval(self.inputs)
@@ -326,28 +297,23 @@ class Toy:
                     max_diff = max(max_diff, np.max(np.abs(diff)))
 
             if not all_close:
-                print("TERM:", term)
-                print(term.layout)
+                print("expected:")
+                for expected_vec in expected:
+                    print(expected_vec)
+                print()
 
-                verify = getattr(self.args, "toy_verify", True)
-                if verify:
-                    print("expected:")
-                    for expected_vec in expected:
-                        print(expected_vec)
-                    print()
+                print("result:")
+                for result_vec in results:
+                    print(result_vec)
+                print()
 
-                    print("result:")
-                    for result_vec in results:
-                        print(result_vec)
-                    print()
+                print("diff:")
+                for expected_vec, result_vec in zip(expected, results):
+                    print([e - r for e, r in zip(expected_vec, result_vec)])
+                print()
+                print("expected layout:", term.layout)
 
-                    print("diff:")
-                    for expected_vec, result_vec in zip(expected, results):
-                        print([e - r for e, r in zip(expected_vec, result_vec)])
-                    print()
-                    print("expected layout:", term.layout)
-
-                    assert all_close, f"Values not close enough. Max diff: {max_diff}"
+                assert all_close, f"Values not close enough. Max diff: {max_diff}"
 
         return results
 
