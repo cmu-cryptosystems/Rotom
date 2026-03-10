@@ -40,12 +40,12 @@ class CKKS:
         self.margin_depth = 4
 
         # clean data path
-        if os.path.exists("./data"):
-            shutil.rmtree("./data")
-        os.mkdir("./data")
+        if os.path.exists("./modules"):
+            shutil.rmtree("./modules")
+        os.mkdir("./modules")
 
     def get_directory_size(self):
-        path = "./data"
+        path = "./modules"
         total_size = 0
         for dirpath, dirnames, filenames in os.walk(path):
             for file in filenames:
@@ -128,19 +128,21 @@ class CKKS:
 
     def serialize_context_and_keys(self):
         serType = BINARY
-        if not SerializeToFile("data/cryptocontext.txt", self.cc, serType):
+        if not SerializeToFile("modules/cryptocontext.txt", self.cc, serType):
             raise Exception(
                 "Error writing serialization of the crypto context to cryptocontext.txt"
             )
 
         # Serialize the relinearization key
-        if not self.cc.SerializeEvalMultKey("data/key-eval-mult.txt", serType):
+        if not self.cc.SerializeEvalMultKey("modules/key-eval-mult.txt", serType):
             raise Exception(
                 'Error writing serialization of the eval mult keys to "key-eval-mult.txt"'
             )
 
         # Serialize the rotation evaluation keys
-        if not self.cc.SerializeEvalAutomorphismKey("data/key-eval-rot.txt", serType):
+        if not self.cc.SerializeEvalAutomorphismKey(
+            "modules/key-eval-rot.txt", serType
+        ):
             raise Exception(
                 'Error writing serialization of the eval rotate keys to "key-eval-rot.txt"'
             )
@@ -158,11 +160,11 @@ class CKKS:
         return term.cs[0]
 
     def serialize_ct(self, term, ct):
-        if not SerializeToFile(f"data/{term}.txt", ct, BINARY):
+        if not SerializeToFile(f"modules/{term}.txt", ct, BINARY):
             raise Exception(f"Error writing serialization of {term}")
 
     def serialize_result(self, i, ct):
-        if not SerializeToFile(f"data/result_{i}.txt", ct, BINARY):
+        if not SerializeToFile(f"modules/result_{i}.txt", ct, BINARY):
             raise Exception(f"Error writing serialization of {i}")
 
     def eval_pack(self, term, encrypt=False, cache=False):
@@ -250,9 +252,6 @@ class CKKS:
     def eval_mul(self, term):
         return self.cc.EvalMult(self.env[term.cs[0]], self.env[term.cs[1]])
 
-    def eval_poly(self, term):
-        return self.env[term.cs[0]]
-
     def eval(self, term):
         match term.op:
             case HEOp.PACK | HEOp.MASK:
@@ -265,6 +264,8 @@ class CKKS:
                 return self.eval_sub(term)
             case HEOp.MUL:
                 return self.eval_mul(term)
+            case HEOp.POLY:
+                raise NotImplementedError(term.op)
             case HEOp.RESCALE:
                 return self.env[term.cs[0]]
             case _:
@@ -285,7 +286,7 @@ class CKKS:
         match term.op:
             case HEOp.PACK | HEOp.MASK:
                 pass
-            case HEOp.ROT | HEOp.RESCALE:
+            case HEOp.ROT | HEOp.RESCALE | HEOp.POLY:
                 self.dependencies[term.cs[0]].remove(term)
                 if not self.dependencies[term.cs[0]]:
                     del self.dependencies[term.cs[0]]
@@ -329,7 +330,7 @@ class CKKS:
                     continue
 
                 match ct_term.op:
-                    case HEOp.PACK | HEOp.PUNCTURED_PACK:
+                    case HEOp.PACK | HEOp.PUNCTURED_PACK | HEOp.POLY:
                         continue
                     case HEOp.MASK:
                         self.pt_env[ct_term] = ct_term.cs[0]
@@ -399,6 +400,7 @@ class CKKS:
                         | HEOp.ZERO_MASK
                         | HEOp.RESCALE
                         | HEOp.PUNCTURED_PACK
+                        | HEOp.POLY
                     ):
                         continue
                     case HEOp.ADD | HEOp.SUB | HEOp.MUL:
@@ -514,6 +516,8 @@ class CKKS:
                     depth[c] = max(depth[c.cs[0]], depth[c.cs[1]])
                 case HEOp.ROT:
                     depth[c] = depth[c.cs[0]]
+                case HEOp.POLY:
+                    raise NotImplementedError(c.op)
                 case HEOp.RESCALE:
                     depth[c] = depth[c.cs[0]] + 1
                 case _:
@@ -540,6 +544,8 @@ class CKKS:
                     depth[c] = max(depth.get(c.cs[0], 0), depth.get(c.cs[1], 0))
                 case HEOp.ROT:
                     depth[c] = depth.get(c.cs[0], 0)
+                case HEOp.POLY:
+                    raise NotImplementedError(c.op)
                 case _:
                     raise NotImplementedError(
                         f"Unhandled operation in depth calculation: {c.op}"

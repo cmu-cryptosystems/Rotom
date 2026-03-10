@@ -9,7 +9,6 @@ def lower_add(env, kernel):
 
     a_cs = [HETerm(HEOp.CS, [ct], ct.secret) for ct in a_cts.values()]
     b_cs = [HETerm(HEOp.CS, [ct], ct.secret) for ct in b_cts.values()]
-
     cts = {}
     for i, (a, b) in enumerate(zip(a_cs, b_cs)):
         cts[i] = a + b

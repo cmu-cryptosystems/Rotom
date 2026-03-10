@@ -12,9 +12,14 @@ def lower_tensor(kernel):
     # evaluate ct dims
     if layout.ct_dims:
         cts = {}
+        # BUG: this is incorrect if the layout has rolls
+        # and will cause zero masking to be applied to the wrong ciphertexts
         ct_indices = layout_to_shape_indices(layout)
         for i, offset in enumerate(ct_indices):
-            if not all(a < b for a, b in zip(offset, layout_shape)):
+            # HACK: this is a temporary fix to handle the case where the layout has rolls
+            if not layout.rolls and not all(
+                a < b for a, b in zip(offset, layout_shape)
+            ):
                 cts[i] = HETerm(HEOp.ZERO_MASK, [], False)
             else:
                 cts[i] = HETerm(HEOp.PACK, [layout], layout.secret, f"{i} {kernel}")

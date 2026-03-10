@@ -55,6 +55,7 @@ def lower_replicate(env, kernel):
                     indices.append(j * k_len)
         relevant_ct_indices = [a + b for a, b in zip(relevant_ct_indices, indices)]
 
+    # 4. Map output ct indices to input cts
     cts = {}
     for i, ct_index in enumerate(relevant_ct_indices):
         if ct_index not in replicated_cts:

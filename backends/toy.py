@@ -36,6 +36,7 @@ class Toy:
         """
         self.circuit_ir = circuit_ir
         self.inputs = inputs
+        self.args = args
         self.n = args.n
         self.env = {}
         self.input_cache = {}
@@ -157,6 +158,8 @@ class Toy:
         """Apply polynomial descriptor element-wise to a list of values. Uses self.inputs for batchnorm."""
         if poly_func is None or poly_func == "identity":
             return list(vec)
+        if poly_func == "relu_exact":
+            return [float(v) if v > 0 else 0.0 for v in vec]
         if poly_func == "silu":
             return [
                 float(v * (1.0 / (1.0 + np.exp(-np.clip(v, -20, 20))))) for v in vec
@@ -310,7 +313,7 @@ class Toy:
                 print()
                 print("expected layout:", term.layout)
 
-            assert all_close, f"Values not close enough. Max diff: {max_diff}"
+                assert all_close, f"Values not close enough. Max diff: {max_diff}"
 
         return results
 
