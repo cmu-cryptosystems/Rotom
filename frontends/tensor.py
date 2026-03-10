@@ -33,6 +33,8 @@ from enum import Enum
 
 import numpy as np
 
+from .poly import APPROX_RELU_CHEBYSHEV_COEFFS
+
 
 class TensorOp(Enum):
     """Supported tensor operations.
@@ -365,6 +367,8 @@ class TensorTerm:
                 - callable: any Python function (x) -> array, same shape. Used for
                   eval only; not serializable.
                 - "silu": SiLU (Swish) x * sigmoid(x), or a polynomial approximation
+                - "relu": ReLU(x) ≈ p(x) where p is a fixed-degree Chebyshev
+                  approximation on [-20, 20], encoded as monomial coefficients
                 - ("batchnorm", mean_key, var_key, gamma_key, beta_key): BatchNorm
                   with parameter names for inputs dict; eps=1e-5 used internally
                 - list or tuple of floats [c0, c1, c2, ...]: polynomial
@@ -377,12 +381,20 @@ class TensorTerm:
         Example:
             >>> b = a.poly()  # identity
             >>> c = a.poly("silu")
+            >>> d = a.poly("relu")  # approximate ReLU via Chebyshev polynomial
             >>> d = a.poly([0, 1, 0.1])  # x + 0.1*x^2
             >>> e = x.poly(("batchnorm", "mean", "var", "gamma", "beta"))
             >>> f = x.poly(lambda t: gamma * (t - mean) / np.sqrt(var + 1e-5) + beta)
         """
         if func is None:
             func = "identity"
+        # Map named activations to concrete polynomial coefficient lists so that
+        # downstream passes only see a generic Poly with explicit coefficients.
+        # Special strings (e.g. "relu_exact") are left as-is so backends and
+        # eval() can apply a non-polynomial function when appropriate.
+        if isinstance(func, str):
+            if func == "relu":
+                func = APPROX_RELU_CHEBYSHEV_COEFFS
         return TensorTerm(TensorOp.POLY, [self, func], layout)
 
     def reshape(self, dim, shape, layout=None):
@@ -795,6 +807,8 @@ class TensorTerm:
                     return np.asarray(func(x))
                 if func == "identity":
                     return x
+                if func == "relu_exact":
+                    return np.maximum(x, 0.0)
                 if func == "silu":
                     return x * (1.0 / (1.0 + np.exp(-np.clip(x, -20, 20))))
                 if (

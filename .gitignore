@@ -2,7 +2,8 @@
 __pycache__/
 layout_cache
 *.so
-data
+# circuit files
+modules/
 .venv
 # Ignore HEIR output directory (generated MLIR files)
 heir/
