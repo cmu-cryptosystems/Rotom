@@ -194,7 +194,51 @@ def lower_bsgs_matmul(env, kernel):
                 accumulated = accumulated + partial
         cts[g] = accumulated
 
-    layout_cts = LayoutCiphertexts(layout=kernel.layout, cts=cts)
+    # When the shared dimension spans both ct_dims (handled by BSGS rotation)
+    # and slot_dims, apply rotate_and_sum for the remaining slot-level portion.
+    slot_sum_dims = []
+    for a_dim, b_dim in zip(
+        kernel.cs[1].layout.slot_dims, kernel.cs[2].layout.slot_dims
+    ):
+        if a_dim.dim is not None and b_dim.dim is not None:
+            slot_sum_dims.append(a_dim)
+
+    if slot_sum_dims:
+        kernel_cs = [cs for cs in kernel.cs if isinstance(cs, Kernel)]
+        sum_dim = max(
+            dim.dim
+            for dim in kernel_cs[0].layout.get_dims()
+            if dim.dim is not None
+        )
+        intermediate_dims = []
+        for ct_dim in kernel.cs[1].layout.ct_dims:
+            if ct_dim.dim != sum_dim:
+                intermediate_dims.append(ct_dim)
+        intermediate_dims.extend(kernel.cs[1].layout.slot_dims)
+        intermediate_layout = Layout(
+            kernel.layout.term,
+            [],
+            intermediate_dims,
+            kernel.layout.n,
+            kernel.layout.secret,
+        )
+        layout_cts = LayoutCiphertexts(layout=intermediate_layout, cts=cts)
+
+        for slot_sum_dim in slot_sum_dims:
+            segment = get_segment(slot_sum_dim, layout_cts.layout.slot_dims)
+            extent = segment[1]
+            mul_offset = segment[2]
+            summed_cts = {}
+            for index, term in layout_cts.cts.items():
+                summed_cts[index] = rotate_and_sum(term, extent, mul_offset)
+            new_layout = create_layout_without_dims(
+                layout_cts.layout, [slot_sum_dim]
+            )
+            layout_cts = LayoutCiphertexts(layout=new_layout, cts=summed_cts)
+
+        layout_cts = LayoutCiphertexts(layout=kernel.layout, cts=layout_cts.cts)
+    else:
+        layout_cts = LayoutCiphertexts(layout=kernel.layout, cts=cts)
 
     # mask out gap dimensions
     needs_mask = False
