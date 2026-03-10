@@ -4,7 +4,6 @@ import pickle as pkl
 import random
 import shutil
 import time
-from ast import Not
 
 import numpy as np
 from openfhe import *
