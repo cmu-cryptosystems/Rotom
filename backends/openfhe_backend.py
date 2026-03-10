@@ -4,6 +4,7 @@ import pickle as pkl
 import random
 import shutil
 import time
+from ast import Not
 
 import numpy as np
 from openfhe import *
@@ -250,57 +251,6 @@ class CKKS:
     def eval_mul(self, term):
         return self.cc.EvalMult(self.env[term.cs[0]], self.env[term.cs[1]])
 
-    def eval_poly(self, term):
-        """
-        Approximate polynomial evaluation for CKKS backend.
-
-        Currently supports only explicit coefficient lists/tuples:
-            poly_func = [c0, c1, c2, ...]
-        and evaluates c0 + c1*x + c2*x^2 + ... homomorphically using
-        Horner-style accumulation with ciphertext-plaintext operations.
-        """
-        base = self.env[term.cs[0]]
-        poly_func = getattr(term, "poly_func", None)
-
-        # Identity or unsupported descriptors: no-op.
-        if poly_func is None or poly_func == "identity":
-            return base
-
-        # Only handle explicit coefficient lists/tuples here.
-        if isinstance(poly_func, (list, tuple)) and len(poly_func) > 0:
-            try:
-                coeffs = [float(c) for c in poly_func]
-            except (TypeError, ValueError):
-                return base
-
-            n_slots = self.n
-
-            # Start with constant term c0 as an encrypted plaintext vector.
-            ct_sum = None
-            c0 = coeffs[0]
-            if c0 != 0.0:
-                pt_c0 = self.cc.MakeCKKSPackedPlaintext([c0] * n_slots)
-                ct_sum = self.encrypt(pt_c0)
-
-            # Precompute successive powers of x: x, x^2, x^3, ...
-            pow_ct = base  # x^1
-            for k, c in enumerate(coeffs[1:], start=1):
-                if c != 0.0:
-                    pt_c = self.cc.MakeCKKSPackedPlaintext([c] * n_slots)
-                    term_k = self.cc.EvalMult(pow_ct, pt_c)
-                    if ct_sum is None:
-                        ct_sum = term_k
-                    else:
-                        ct_sum = self.cc.EvalAdd(ct_sum, term_k)
-                # Next power: x^(k+1) = x^k * x
-                pow_ct = self.cc.EvalMult(pow_ct, base)
-
-            # Fallback: if everything was zero, just return the input.
-            return ct_sum if ct_sum is not None else base
-
-        # Fallback for unsupported poly_func types.
-        return base
-
     def eval(self, term):
         match term.op:
             case HEOp.PACK | HEOp.MASK:
@@ -314,7 +264,7 @@ class CKKS:
             case HEOp.MUL:
                 return self.eval_mul(term)
             case HEOp.POLY:
-                return self.eval_poly(term)
+                raise NotImplementedError(term.op)
             case HEOp.RESCALE:
                 return self.env[term.cs[0]]
             case _:
@@ -566,14 +516,7 @@ class CKKS:
                 case HEOp.ROT:
                     depth[c] = depth[c.cs[0]]
                 case HEOp.POLY:
-                    # Approximate multiplicative depth contribution of a polynomial.
-                    poly_func = getattr(c, "poly_func", None)
-                    extra = 0
-                    if isinstance(poly_func, (list, tuple)):
-                        # Degree = len(coeffs) - 1; our EvalMult chain uses (degree-1)
-                        # ciphertext-ciphertext multiplications.
-                        extra = max(0, len(poly_func) - 1)
-                    depth[c] = depth[c.cs[0]] + extra
+                    raise NotImplementedError(c.op)
                 case HEOp.RESCALE:
                     depth[c] = depth[c.cs[0]] + 1
                 case _:
@@ -601,13 +544,7 @@ class CKKS:
                 case HEOp.ROT:
                     depth[c] = depth.get(c.cs[0], 0)
                 case HEOp.POLY:
-                    # Treat POLY as adding multiplicative depth based on polynomial degree.
-                    poly_func = getattr(c, "poly_func", None)
-                    extra = 0
-                    if isinstance(poly_func, (list, tuple)):
-                        extra = max(0, len(poly_func) - 1)
-                    base_depth = depth.get(c.cs[0], 0)
-                    depth[c] = base_depth + (extra if c.secret else 0)
+                    raise NotImplementedError(c.op)
                 case _:
                     raise NotImplementedError(
                         f"Unhandled operation in depth calculation: {c.op}"

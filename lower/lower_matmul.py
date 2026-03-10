@@ -113,8 +113,6 @@ def lower_bsgs_matmul(env, kernel):
     stride = prod(dim.extent for dim in rot_rolled_kernel.layout.slot_dims[1:])
 
     num_output_cts = kernel.layout.num_ct()
-    rep_dim = repeated_ct_dims[0]
-
     rep_ct_dims = replicated_kernel.layout.ct_dims
     rolled_ct_dims = rolled_kernel.layout.ct_dims
     rep_dim_indices = get_dim_indices(rep_ct_dims)
@@ -182,7 +180,6 @@ def lower_bsgs_matmul(env, kernel):
     # Run BSGS for each output group, accumulating over inner chunks.
     # Each inner chunk uses a different replicated ct (different input column group).
     cts = {}
-    print("num_output_cts", num_output_cts)
     for g in range(num_output_cts):
         accumulated = None
         for chunk_idx, inner_val in enumerate(inner_chunk_values):
@@ -190,11 +187,6 @@ def lower_bsgs_matmul(env, kernel):
             pts = {}
             for d in range(dim_size):
                 pts[d] = rolled_cts[rolled_lookup[(g, d, inner_val)]]
-            print("bsgs: g", g)
-            print("bsgs: inner_val", inner_val)
-            print("bsgs: dim_size", dim_size)
-            print("bsgs: stride", stride)
-            print()
             partial = bsgs(rep_ct, pts, dim_size, stride, True)
             if accumulated is None:
                 accumulated = partial

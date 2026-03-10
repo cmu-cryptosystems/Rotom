@@ -5,28 +5,11 @@ from lower.layout_cts import LayoutCiphertexts
 def lower_sub(env, kernel):
     a_cts = env[kernel.cs[0]]
     b_cts = env[kernel.cs[1]]
+    assert len(a_cts.keys()) == len(b_cts.keys())
 
-    a_keys = sorted(a_cts.keys())
-    b_keys = sorted(b_cts.keys())
-
-    # Broadcast when ct counts differ: replicate the smaller operand.
-    if len(a_keys) >= len(b_keys):
-        ratio = len(a_keys) // len(b_keys)
-        cts = {}
-        for i, a_key in enumerate(a_keys):
-            b_idx = i // ratio
-            b_key = b_keys[b_idx]
-            a_term = HETerm(HEOp.CS, [a_cts[a_key]], a_cts[a_key].secret)
-            b_term = HETerm(HEOp.CS, [b_cts[b_key]], b_cts[b_key].secret)
-            cts[a_key] = a_term - b_term
-    else:
-        ratio = len(b_keys) // len(a_keys)
-        cts = {}
-        for i, b_key in enumerate(b_keys):
-            a_idx = i // ratio
-            a_key = a_keys[a_idx]
-            a_term = HETerm(HEOp.CS, [a_cts[a_key]], a_cts[a_key].secret)
-            b_term = HETerm(HEOp.CS, [b_cts[b_key]], b_cts[b_key].secret)
-            cts[b_key] = a_term - b_term
-
+    a_cs = [HETerm(HEOp.CS, [ct], ct.secret) for ct in a_cts.values()]
+    b_cs = [HETerm(HEOp.CS, [ct], ct.secret) for ct in b_cts.values()]
+    cts = {}
+    for i, (a, b) in enumerate(zip(a_cs, b_cs)):
+        cts[i] = a - b
     return LayoutCiphertexts(layout=kernel.layout, cts=cts)

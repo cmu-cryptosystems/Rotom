@@ -343,9 +343,6 @@ def get_segment(dim, dims):
 def get_cts_by_dim(layout_cts, dim):
     """Get ciphertext groups by dimension from LayoutCiphertexts.
 
-    For summation: groups cts that share the same index for other dimensions,
-    so each group can be summed over this dimension. One ct per dim value per group.
-
     Args:
         layout_cts: LayoutCiphertexts object containing layout and ciphertexts
         dim: Dim object to group by
@@ -382,9 +379,6 @@ def get_cts_by_dim(layout_cts, dim):
 
 
 def get_ct_idxs_by_dim(ct_dims, dim):
-    """Group ct indices by dimension value. Returns one group per dim value (e.g. [[0],[1],..] for 8 cts).
-    Uses original while-loop when num_ct == dim.extent (e.g. 4x4): one group with all indices.
-    """
     assert dim in ct_dims
     ct_dim_map = get_dim_map(ct_dims)
     ct_dim_index = ct_dim_map[dim]
@@ -539,8 +533,6 @@ def apply_layout(pt_tensor, layout):
 
     # Get the actual tensor dimensionality
     pt_tensor_ndim = np.ndim(pt_tensor)
-    print("pt_tensor_ndim:", pt_tensor_ndim)
-    print("pt_tensor.shape:", pt_tensor.shape)
 
     cts = []
     for ct_index in range(len(base_indices_by_cts)):
@@ -594,10 +586,6 @@ def apply_layout(pt_tensor, layout):
         # this places cts in row-major order
         cts.append(ct)
 
-    print("layout:", layout)
-    for ct in cts:
-        print("ct:", ct)
-    print()
     return cts
 
 

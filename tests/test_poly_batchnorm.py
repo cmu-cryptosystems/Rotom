@@ -11,38 +11,6 @@ import numpy as np
 from frontends.tensor import TensorOp, TensorTerm
 
 
-class TestPolyEval:
-    """Test Poly evaluation for generic funcs (identity, explicit coeffs)."""
-
-    def test_poly_identity(self):
-        """Poly with identity returns input unchanged (up to power-of-2 padding)."""
-        a = TensorTerm.Tensor("a", [2, 3], True)
-        out = a.poly("identity")
-        inputs = {"a": np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])}
-        result = out.eval(inputs)
-        # Eval pads to power-of-2; poly(identity) preserves that
-        expected_padded = np.array([[1.0, 2.0, 3.0, 0.0], [4.0, 5.0, 6.0, 0.0]])
-        np.testing.assert_allclose(result, expected_padded)
-
-    def test_poly_default_identity(self):
-        """Poly with no func (default) is identity."""
-        a = TensorTerm.Tensor("a", [2, 2], True)
-        out = a.poly()
-        inputs = {"a": np.array([[1.0, 2.0], [3.0, 4.0]])}
-        result = out.eval(inputs)
-        np.testing.assert_allclose(result, inputs["a"])
-
-    def test_poly_polynomial_coeffs(self):
-        """Poly with [c0, c1, c2, ...] computes c0 + c1*x + c2*x^2 + ..."""
-        a = TensorTerm.Tensor("a", [2, 2], True)
-        out = a.poly([1.0, 2.0, 0.5])  # 1 + 2*x + 0.5*x^2
-        x = np.array([[0.0, 1.0], [2.0, -1.0]])
-        inputs = {"a": x}
-        result = out.eval(inputs)
-        expected = 1.0 + 2.0 * x + 0.5 * (x**2)
-        np.testing.assert_allclose(result, expected, rtol=1e-9, atol=1e-9)
-
-
 class TestBatchNorm:
     """Test BatchNorm via Poly."""
 
