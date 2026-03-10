@@ -93,6 +93,8 @@ def layout_to_shape_indices(layout):
             else:
                 indices_map[dim.dim] = add_vec(indices_map[dim.dim], dim_indices[i])
 
+    print("indices_map:", indices_map)
+
     if unique_dims == 1:
         return [(a,) for a in indices_map[0]]
     elif unique_dims == 2:

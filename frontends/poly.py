@@ -28,12 +28,9 @@ def build_relu_chebyshev_coeffs(
     # handle domain scaling. This yields a numerically stable approximation
     # that is reasonably accurate (on the order of a few percent) across the
     # domain for a moderate polynomial degree.
-    cheb = np.polynomial.chebyshev.Chebyshev.fit(
-        xs, ys, degree, domain=[lower, upper]
-    )
+    cheb = np.polynomial.chebyshev.Chebyshev.fit(xs, ys, degree, domain=[lower, upper])
     mono = cheb.convert(kind=np.polynomial.Polynomial)
     return [float(c) for c in mono.coef]
 
 
 APPROX_RELU_CHEBYSHEV_COEFFS = build_relu_chebyshev_coeffs()
-

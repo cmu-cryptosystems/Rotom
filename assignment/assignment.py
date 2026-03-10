@@ -619,23 +619,6 @@ class LayoutAssignment:
         """
         assert term in self.kernels and term in self.kernel_costs
         assert self.kernels[term] and self.kernel_costs[term]
-
-        # Debug: Print all candidate costs
-        if term.op.value == "MATMUL" or (
-            hasattr(term, "op") and str(term).startswith("(@")
-        ):
-            print(f"\n=== Search for {term} ===")
-            print(f"Number of candidate layouts: {len(self.kernel_costs[term])}")
-            for layout_key, cost in sorted(
-                self.kernel_costs[term].items(), key=lambda kv: kv[1]
-            ):
-                kernel = self.kernels[term][layout_key].kernel
-                has_rolls = bool(kernel.layout.rolls)
-                print(f"  Layout: {layout_key}")
-                print(f"    Has rolls: {has_rolls}, Cost: {cost}")
-                print(f"    Layout: {kernel.layout}")
-            print("=" * 60)
-
         best_layout, _best_cost = min(
             self.kernel_costs[term].items(), key=lambda kv: kv[1]
         )

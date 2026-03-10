@@ -35,4 +35,3 @@ class TestPolyActivations:
         # moderate polynomial degree, so we only expect agreement up to a few
         # percent rather than machine precision.
         np.testing.assert_allclose(result, expected, rtol=5e-2, atol=5e-2)
-

@@ -91,8 +91,10 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
         args.benchmark = "matvecmul_ct_pt_1x64_64x32"
 
         np.random.seed(42)
-        inputs = {"a": np.random.randn(1, 64).astype(np.float64) * 0.1,
-                  "b": np.random.randn(64, 32).astype(np.float64) * 0.1}
+        inputs = {
+            "a": np.random.randn(1, 64).astype(np.float64) * 0.1,
+            "b": np.random.randn(64, 32).astype(np.float64) * 0.1,
+        }
         tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
         kernel = LayoutAssignment(tensor_ir, args).run()
         circuit_ir = Lower(kernel).run()
@@ -107,8 +109,10 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
         args.benchmark = "matvecmul_ct_pt_1x100_100x50"
 
         np.random.seed(42)
-        inputs = {"a": np.random.randn(1, 100).astype(np.float64) * 0.1,
-                  "b": np.random.randn(100, 50).astype(np.float64) * 0.1}
+        inputs = {
+            "a": np.random.randn(1, 100).astype(np.float64) * 0.1,
+            "b": np.random.randn(100, 50).astype(np.float64) * 0.1,
+        }
         tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
         kernel = LayoutAssignment(tensor_ir, args).run()
         circuit_ir = Lower(kernel).run()
@@ -123,8 +127,10 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
         args.benchmark = "matvecmul_ct_pt_1x80_80x48"
 
         np.random.seed(42)
-        inputs = {"a": np.random.randn(1, 80).astype(np.float64) * 0.1,
-                  "b": np.random.randn(80, 48).astype(np.float64) * 0.1}
+        inputs = {
+            "a": np.random.randn(1, 80).astype(np.float64) * 0.1,
+            "b": np.random.randn(80, 48).astype(np.float64) * 0.1,
+        }
         tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
         kernel = LayoutAssignment(tensor_ir, args).run()
         circuit_ir = Lower(kernel).run()
@@ -139,8 +145,10 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
         args.benchmark = "matvecmul_ct_pt_1x130_130x66"
 
         np.random.seed(42)
-        inputs = {"a": np.random.randn(1, 130).astype(np.float64) * 0.1,
-                  "b": np.random.randn(130, 66).astype(np.float64) * 0.1}
+        inputs = {
+            "a": np.random.randn(1, 130).astype(np.float64) * 0.1,
+            "b": np.random.randn(130, 66).astype(np.float64) * 0.1,
+        }
         tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
         kernel = LayoutAssignment(tensor_ir, args).run()
         circuit_ir = Lower(kernel).run()
@@ -155,15 +163,70 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
         args.benchmark = "matvecmul_ct_pt_1x200_200x100"
 
         np.random.seed(42)
-        inputs = {"a": np.random.randn(1, 200).astype(np.float64) * 0.1,
-                  "b": np.random.randn(200, 100).astype(np.float64) * 0.1}
+        inputs = {
+            "a": np.random.randn(1, 200).astype(np.float64) * 0.1,
+            "b": np.random.randn(200, 100).astype(np.float64) * 0.1,
+        }
         tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
         kernel = LayoutAssignment(tensor_ir, args).run()
         circuit_ir = Lower(kernel).run()
         results = run_backend(backend, circuit_ir, inputs, args)
         self._assert_allclose(apply_layout(expected, kernel.layout), results)
 
-    @pytest.mark.xfail(reason="BSGS_MATMUL bug: still fails with n=32k; see scripts/debug_matvecmul_1x784_784x512.py")
+    def test_matvecmul_ct_pt_1x8_8x4_n16(self, backend):
+        """Test [1, 8] @ [8, 4] with n=2048"""
+        args = get_default_args()
+        args.n = 16
+        args.rolls = True
+        args.benchmark = "matvecmul_ct_pt_1x8_8x4_n16"
+
+        np.random.seed(42)
+        inputs = {
+            "a": np.random.randn(1, 8).astype(np.float64) * 0.1,
+            "b": np.random.randn(8, 4).astype(np.float64) * 0.1,
+        }
+        tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
+        kernel = LayoutAssignment(tensor_ir, args).run()
+        circuit_ir = Lower(kernel).run()
+        results = run_backend(backend, circuit_ir, inputs, args)
+        self._assert_allclose(apply_layout(expected, kernel.layout), results)
+
+    def test_matvecmul_ct_pt_1x9_9x4_n16(self, backend):
+        """Test [1, 9] @ [9, 4] with n=16"""
+        args = get_default_args()
+        args.n = 16
+        args.rolls = True
+        args.benchmark = "matvecmul_ct_pt_1x9_9x4_n16"
+
+        np.random.seed(42)
+        inputs = {
+            "a": np.random.randn(1, 9).astype(np.float64) * 0.1,
+            "b": np.random.randn(9, 4).astype(np.float64) * 0.1,
+        }
+        tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
+        kernel = LayoutAssignment(tensor_ir, args).run()
+        circuit_ir = Lower(kernel).run()
+        results = run_backend(backend, circuit_ir, inputs, args)
+        self._assert_allclose(apply_layout(expected, kernel.layout), results)
+
+    def test_matvecmul_ct_pt_1x49_49x16_n2k(self, backend):
+        """Test [1, 49] @ [49, 16] with n=2048"""
+        args = get_default_args()
+        args.n = 2048
+        args.rolls = True
+        args.benchmark = "matvecmul_ct_pt_1x49_49x16_n2048"
+
+        np.random.seed(42)
+        inputs = {
+            "a": np.random.randn(1, 49).astype(np.float64) * 0.1,
+            "b": np.random.randn(49, 16).astype(np.float64) * 0.1,
+        }
+        tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
+        kernel = LayoutAssignment(tensor_ir, args).run()
+        circuit_ir = Lower(kernel).run()
+        results = run_backend(backend, circuit_ir, inputs, args)
+        self._assert_allclose(apply_layout(expected, kernel.layout), results)
+
     def test_matvecmul_ct_pt_1x784_784x512_n32k(self, backend):
         """Test [1, 784] @ [784, 512] with n=32768 - still fails (uses BSGS layout)."""
         args = get_default_args()
@@ -172,15 +235,16 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
         args.benchmark = "matvecmul_ct_pt_1x784_784x512_n32k"
 
         np.random.seed(42)
-        inputs = {"a": np.random.randn(1, 784).astype(np.float64) * 0.1,
-                  "b": np.random.randn(784, 512).astype(np.float64) * 0.1}
+        inputs = {
+            "a": np.random.randn(1, 784).astype(np.float64) * 0.1,
+            "b": np.random.randn(784, 512).astype(np.float64) * 0.1,
+        }
         tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
         kernel = LayoutAssignment(tensor_ir, args).run()
         circuit_ir = Lower(kernel).run()
         results = run_backend(backend, circuit_ir, inputs, args)
         self._assert_allclose(apply_layout(expected, kernel.layout), results)
 
-    @pytest.mark.xfail(reason="BSGS_MATMUL bug: first mismatch at slot 832; see scripts/debug_matvecmul_1x784_784x512.py")
     def test_matvecmul_ct_pt_1x784_784x512(self, backend):
         """Test ciphertext-plaintext matmul with MNIST FC1 dimensions: [1, 784] @ [784, 512]."""
         args = get_default_args()

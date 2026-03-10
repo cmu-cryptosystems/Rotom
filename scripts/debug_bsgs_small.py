@@ -5,15 +5,17 @@ Also sanity-check: does matmul work without BSGS (rolls=False)?
 """
 
 import sys
+
 sys.path.insert(0, "/usr0/home/ejchen/code/packing/Rotom")
 
 import numpy as np
+
 from assignment.assignment import LayoutAssignment
 from backends.toy import Toy
 from frontends.tensor import TensorTerm
 from ir.kernel import KernelOp
 from lower.lower import Lower
-from lower.lower_util import find_bsgs_interval, bsgs
+from lower.lower_util import bsgs, find_bsgs_interval
 from tests.conftest import run_backend
 from tests.test_util import get_default_args
 from util.layout_util import apply_layout
@@ -39,8 +41,7 @@ def test_without_bsgs(m, n):
     results = run_backend("toy", circuit_ir, inputs, args)
     expected = apply_layout(inputs["a"] @ inputs["b"], kernel.layout)
     max_diff = max(
-        np.max(np.abs(np.asarray(e) - np.asarray(r)))
-        for e, r in zip(expected, results)
+        np.max(np.abs(np.asarray(e) - np.asarray(r))) for e, r in zip(expected, results)
     )
     return max_diff < 1e-2, max_diff
 
@@ -65,8 +66,7 @@ def test_with_bsgs(m, n):
     results = run_backend("toy", circuit_ir, inputs, args)
     expected = apply_layout(inputs["a"] @ inputs["b"], kernel.layout)
     max_diff = max(
-        np.max(np.abs(np.asarray(e) - np.asarray(r)))
-        for e, r in zip(expected, results)
+        np.max(np.abs(np.asarray(e) - np.asarray(r))) for e, r in zip(expected, results)
     )
     return max_diff < 1e-2, max_diff, kernel, circuit_ir
 
@@ -137,13 +137,19 @@ def analyze_bsgs_structure(m, n):
     print("\n=== Partial product alignment (slot 0) ===")
     print("  For output slot 0, we sum over dim_size indices.")
     print("  ct is rotated by bs*stride -> slot i gets ct[i - bs*stride]")
-    print("  pt is rotated by -baby_step*gs*stride -> slot i gets pt[i + baby_step*gs*stride]")
+    print(
+        "  pt is rotated by -baby_step*gs*stride -> slot i gets pt[i + baby_step*gs*stride]"
+    )
     print("  Mul: slot i contributes ct[i-bs*stride] * pt[i+baby_step*gs*stride]")
     print("  For slot 0: need ct[-bs*stride] * pt[baby_step*gs*stride]")
-    print("  After baby-step sum: slot 0 has sum over bs of ct[-bs*stride]*pt[bs*stride] (gs=0)")
+    print(
+        "  After baby-step sum: slot 0 has sum over bs of ct[-bs*stride]*pt[bs*stride] (gs=0)"
+    )
     print("  After giant-step sum: slot 0 has sum over gs of (rotated sum)")
     print("  Final: slot 0 = sum_{k=0}^{dim_size-1} ct[-k*stride] * pt[k*stride]")
-    print(f"  So we need ct at slots 0, -stride, -2*stride, ... and pt at 0, stride, 2*stride, ...")
+    print(
+        f"  So we need ct at slots 0, -stride, -2*stride, ... and pt at 0, stride, 2*stride, ..."
+    )
 
     return dim_size, stride, baby_step, giant_step
 
@@ -172,7 +178,9 @@ def trace_bsgs_slot_by_slot(m, n):
         print("Kernel does not use BSGS_MATMUL, skipping trace")
         return
 
-    rot_rolled = kernel.cs[1] if kernel.cs[1].op == KernelOp.BSGS_ROT_ROLL else kernel.cs[2]
+    rot_rolled = (
+        kernel.cs[1] if kernel.cs[1].op == KernelOp.BSGS_ROT_ROLL else kernel.cs[2]
+    )
     roll_idx = kernel.cs[0]
     dims = rot_rolled.layout.get_dims()
     dim_size = dims[roll_idx[0]].extent
@@ -187,7 +195,10 @@ def trace_bsgs_slot_by_slot(m, n):
 
     # Apply layout to get packed form
     from util.layout_util import apply_layout, get_dim_indices
-    packed_a = apply_layout(a.reshape(1, m), kernel.cs[1].cs[1].layout)  # REPLICATE input
+
+    packed_a = apply_layout(
+        a.reshape(1, m), kernel.cs[1].cs[1].layout
+    )  # REPLICATE input
     packed_b = apply_layout(b, kernel.cs[2].layout)  # weights
 
     # For each output ct, first 512 slots (or whatever) map to output elements

@@ -14,7 +14,9 @@ def lower_tensor(kernel):
         cts = {}
         ct_indices = layout_to_shape_indices(layout)
         for i, offset in enumerate(ct_indices):
-            if not all(a < b for a, b in zip(offset, layout_shape)):
+            if not layout.rolls and not all(
+                a < b for a, b in zip(offset, layout_shape)
+            ):
                 cts[i] = HETerm(HEOp.ZERO_MASK, [], False)
             else:
                 cts[i] = HETerm(HEOp.PACK, [layout], layout.secret, f"{i} {kernel}")

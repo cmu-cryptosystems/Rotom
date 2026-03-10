@@ -76,10 +76,14 @@ def _debug_bsgs_matmul(kernel_term, expected, results, eval_result):
     mismatch_slots = np.where(np.abs(exp_flat - res_flat) > 1e-2)[0]
     print(f"    nonzero expected slots (first 20): {nonzero_exp[:20].tolist()}")
     print(f"    mismatch slots (first 20): {mismatch_slots[:20].tolist()}")
-    print(f"    first mismatch at slot: {mismatch_slots[0] if len(mismatch_slots) > 0 else 'N/A'}")
+    print(
+        f"    first mismatch at slot: {mismatch_slots[0] if len(mismatch_slots) > 0 else 'N/A'}"
+    )
     if len(nonzero_exp) > 0:
         for i in nonzero_exp[:5]:
-            print(f"      slot {i}: exp={exp_flat[i]:.6f} res={res_flat[i]:.6f} diff={exp_flat[i]-res_flat[i]:.6f}")
+            print(
+                f"      slot {i}: exp={exp_flat[i]:.6f} res={res_flat[i]:.6f} diff={exp_flat[i]-res_flat[i]:.6f}"
+            )
 
 
 def compare_vectors(expected, result, name, rtol=1e-2, atol=1e-2):
@@ -98,7 +102,9 @@ def compare_vectors(expected, result, name, rtol=1e-2, atol=1e-2):
         n_show = min(5, len(bad))
         print(f"  {name}: MISMATCH max_diff={max_diff:.6f}")
         for i in bad[:n_show]:
-            print(f"    slot {i}: expected={exp_arr.flat[i]:.6f} got={res_arr.flat[i]:.6f}")
+            print(
+                f"    slot {i}: expected={exp_arr.flat[i]:.6f} got={res_arr.flat[i]:.6f}"
+            )
         if len(bad) > n_show:
             print(f"    ... and {len(bad) - n_show} more")
     return max_diff
@@ -217,7 +223,9 @@ def main():
             flat_res = np.concatenate([np.asarray(v).flatten() for v in results])
             pred_exp = int(np.argmax(flat_exp[:out_dim]))
             pred_res = int(np.argmax(flat_res[:out_dim]))
-            print(f"  Plaintext pred: {pred_exp}, Toy pred: {pred_res}, Label: {int(labels[idx].item())}")
+            print(
+                f"  Plaintext pred: {pred_exp}, Toy pred: {pred_res}, Label: {int(labels[idx].item())}"
+            )
 
     # Final summary: full logits
     print("\n" + "=" * 60)

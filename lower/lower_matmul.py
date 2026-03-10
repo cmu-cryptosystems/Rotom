@@ -141,8 +141,10 @@ def lower_bsgs_matmul(env, kernel):
     for idx, d in enumerate(rolled_ct_dims):
         if diag_dim_idx is None and d.extent == dim_size:
             diag_dim_idx = idx
-        elif rolled_output_dim_idx is None and d.dim is not None and any(
-            od.dim == d.dim and od.extent == d.extent for od in output_ct_dims
+        elif (
+            rolled_output_dim_idx is None
+            and d.dim is not None
+            and any(od.dim == d.dim and od.extent == d.extent for od in output_ct_dims)
         ):
             rolled_output_dim_idx = idx
         else:
@@ -180,6 +182,7 @@ def lower_bsgs_matmul(env, kernel):
     # Run BSGS for each output group, accumulating over inner chunks.
     # Each inner chunk uses a different replicated ct (different input column group).
     cts = {}
+    print("num_output_cts", num_output_cts)
     for g in range(num_output_cts):
         accumulated = None
         for chunk_idx, inner_val in enumerate(inner_chunk_values):
@@ -187,6 +190,11 @@ def lower_bsgs_matmul(env, kernel):
             pts = {}
             for d in range(dim_size):
                 pts[d] = rolled_cts[rolled_lookup[(g, d, inner_val)]]
+            print("bsgs: g", g)
+            print("bsgs: inner_val", inner_val)
+            print("bsgs: dim_size", dim_size)
+            print("bsgs: stride", stride)
+            print()
             partial = bsgs(rep_ct, pts, dim_size, stride, True)
             if accumulated is None:
                 accumulated = partial
@@ -206,9 +214,7 @@ def lower_bsgs_matmul(env, kernel):
     if slot_sum_dims:
         kernel_cs = [cs for cs in kernel.cs if isinstance(cs, Kernel)]
         sum_dim = max(
-            dim.dim
-            for dim in kernel_cs[0].layout.get_dims()
-            if dim.dim is not None
+            dim.dim for dim in kernel_cs[0].layout.get_dims() if dim.dim is not None
         )
         intermediate_dims = []
         for ct_dim in kernel.cs[1].layout.ct_dims:
@@ -231,9 +237,7 @@ def lower_bsgs_matmul(env, kernel):
             summed_cts = {}
             for index, term in layout_cts.cts.items():
                 summed_cts[index] = rotate_and_sum(term, extent, mul_offset)
-            new_layout = create_layout_without_dims(
-                layout_cts.layout, [slot_sum_dim]
-            )
+            new_layout = create_layout_without_dims(layout_cts.layout, [slot_sum_dim])
             layout_cts = LayoutCiphertexts(layout=new_layout, cts=summed_cts)
 
         layout_cts = LayoutCiphertexts(layout=kernel.layout, cts=layout_cts.cts)

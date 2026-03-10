@@ -6,7 +6,6 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 IMAGES_FILE = os.path.join(DATA_DIR, "t10k-images-idx3-ubyte")
 LABELS_FILE = os.path.join(DATA_DIR, "t10k-labels-idx1-ubyte")
@@ -21,7 +20,9 @@ def _load_idx_images(path: str) -> torch.Tensor:
             raise ValueError(f"Incomplete IDX image header in {path}")
         magic, num_images, rows, cols = struct.unpack(">IIII", header)
         if magic != 2051:
-            raise ValueError(f"Unexpected magic number {magic} in {path}, expected 2051")
+            raise ValueError(
+                f"Unexpected magic number {magic} in {path}, expected 2051"
+            )
         data = f.read()
 
     images = np.frombuffer(data, dtype=np.uint8)
@@ -44,7 +45,9 @@ def _load_idx_labels(path: str) -> torch.Tensor:
             raise ValueError(f"Incomplete IDX label header in {path}")
         magic, num_items = struct.unpack(">II", header)
         if magic != 2049:
-            raise ValueError(f"Unexpected magic number {magic} in {path}, expected 2049")
+            raise ValueError(
+                f"Unexpected magic number {magic} in {path}, expected 2049"
+            )
         data = f.read()
 
     labels = np.frombuffer(data, dtype=np.uint8)
@@ -117,4 +120,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

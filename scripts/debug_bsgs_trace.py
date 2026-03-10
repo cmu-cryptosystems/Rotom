@@ -5,15 +5,17 @@ Find where the mismatch originates.
 """
 
 import sys
+
 sys.path.insert(0, "/usr0/home/ejchen/code/packing/Rotom")
 
 import numpy as np
+
 from assignment.assignment import LayoutAssignment
 from backends.toy import Toy
 from frontends.tensor import TensorTerm
 from ir.kernel import KernelOp
-from lower.lower import Lower as LowerPass
 from lower.layout_cts import LayoutCiphertexts
+from lower.lower import Lower as LowerPass
 from tests.test_util import get_default_args
 from util.layout_util import apply_layout, get_ct_idxs_by_dim
 
@@ -108,8 +110,10 @@ def main():
         print(f"REPLICATE output: {len(rep_layout_cts.cts)} cts")
         for i, ct in list(rep_layout_cts.cts.items())[:3]:
             # Get the root term (before rotations in post_order)
-            terms = list(ct.post_order()) if hasattr(ct, 'post_order') else []
-            rot_terms = [t for t in terms if hasattr(t, 'op') and str(t.op) == 'HEOp.ROT']
+            terms = list(ct.post_order()) if hasattr(ct, "post_order") else []
+            rot_terms = [
+                t for t in terms if hasattr(t, "op") and str(t.op) == "HEOp.ROT"
+            ]
             print(f"  ct[{i}]: {len(terms)} terms, {len(rot_terms)} ROTs")
             if rot_terms:
                 print(f"    first ROT: {rot_terms[0]}")
@@ -150,7 +154,9 @@ def main():
         arr = np.asarray(pt).flatten()
         print(f"  packed_B[{i}]: len={len(arr)}, first 4 slots: {arr[:4]}")
         if i == 1:
-            print(f"    slots 0,512,1024,1536: {arr[0]}, {arr[512]}, {arr[1024]}, {arr[1536]}")
+            print(
+                f"    slots 0,512,1024,1536: {arr[0]}, {arr[512]}, {arr[1024]}, {arr[1536]}"
+            )
 
     # For BSGS, we need pt at slots 0, stride, 2*stride, ... for the inner product.
     # Stride = 512. So we need pt[0], pt[512], pt[1024], pt[1536], ...
@@ -166,12 +172,15 @@ def main():
     print("\n--- Output layout mapping ---")
     out_layout = kernel.layout
     from util.layout_util import get_dim_indices
+
     dim_indices = get_dim_indices(out_layout.get_dims())
     # Which slot holds output element (0, j)?
     # The layout has dims. For [1:8:16][G:32][1:16:1], we have 8, 32, 16.
     # So we have 8*32*16 = 4096 slots. But we only have 66 output elements.
     # So there are gaps (G:32). The layout packs 66 elements with gaps.
-    print(f"Output layout dims: {[(str(d), d.extent, d.dim) for d in out_layout.get_dims()]}")
+    print(
+        f"Output layout dims: {[(str(d), d.extent, d.dim) for d in out_layout.get_dims()]}"
+    )
 
 
 if __name__ == "__main__":

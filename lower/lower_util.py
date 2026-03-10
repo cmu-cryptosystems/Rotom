@@ -45,7 +45,9 @@ def find_bsgs_interval(n):
 
 def bsgs(ct, pts, dim_size, stride, left):  # 3. find bsgs interval
     baby_step, giant_step = find_bsgs_interval(dim_size)
-
+    print("bsgs: baby_step", baby_step)
+    print("bsgs: giant_step", giant_step)
+    print()
     # 4. apply bsgs
     # 4.1 apply baby_steps to `a`
     ct_baby_steps = {}

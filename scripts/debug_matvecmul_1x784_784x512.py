@@ -15,9 +15,11 @@ Findings:
 """
 
 import sys
+
 sys.path.insert(0, "/usr0/home/ejchen/code/packing/Rotom")
 
 import numpy as np
+
 from assignment.assignment import LayoutAssignment
 from backends.toy import Toy
 from frontends.tensor import TensorTerm

@@ -7,9 +7,11 @@ Non-power-of-two dimensions: 100, 130, 512, 784, etc.
 """
 
 import sys
+
 sys.path.insert(0, "/usr0/home/ejchen/code/packing/Rotom")
 
 import numpy as np
+
 from assignment.assignment import LayoutAssignment
 from backends.toy import Toy
 from frontends.tensor import TensorTerm
@@ -36,6 +38,7 @@ def test_matvecmul(m, n, args, verbose=False):
 
     # Check which matmul path was used
     from ir.kernel import KernelOp
+
     matmul_ops = []
     for term in kernel.post_order():
         if term.op == KernelOp.BSGS_MATMUL:
@@ -55,7 +58,9 @@ def test_matvecmul(m, n, args, verbose=False):
     close = max_diff < 1e-2
     if verbose or not close:
         path = matmul_ops[0] if matmul_ops else "?"
-        print(f"  [1,{m}] @ [{m},{n}] -> {path}: max_diff={max_diff:.6f} {'PASS' if close else 'FAIL'}")
+        print(
+            f"  [1,{m}] @ [{m},{n}] -> {path}: max_diff={max_diff:.6f} {'PASS' if close else 'FAIL'}"
+        )
     return close, max_diff
 
 
@@ -67,11 +72,25 @@ def main():
     # Test dimensions: (m, n) for [1,m] @ [m,n]
     dims = [
         # Powers of 2
-        (4, 4), (8, 8), (16, 16), (32, 32), (64, 32), (64, 64), (128, 64), (128, 128),
+        (4, 4),
+        (8, 8),
+        (16, 16),
+        (32, 32),
+        (64, 32),
+        (64, 64),
+        (128, 64),
+        (128, 128),
         # Non-power-of-two
-        (100, 50), (130, 66), (256, 128), (512, 256), (512, 512),
+        (100, 50),
+        (130, 66),
+        (256, 128),
+        (512, 256),
+        (512, 512),
         (784, 512),  # MNIST FC1
-        (128, 65), (65, 32), (80, 48), (200, 100),
+        (128, 65),
+        (65, 32),
+        (80, 48),
+        (200, 100),
     ]
 
     print("Testing matvecmul dimensions [1,M] @ [M,N] with n=4096:")
