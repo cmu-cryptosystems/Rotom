@@ -26,6 +26,7 @@ from lower.lower_matmul import lower_bsgs_matmul, lower_matmul
 from lower.lower_mul import lower_mul
 from lower.lower_permute import lower_permute
 from lower.lower_poly import lower_poly
+from lower.lower_poly_call import lower_poly_call
 from lower.lower_reorder import lower_reorder
 from lower.lower_replicate import lower_replicate
 from lower.lower_rescale import lower_rescale
@@ -112,6 +113,8 @@ class Lower:
                     self.env[term] = lower_rescale(self.env, term)
                 case KernelOp.POLY:
                     self.env[term] = lower_poly(self.env, term)
+                case KernelOp.POLY_CALL:
+                    self.env[term] = lower_poly_call(self.env, term)
                 case _:
                     raise NotImplementedError(term.op)
 
@@ -124,10 +127,10 @@ class Lower:
             opt_ct = mask_identity_opt(opt_ct)
             opt_ct = zero_mask_identity_opt(opt_ct)
 
-            # Lift rotations to packing phase (optimization for convolution)
-            # This replaces ROT(CS(PACK(...)), rot_amt) with pre-rotated PACK operations
-            # The backend can then rotate during packing instead of homomorphically
-            opt_ct = lift_rotations_to_pack(opt_ct)
+            # # Lift rotations to packing phase (optimization for convolution)
+            # # This replaces ROT(CS(PACK(...)), rot_amt) with pre-rotated PACK operations
+            # # The backend can then rotate during packing instead of homomorphically
+            # opt_ct = lift_rotations_to_pack(opt_ct)
 
             opt_cts[ct_idx] = opt_ct
 

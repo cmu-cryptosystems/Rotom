@@ -11,6 +11,8 @@ def rot_zero_opt(he_term):
         for i, cs in enumerate(term.cs):
             if term.op in [HEOp.PACK, HEOp.MASK, HEOp.ZERO_MASK]:
                 continue
+            if type(cs) == dict:
+                continue
             if cs in update_map:
                 term.cs[i] = update_map[cs]
 
@@ -26,6 +28,8 @@ def rot_zero_opt(he_term):
     # update term cs
     for i, cs in enumerate(he_term.cs):
         if he_term.op in [HEOp.PACK, HEOp.MASK, HEOp.ZERO_MASK]:
+            continue
+        if type(cs) == dict:
             continue
         if cs in update_map:
             he_term.cs[i] = update_map[cs]

@@ -94,27 +94,15 @@ def interpret_mlir(mlir_file, inputs_dir=None):
         # Handle both regular operations and extract_slice with "to" keyword
         match = re.match(r"(%\w+) = (\w+\.\w+) (.+) : (.+)", line)
         if not match:
-            # Try extract_slice format with "to" keyword
             match = re.match(r"(%\w+) = (\w+\.\w+) (.+) : (.+) to (.+)", line)
         if not match:
-            # Try return statement
-            if line.startswith("return"):
-                return_match = re.search(r"return (%\w+)", line)
-                if return_match:
-                    result_var = return_match.group(1)
-                    result = env.get(result_var, None)
-                    if result is not None:
-                        return result
-            continue
+            match = re.match(r"(%\w+) = (call) (.+) : (.+)", line)
+        
+        if match is None: continue 
 
         result_var = match.group(1)
         operation = match.group(2)
         args_str = match.group(3).strip()
-        types_str = match.group(4).strip()
-
-        # For extract_slice with "to" keyword, we have an extra group
-        if len(match.groups()) > 4:
-            result_type_str = match.group(5).strip()
 
         # Parse arguments
         args = [arg.strip() for arg in args_str.split(",")]
@@ -122,7 +110,7 @@ def interpret_mlir(mlir_file, inputs_dir=None):
         # Execute operation
         if operation == "arith.constant":
             # Format: %c5 = arith.constant 4 : index
-            const_match = re.match(r"(\d+)", args_str)
+            const_match = re.match(r"(-?\d+)", args_str)
             if const_match:
                 value = int(const_match.group(1))
                 env[result_var] = value
@@ -143,37 +131,41 @@ def interpret_mlir(mlir_file, inputs_dir=None):
             # Multiplication: %1 = arith.mulf %2, %3 : tensor<16xf32>
             arg1 = env.get(args[0])
             arg2 = env.get(args[1])
-            if arg1 is not None and arg2 is not None:
-                result = arg1 * arg2
-                env[result_var] = result
+            if arg1 is None or arg2 is None:
+                raise ValueError("arg1 or arg2 is None")
+            result = arg1 * arg2
+            env[result_var] = result
 
         elif operation == "arith.addf":
             # Addition: %8 = arith.addf %1, %6 : tensor<16xf32>
             arg1 = env.get(args[0])
             arg2 = env.get(args[1])
-            if arg1 is not None and arg2 is not None:
-                result = arg1 + arg2
-                env[result_var] = result
+            if arg1 is None or arg2 is None:
+                raise ValueError("arg1 or arg2 is None")
+            result = arg1 + arg2
+            env[result_var] = result
 
         elif operation == "arith.subf":
             # Subtraction
             arg1 = env.get(args[0])
             arg2 = env.get(args[1])
-            if arg1 is not None and arg2 is not None:
-                result = arg1 - arg2
-                env[result_var] = result
+            if arg1 is None or arg2 is None:
+                raise ValueError("arg1 or arg2 is None")
+            result = arg1 - arg2
+            env[result_var] = result
 
         elif operation == "tensor_ext.rotate":
             # Rotation: %4 = tensor_ext.rotate %2, %c5 : tensor<16xf32>, index
             # positive rotation amount means left rotate
             arg1 = env.get(args[0])
             rot_amt = env.get(args[1])
-            if arg1 is not None and rot_amt is not None:
-                vector = arg1.copy()
-                n = len(vector)
-                # Left rotate by rot_amt: element at i goes to (i - rot_amt) % n
-                rotated = np.array([vector[(i + rot_amt) % n] for i in range(n)])
-                env[result_var] = rotated
+            if arg1 is None or rot_amt is None:
+                raise ValueError("arg1 or rot_amt is None")
+            vector = arg1.copy()
+            n = len(vector)
+            # Left rotate by rot_amt: element at i goes to (i - rot_amt) % n
+            rotated = np.array([vector[(i + rot_amt) % n] for i in range(n)])
+            env[result_var] = rotated
 
         elif operation == "tensor.extract_slice":
             # Format: %3 = tensor.extract_slice %2 [0, 0] [1 4096] [1, 1] : tensor<64x4096xf64> {secret.secret} to tensor<1x4096xf64>
@@ -232,7 +224,17 @@ def interpret_mlir(mlir_file, inputs_dir=None):
                             raise ValueError(
                                 f"Unsupported tensor dimension for extract_slice: {source_tensor.ndim}"
                             )
-
+        elif operation == "call":
+            call_match = re.match(r"@(\w+)\((%\w+)\)", args_str)
+            if call_match:
+                func_name = call_match.group(1)
+                arg_var = call_match.group(2)
+                arg = env.get(arg_var)
+                if arg is not None:
+                    if func_name == "relu":
+                        env[result_var] = np.maximum(arg, 0)
+                    else:
+                        raise ValueError(f"Unknown called function: @{func_name}")
         step += 1
 
     # Get return value - look for return statement

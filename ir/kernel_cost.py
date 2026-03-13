@@ -533,6 +533,18 @@ class KernelCost:
         ops["mul"] += cts
         return ops
 
+    def poly_call_ops(self, ops):
+        """Calculate polynomial call operations.
+
+        Args:
+            ops: Dictionary of operation counts
+        """
+        cts = self.kernel.layout.num_ct()
+        ops["add"] += cts
+        ops["rot"] += cts
+        ops["mul"] += cts
+        return ops
+
     def conversion_ops(self, ops):
         """Calculate conversion operations (assume conversions are very expensive).
 
@@ -656,6 +668,8 @@ class KernelCost:
                 ops = self.compact_ops(ops)
             case KernelOp.POLY:
                 ops = self.poly_ops(ops)
+            case KernelOp.POLY_CALL:
+                ops = self.poly_call_ops(ops)
             case KernelOp.CONVERSION:
                 ops = self.conversion_ops(ops)
             case KernelOp.COMBINE:

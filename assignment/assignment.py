@@ -27,6 +27,7 @@ from assignment.gen.gen_conv2d import gen_conv2d, gen_conv2d_roll
 from assignment.gen.gen_index import gen_index
 from assignment.gen.gen_permute import gen_permute
 from assignment.gen.gen_poly import gen_poly
+from assignment.gen.gen_poly_call import gen_poly_call
 from assignment.gen.gen_rescale import gen_rescale
 from assignment.gen.gen_reshape import gen_reshape
 from assignment.gen.gen_strassens import gen_strassens
@@ -166,6 +167,8 @@ class LayoutAssignment:
                 kernels = gen_block_matmul(term, cs_kernels)
             case TensorOp.POLY:
                 kernels = gen_poly(term, cs_kernels[0])
+            case TensorOp.POLY_CALL:
+                kernels = gen_poly_call(term, cs_kernels[0])
             case _:
                 raise NotImplementedError(term.op)
         assert kernels
@@ -387,6 +390,7 @@ class LayoutAssignment:
             case (
                 TensorOp.TRANSPOSE
                 | TensorOp.POLY
+                | TensorOp.POLY_CALL
                 | TensorOp.SUM
                 | TensorOp.RESHAPE
                 | TensorOp.PERMUTE

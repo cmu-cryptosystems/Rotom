@@ -50,6 +50,7 @@ class Secret:
                 | TensorOp.SUM
                 | TensorOp.PRODUCT
                 | TensorOp.POLY
+                | TensorOp.POLY_CALL
                 | TensorOp.RESHAPE
                 | TensorOp.PERMUTE
                 | TensorOp.INDEX
@@ -102,6 +103,7 @@ class Secret:
                 TensorOp.TRANSPOSE
                 | TensorOp.SUM
                 | TensorOp.POLY
+                | TensorOp.POLY_CALL
                 | TensorOp.RESHAPE
                 | TensorOp.PERMUTE
                 | TensorOp.INDEX

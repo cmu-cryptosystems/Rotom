@@ -55,6 +55,7 @@ class TensorOp(Enum):
         BLOCK_MATMUL: Block matrix multiplication
         CONV2D: 2D convolution
         POLY: Polynomial approximation
+        POLY_CALL: Polynomial approximation call
         RESHAPE: Tensor reshaping
         PERMUTE: Dimension permutation
         INDEX: Tensor indexing
@@ -72,6 +73,7 @@ class TensorOp(Enum):
     BLOCK_MATMUL = "Block_MatMul"  # block matmul
     CONV2D = "Conv"  # convolutions
     POLY = "Poly"  # polynomial approximation
+    POLY_CALL = "PolyCall"  # polynomial approximation call
     RESHAPE = "Reshape"  # tensor reshape
     PERMUTE = "Permute"  # permute dims
     INDEX = "Index"
@@ -357,6 +359,24 @@ class TensorTerm:
             >>> c = a.transpose(layout="[1:4:1][0:4:1]")  # With layout
         """
         return TensorTerm(TensorOp.TRANSPOSE, [self], layout)
+
+    def poly_call(self, name, upper_bound, lower_bound, layout=None):
+        """Call a polynomial approximation.
+
+        Args:
+            name (str): The name of the polynomial approximation or named function
+            upper_bound (float): The upper bound of the polynomial approximation
+            lower_bound (float): The lower bound of the polynomial approximation
+            layout (str, optional): Tensor layout string for the result
+
+        Returns:
+            TensorTerm: A new tensor term representing the Poly call operation
+
+        Example:
+            >>> b = a.poly_call("relu", 20, -20)  # Call ReLU with upper bound 20 and lower bound -20
+            >>> c = a.poly_call("relu", 20, -20, layout="[0:4:1][1:4:1]")  # With layout
+        """
+        return TensorTerm(TensorOp.POLY_CALL, [self, name, upper_bound, lower_bound], layout)
 
     def poly(self, func=None, layout=None):
         """Apply a polynomial approximation or named function element-wise.
@@ -863,6 +883,20 @@ class TensorTerm:
                         return out
                 raise NotImplementedError(
                     f"Poly func {func!r} not implemented for eval"
+                )
+            case TensorOp.POLY_CALL:
+                x = env[self.cs[0]]
+                func = self.cs[1] if len(self.cs) > 1 else "identity"
+                if func == "identity":
+                    return x
+                if func == "relu_exact":
+                    return np.maximum(x, 0.0)
+                if func == "relu":
+                    return np.maximum(x, 0.0)
+                if func == "silu":
+                    return x * (1.0 / (1.0 + np.exp(-np.clip(x, -20, 20))))
+                raise NotImplementedError(
+                    f"Poly call func {func!r} not implemented for eval"
                 )
             case _:
                 raise NotImplementedError(self.op)

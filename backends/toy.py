@@ -202,8 +202,9 @@ class Toy:
     def eval_poly(self, term):
         """Apply the actual POLY function when term.poly_func is set (from lowering); else identity."""
         vec = self.env[term.cs[0]]
-        poly_func = getattr(term, "poly_func", None)
-        poly_channel = getattr(term, "poly_channel", None)
+        metadata = term.cs[1]
+        poly_func = metadata.get("poly_func", None)
+        poly_channel = metadata.get("poly_channel", None)
         return self._apply_poly_to_vector(vec, poly_func, poly_channel=poly_channel)
 
     def eval_rescale(self, term):
