@@ -97,8 +97,9 @@ def interpret_mlir(mlir_file, inputs_dir=None):
             match = re.match(r"(%\w+) = (\w+\.\w+) (.+) : (.+) to (.+)", line)
         if not match:
             match = re.match(r"(%\w+) = (call) (.+) : (.+)", line)
-        
-        if match is None: continue 
+
+        if match is None:
+            continue
 
         result_var = match.group(1)
         operation = match.group(2)

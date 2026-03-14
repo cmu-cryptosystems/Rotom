@@ -85,7 +85,7 @@ class HEIR:
                 packed_tensor = apply_layout(tensor, layout)
                 self.input_cache[layout] = packed_tensor
 
-        # get packed vector 
+        # get packed vector
         packing_idx = int(term.metadata.split()[0])
         vector = self.input_cache[layout][packing_idx]
 
@@ -95,7 +95,7 @@ class HEIR:
 
         # create argument term id used in the function definition
         if base_term not in self.term_to_vector:
-            # create a new id for this input argument 
+            # create a new id for this input argument
             self.term_to_vector[base_term] = []
             self.term_to_id[base_term] = f"%{self.next_id}"
             self.next_id += 1
@@ -104,13 +104,13 @@ class HEIR:
             self.term_to_type[base_term] = self.term_input_type(
                 self.input_cache[layout], base_term_secret
             )
-        # add base vector values to term_to_vector to serialize later 
+        # add base vector values to term_to_vector to serialize later
         if term not in self.term_to_id:
             self.term_to_vector[base_term].append(vector)
 
         # create extracted term id to reference in the rest of the computation
         if term not in self.term_to_id:
-            # create an id for the extracted ct 
+            # create an id for the extracted ct
             self.term_to_id[term] = f"%{self.next_id}"
             self.term_to_type[term] = self.term_type()
             self.next_id += 1
@@ -120,8 +120,7 @@ class HEIR:
 
             line = f"{extract_term_id} = tensor.extract_slice {self.term_to_id[base_term]} [{len(self.term_to_vector[base_term])-1}, 0] [1, {self.n}] [1, 1] : {self.term_to_type[base_term]} to {extract_term_type}"
             self.lines.append(line)
-        return vector 
-
+        return vector
 
     def eval_indices(self, term):
         tensor = self.inputs[term.cs[0].cs[0]]
@@ -172,14 +171,14 @@ class HEIR:
         out_term_id = self.term_to_id[term]
         out_term_type = self.term_to_type[term]
         line = f"{out_term_id} = arith.mulf {a_term_id}, {b_term_id} : {out_term_type}"
-        self.lines.append(line)    
+        self.lines.append(line)
 
     def eval_poly_call(self, term):
-        # get the poly call term id and type 
+        # get the poly call term id and type
         poly_call_term_id = self.term_to_id[term]
         poly_call_term_type = self.term_to_type[term]
 
-        # get the mapped term id and type 
+        # get the mapped term id and type
         mapped_term_id = self.term_to_id[term.cs[0]]
         assert poly_call_term_type == self.term_to_type[term.cs[0]]
 
@@ -187,10 +186,9 @@ class HEIR:
         func_name = metadata["poly_func"]
         domain_lower = metadata["lower_bound"]
         domain_upper = metadata["upper_bound"]
-        # create the poly call line 
+        # create the poly call line
         line = f"{poly_call_term_id} = call @{func_name}({mapped_term_id}) {{domain_lower = {domain_lower}, domain_upper = {domain_upper}}} : ({poly_call_term_type}) -> ({poly_call_term_type})"
         self.lines.append(line)
-
 
     def term_input_type(self, vectors, secret):
         if secret:
@@ -207,12 +205,14 @@ class HEIR:
                 for cs_term in term.cs:
                     # if the cs_term does not have an id
                     if cs_term not in self.term_to_id:
-                        # this means that the cs_term is something extracted 
-                        # from an argument term, so we need to get the id of the 
-                        # argument term, extract the vector, and create an id 
+                        # this means that the cs_term is something extracted
+                        # from an argument term, so we need to get the id of the
+                        # argument term, extract the vector, and create an id
                         # for the cs_term
                         vector = (
-                            self.env[cs_term] if cs_term.secret else self.pt_env[cs_term]
+                            self.env[cs_term]
+                            if cs_term.secret
+                            else self.pt_env[cs_term]
                         )
 
                         # get the base term
@@ -220,28 +220,30 @@ class HEIR:
                         base_term = self.get_base_term_name(base)
                         base_term_secret = self.get_base_term_secret(base)
 
-                        # check if the base term is defined already 
+                        # check if the base term is defined already
                         if base_term not in self.term_to_vector:
                             self.term_to_vector[base_term] = []
                             self.term_to_id[base_term] = f"%{self.next_id}"
                             self.next_id += 1
-                        
-                        # add the vector for serialization 
+
+                        # add the vector for serialization
                         self.term_to_vector[base_term].append(vector)
 
-                        # get base_term id and type 
+                        # get base_term id and type
                         base_term_id = self.term_to_id[base_term]
                         self.term_to_type[base_term] = self.term_input_type(
                             self.input_cache[base.cs[0]], base_term_secret
                         )
-                        base_term_type = self.term_input_type(self.input_cache[base.cs[0]], False)
+                        base_term_type = self.term_input_type(
+                            self.input_cache[base.cs[0]], False
+                        )
 
-                        # create cs_term id and type 
+                        # create cs_term id and type
                         self.term_to_id[cs_term] = f"%{self.next_id}"
                         self.term_to_type[cs_term] = self.term_type()
                         self.next_id += 1
 
-                        # extract the cs_term 
+                        # extract the cs_term
                         extract_term_id = self.term_to_id[cs_term]
                         extract_term_type = self.term_to_type[cs_term]
                         line = f"{extract_term_id} = tensor.extract_slice {base_term_id} [{len(self.term_to_vector[base_term])-1}, 0] [1, {self.n}] [1, 1] : {base_term_type} to {extract_term_type}"
@@ -257,7 +259,7 @@ class HEIR:
             self.next_id += 1
 
         self.eval_cs(term)
-          
+
         match term.op:
             case HEOp.PACK:
                 self.eval_pack(term)
@@ -428,17 +430,17 @@ class HEIR:
                     case _:
                         raise NotImplementedError(ct_term.op)
 
-
     def run(self):
         cts = self.dagify_fhe_circuit()
-    
+
         self.preprocess_packing(cts)
         self.preprocess_pt_compute(cts)
 
         for ct in cts:
             self.returns = []
             for ct_term in ct.post_order():
-                if not ct_term.secret or ct_term in self.term_to_id: continue
+                if not ct_term.secret or ct_term in self.term_to_id:
+                    continue
                 self.eval(ct_term)
             self.returns.append(ct)
 

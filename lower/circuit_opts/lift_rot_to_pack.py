@@ -94,7 +94,7 @@ def lift_rotations_to_pack(he_term):
         for i, cs in enumerate(term.cs):
             if term.op in [HEOp.PACK, HEOp.MASK, HEOp.ZERO_MASK]:
                 continue
-            if type(cs) == dict:
+            if isinstance(cs, dict):
                 continue
             if cs in update_map:
                 term.cs[i] = update_map[cs]
@@ -195,7 +195,7 @@ def lift_rotations_to_pack(he_term):
     for i, cs in enumerate(he_term.cs):
         if he_term.op in [HEOp.PACK, HEOp.MASK, HEOp.ZERO_MASK]:
             continue
-        if type(cs) == dict:
+        if isinstance(cs, dict):
             continue
         if cs in update_map:
             he_term.cs[i] = update_map[cs]

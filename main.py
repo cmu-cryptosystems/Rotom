@@ -28,12 +28,12 @@ from benchmarks.rotom_benchmarks.double_matmul.double_matmul_256_128_ct_ct impor
 from benchmarks.rotom_benchmarks.logreg import logreg
 from benchmarks.rotom_benchmarks.matmul.matmul_128_64 import matmul_128_64
 from benchmarks.rotom_benchmarks.matmul.matmul_256_128 import matmul_256_128
-from benchmarks.rotom_benchmarks.mlp_mnist_square import mlp_mnist_square
-from benchmarks.rotom_benchmarks.resnet_silu import resnet_silu, resnet_silu_one_layer
-from benchmarks.rotom_benchmarks.ttm import ttm
 
 # heir benchmarks
 from benchmarks.rotom_benchmarks.mlp_mnist_heir import mlp_mnist_heir
+from benchmarks.rotom_benchmarks.mlp_mnist_square import mlp_mnist_square
+from benchmarks.rotom_benchmarks.resnet_silu import resnet_silu, resnet_silu_one_layer
+from benchmarks.rotom_benchmarks.ttm import ttm
 
 # Import Rotom
 from frontends.tensor import TensorTerm
@@ -162,7 +162,7 @@ def run_benchmark_or_microbenchmark(args):
 
         # Lower to circuit IR
         circuit_ir = Lower(kernel).run()
-        
+
         # Serialize circuit if requested
         if args.serialize:
             circuit_name = f"{args.benchmark}_{args.n}"
@@ -228,7 +228,7 @@ def main(args):
     a = TensorTerm.Tensor("a", [64, 64], True)
     b = TensorTerm.Tensor("b", [64, 64], False)
     c = TensorTerm.Tensor("c", [64, 64], False)
-    tensor_ir = a @ b 
+    tensor_ir = a @ b
     inputs = {}
     inputs["a"] = np.array(
         [[np.random.randint(0, 10) * 0.1 for j in range(64)] for i in range(64)]

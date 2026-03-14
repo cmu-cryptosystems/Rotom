@@ -23,7 +23,5 @@ def lower_poly(env, kernel):
         metadata = {}
         metadata["poly_func"] = poly_func
         metadata["poly_channel"] = poly_channel
-        cts[k] = HETerm(
-            HEOp.POLY, [v, metadata], v.secret
-        )
+        cts[k] = HETerm(HEOp.POLY, [v, metadata], v.secret)
     return LayoutCiphertexts(layout=kernel.layout, cts=cts)

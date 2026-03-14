@@ -2,10 +2,10 @@
 MLP inference for MNIST (HEIR-style, with approx-ReLU via Poly).
 
 Based on https://github.com/google/heir/issues/1232: MLP inference on MNIST
-using HEIR CKKS. 
-  - FC1: 784x512 
+using HEIR CKKS.
+  - FC1: 784x512
   - Approx-RELU (polynomial approximation)
-  - FC2: 512x10 
+  - FC2: 512x10
 """
 
 import numpy as np
@@ -27,16 +27,10 @@ def mlp_mnist_heir():
     inputs = {}
     inputs["input"] = np.array([[np.random.randn() * 0.1 for _ in range(784)]])
     inputs["fc1"] = np.array(
-        [
-            [np.random.randn() * 0.1 for _ in range(512)]
-            for _ in range(784)
-        ]
+        [[np.random.randn() * 0.1 for _ in range(512)] for _ in range(784)]
     )
     inputs["fc2"] = np.array(
-        [
-            [np.random.randn() * 0.1 for _ in range(10)]
-            for _ in range(512)
-        ]
+        [[np.random.randn() * 0.1 for _ in range(10)] for _ in range(512)]
     )
 
     inp = TensorTerm.Tensor("input", [1, 784], True)

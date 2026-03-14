@@ -376,7 +376,9 @@ class TensorTerm:
             >>> b = a.poly_call("relu", 20, -20)  # Call ReLU with upper bound 20 and lower bound -20
             >>> c = a.poly_call("relu", 20, -20, layout="[0:4:1][1:4:1]")  # With layout
         """
-        return TensorTerm(TensorOp.POLY_CALL, [self, name, upper_bound, lower_bound], layout)
+        return TensorTerm(
+            TensorOp.POLY_CALL, [self, name, upper_bound, lower_bound], layout
+        )
 
     def poly(self, func=None, layout=None):
         """Apply a polynomial approximation or named function element-wise.
