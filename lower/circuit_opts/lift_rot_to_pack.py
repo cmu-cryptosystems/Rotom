@@ -11,8 +11,6 @@ This allows the backend to rotate during packing (cheaper) instead of
 homomorphically (more expensive).
 """
 
-from collections import defaultdict
-
 from ir.he import HEOp, HETerm
 
 
@@ -95,6 +93,8 @@ def lift_rotations_to_pack(he_term):
         # Update term children first
         for i, cs in enumerate(term.cs):
             if term.op in [HEOp.PACK, HEOp.MASK, HEOp.ZERO_MASK]:
+                continue
+            if isinstance(cs, dict):
                 continue
             if cs in update_map:
                 term.cs[i] = update_map[cs]
@@ -194,6 +194,8 @@ def lift_rotations_to_pack(he_term):
     # Final update of root term's children
     for i, cs in enumerate(he_term.cs):
         if he_term.op in [HEOp.PACK, HEOp.MASK, HEOp.ZERO_MASK]:
+            continue
+        if isinstance(cs, dict):
             continue
         if cs in update_map:
             he_term.cs[i] = update_map[cs]

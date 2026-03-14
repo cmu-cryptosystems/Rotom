@@ -56,6 +56,7 @@ class KernelOp(Enum):
     CONV2D_ROLL = "CONV2D_ROLL"
     # poly
     POLY = "POLY"
+    POLY_CALL = "POLY_CALL"
     # conversions
     CONVERSION = "CONVERSION"
     REPLICATE = "REPLICATE"

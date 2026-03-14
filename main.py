@@ -28,7 +28,10 @@ from benchmarks.rotom_benchmarks.double_matmul.double_matmul_256_128_ct_ct impor
 from benchmarks.rotom_benchmarks.logreg import logreg
 from benchmarks.rotom_benchmarks.matmul.matmul_128_64 import matmul_128_64
 from benchmarks.rotom_benchmarks.matmul.matmul_256_128 import matmul_256_128
-from benchmarks.rotom_benchmarks.mlp_mnist import mlp_mnist
+
+# heir benchmarks
+from benchmarks.rotom_benchmarks.mlp_mnist_heir import mlp_mnist_heir
+from benchmarks.rotom_benchmarks.mlp_mnist_square import mlp_mnist_square
 from benchmarks.rotom_benchmarks.resnet_silu import resnet_silu, resnet_silu_one_layer
 from benchmarks.rotom_benchmarks.ttm import ttm
 
@@ -123,8 +126,8 @@ def run_benchmark_or_microbenchmark(args):
             case "logreg":
                 tensor_ir, inputs = logreg()
                 args.n = n
-            case "mlp_mnist":
-                tensor_ir, inputs = mlp_mnist()
+            case "mlp_mnist_square":
+                tensor_ir, inputs = mlp_mnist_square()
                 args.n = n
             case "resnet_silu":
                 tensor_ir, inputs, n = resnet_silu()
@@ -138,12 +141,16 @@ def run_benchmark_or_microbenchmark(args):
             case "bert_attention":
                 tensor_ir, inputs, n = bert_attention()
                 args.n = n
+            case "mlp_mnist_heir":
+                tensor_ir, inputs = mlp_mnist_heir()
+                args.n = n
             case _:
                 raise NotImplementedError("unknown benchmark")
 
         assert tensor_ir
         assert inputs
         assert n
+
         # Generate kernel from tensor_ir
         kernel = LayoutAssignment(tensor_ir, args).run()
 
@@ -216,11 +223,12 @@ def main(args):
         run_benchmark_or_microbenchmark(args)
         return
 
+    np.random.seed(42)
     # create inputs
     a = TensorTerm.Tensor("a", [64, 64], True)
     b = TensorTerm.Tensor("b", [64, 64], False)
     c = TensorTerm.Tensor("c", [64, 64], False)
-    tensor_ir = a @ b @ c
+    tensor_ir = a @ b
     inputs = {}
     inputs["a"] = np.array(
         [[np.random.randint(0, 10) * 0.1 for j in range(64)] for i in range(64)]
