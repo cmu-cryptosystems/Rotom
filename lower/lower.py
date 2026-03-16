@@ -16,6 +16,7 @@ from lower.layout_cts import LayoutCiphertexts
 from lower.lower_add import lower_add
 from lower.lower_combine import lower_combine
 from lower.lower_compact import lower_compact
+from lower.lower_const import lower_const
 from lower.lower_conv2d import lower_conv2d
 from lower.lower_conv2d_roll import lower_conv2d_roll
 from lower.lower_conversion import lower_conversion
@@ -63,6 +64,8 @@ class Lower:
                     self.env[term] = lower_punctured_tensor(term)
                 case KernelOp.CS:
                     self.env[term] = lower_cs_pack(term)
+                case KernelOp.CONST:
+                    self.env[term] = lower_const(term)
                 case KernelOp.REPLICATE:
                     self.env[term] = lower_replicate(self.env, term)
                 case KernelOp.ADD:

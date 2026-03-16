@@ -23,6 +23,7 @@ from re import L
 
 from assignment.gen.gen_binop import gen_binop
 from assignment.gen.gen_block_matmul import gen_block_matmul
+from assignment.gen.gen_const import gen_const
 from assignment.gen.gen_conv2d import gen_conv2d, gen_conv2d_roll
 from assignment.gen.gen_index import gen_index
 from assignment.gen.gen_permute import gen_permute
@@ -128,6 +129,8 @@ class LayoutAssignment:
         match term.op:
             case TensorOp.TENSOR:
                 kernels = gen_tensor(term, secret, shape, self.n)
+            case TensorOp.CONST:
+                kernels = gen_const(term, self.n)
             case TensorOp.ADD | TensorOp.SUB | TensorOp.MUL | TensorOp.MATMUL:
                 if self.strassens and term.op in [
                     TensorOp.MATMUL,
@@ -135,16 +138,22 @@ class LayoutAssignment:
                     kernel_map = gen_strassens(
                         term, cs_kernels, self.roll_flag, self.network
                     )
-                    for term, kernels in kernel_map.items():
-                        self.update_kernels(term, kernels)
+                    for t, kernels in kernel_map.items():
+                        self.update_kernels(t, kernels)
+                    kernels = kernel_map[term]
                 else:
                     cs_shapes = self.get_cs_shapes(term)
-                    kernels = gen_binop(
+                    kernel_map = gen_binop(
                         term,
                         cs_kernels,
                         cs_shapes,
                         self.roll_flag,
                     )
+                    for t, kernels in kernel_map.items():
+                        print("update kernels:", t, kernels)
+                        self.update_kernels(t, kernels)
+                        print("done")
+                    kernels = kernel_map[term]
             case TensorOp.SUM:
                 kernels = gen_sum(term, cs_kernels[0])
             case TensorOp.TRANSPOSE:
@@ -359,7 +368,7 @@ class LayoutAssignment:
             NotImplementedError: If the operation type is not supported
         """
         match term.op:
-            case TensorOp.TENSOR:
+            case TensorOp.TENSOR | TensorOp.CONST:
                 return []
             case (
                 TensorOp.ADD
@@ -559,6 +568,8 @@ class LayoutAssignment:
                 kernel_shape = [1] * len(shape)
 
             for i, k in enumerate(kernel_shape):
+                if not shape:
+                    continue  # if shape is None, then the kernel is a constant
                 if k != shape[i]:
                     raise ValueError(
                         f"kernel shape {kernel_shape} does not match expected shape {shape}"
@@ -569,9 +580,10 @@ class LayoutAssignment:
 
     def update_kernels(self, term, kernels):
         for kernel in kernels:
+            print("kernel:", kernel)
             # get cs kernels
             cs_kernels = get_cs_op_kernels(kernel)
-
+            print("cs_kernels:", cs_kernels)
             # get cs costs
             cs_costs = 0
             for cs_kernel in cs_kernels:
@@ -590,6 +602,9 @@ class LayoutAssignment:
 
             cs_kernel_list = []
             for cs_kernel in cs_kernels:
+                print(cs_kernel.layout.term)
+                print(cs_kernel.layout.term in self.kernels)
+                print(self.kernels[cs_kernel.layout.term])
                 cs_kernel_list.append(
                     self.kernels[cs_kernel.layout.term][
                         dimension_merging(cs_kernel.layout)

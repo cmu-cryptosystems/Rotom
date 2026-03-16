@@ -131,6 +131,12 @@ class Toy:
         packing_idx = int(term.metadata.split()[0])
         return self.input_cache[(layout.term, layout)][packing_idx]
 
+    def eval_const(self, term):
+        layout = term.cs[0]
+        vector = np.array([term.cs[1]] * self.n)
+        packed_tensor = apply_layout(vector, layout)
+        return packed_tensor
+
     def eval_indices(self, term):
         tensor = self.inputs[term.cs[0].cs[0]]
         vector = [0] * self.n
@@ -240,6 +246,8 @@ class Toy:
                 return self.eval_pack_punctured(term)
             case HEOp.CS_PACK:
                 return self.eval_cs_pack(term)
+            case HEOp.CONST:
+                return self.eval_const(term)
             case HEOp.INDICES:
                 return self.eval_indices(term)
             case HEOp.ROT:
@@ -262,6 +270,8 @@ class Toy:
     def run(self):
         results = []
         for term, cts in self.circuit_ir.items():
+            print("eval term:", term)
+            print(term.op)
             results = []
             # Sort by ciphertext index to ensure consistent ordering
             for ct_idx in sorted(cts.keys()):
@@ -278,8 +288,12 @@ class Toy:
 
             # Evaluate the tensor computation to get the expected result
             eval_result = term.layout.term.eval(self.inputs)
+            print("eval_result:", eval_result)
             if term.op == KernelOp.PUNCTURED_TENSOR:
                 expected = apply_punctured_layout(eval_result, term.layout)
+            elif term.op == KernelOp.CONST:
+                vector = np.array([eval_result] * self.n)
+                expected = apply_layout(vector, term.layout)
             else:
                 expected = apply_layout(eval_result, term.layout)
 
@@ -291,7 +305,16 @@ class Toy:
             all_close = True
             max_diff = 0.0
 
+            if term.op == KernelOp.CONST:
+                print("expected:", expected[0][0])
+                print("results:", results[0][0])
+                print("term:", term)
+                print()
+                print()
+            print("Term:", term)
+
             for expected_vec, result_vec in zip(expected, results):
+                print("HERE???")
                 if not np.allclose(expected_vec, result_vec, rtol=1e-2, atol=1e-2):
                     all_close = False
                     diff = np.array(expected_vec) - np.array(result_vec)

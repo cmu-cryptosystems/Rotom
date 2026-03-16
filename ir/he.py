@@ -46,6 +46,7 @@ class HEOp(Enum):
     CS_PACK = "CS_PACK"
     PACK = "PACK"
     PUNCTURED_PACK = "PUNCTURED_PACK"
+    CONST = "CONST"
     INDICES = "INDICES"
     ADD = "ADD"
     SUB = "SUB"
@@ -350,7 +351,12 @@ class HETerm:
         seen.add(self)
         match self.op:
             case (
-                HEOp.PACK | HEOp.PUNCTURED_PACK | HEOp.INDICES | HEOp.CS | HEOp.CS_PACK
+                HEOp.PACK
+                | HEOp.PUNCTURED_PACK
+                | HEOp.INDICES
+                | HEOp.CS
+                | HEOp.CS_PACK
+                | HEOp.CONST
             ):
                 return [self]
             case HEOp.ADD | HEOp.SUB | HEOp.MUL:

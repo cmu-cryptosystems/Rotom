@@ -97,9 +97,15 @@ class Shape:
         match term.op:
             case TensorOp.TENSOR:
                 return [round_to_ceiling_power_of_2(s) for s in term.cs[1]]
+            case TensorOp.CONST:
+                return None
             case TensorOp.ADD | TensorOp.SUB | TensorOp.MUL:
                 a_shape = copy(self.padded_shapes[term.cs[0]])
                 b_shape = copy(self.padded_shapes[term.cs[1]])
+                if a_shape is None:
+                    return b_shape
+                if b_shape is None:
+                    return a_shape
                 if len(a_shape) > len(b_shape):
                     return a_shape
                 else:
@@ -220,11 +226,17 @@ class Shape:
         match term.op:
             case TensorOp.TENSOR:
                 return term.cs[1]
+            case TensorOp.CONST:
+                return None
             case TensorOp.ADD | TensorOp.MUL | TensorOp.SUB:
                 a = term.cs[0]
                 b = term.cs[1]
                 a_shape = copy(self.get_shape(a))
                 b_shape = copy(self.get_shape(b))
+                if a_shape is None:
+                    return b_shape
+                if b_shape is None:
+                    return a_shape
                 if len(a_shape) > len(b_shape):
                     return a_shape
                 else:

@@ -142,7 +142,7 @@ def run_benchmark_or_microbenchmark(args):
                 tensor_ir, inputs, n = bert_attention()
                 args.n = n
             case "mlp_mnist_heir":
-                tensor_ir, inputs = mlp_mnist_heir()
+                tensor_ir, inputs = mlp_mnist_heir(0)
                 args.n = n
             case _:
                 raise NotImplementedError("unknown benchmark")

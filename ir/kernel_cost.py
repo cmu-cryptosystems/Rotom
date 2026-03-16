@@ -617,7 +617,7 @@ class KernelCost:
             return ops
 
         match self.kernel.op:
-            case KernelOp.TENSOR | KernelOp.PUNCTURED_TENSOR:
+            case KernelOp.TENSOR | KernelOp.PUNCTURED_TENSOR | KernelOp.CONST:
                 ops = self.tensor_ops(ops)
             case (
                 KernelOp.CS

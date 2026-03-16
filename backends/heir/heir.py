@@ -70,7 +70,7 @@ class HEIR:
 
         out_id = self.term_to_id[term]
         out_type = self.term_to_type[term]
-        line = f"{out_id} = arith.constant dense<{term.cs[0]}> : {out_type}"
+        line = f"{out_id} = arith.constant dense<{[[float(x) for x in term.cs[0]]]}> : {out_type}"
         self.lines.append(line)
 
     def eval_pack(self, term):
@@ -88,39 +88,46 @@ class HEIR:
         # get packed vector
         packing_idx = int(term.metadata.split()[0])
         vector = self.input_cache[layout][packing_idx]
+        return vector
 
-        # get base term (name of the input)
-        base_term = layout.term.cs[0]
-        base_term_secret = layout.secret
+    def eval_const(self, term):
+        vector = np.array([term.cs[1]] * self.n)
+        layout = term.cs[0]
+        packed_tensor = apply_layout(vector, layout)
+        out_id = self.term_to_id[term]
+        out_type = self.term_to_type[term]
+        line = f"{out_id} = arith.constant dense<{[packed_tensor]}> : {out_type}"
+        self.lines.append(line)
 
-        # create argument term id used in the function definition
+    def eval_cs(self, term):
+        if term in self.term_to_id and term.op != HEOp.PACK:
+            return
+        base = self.get_base_term(term)
+        base_term = self.get_base_term_name(base)
+        extract_idx = int(base.metadata.split()[0])
+        base_term_secret = self.get_base_term_secret(base)
+
+        vector = self.env[term] if term.secret else self.pt_env[term]
+
         if base_term not in self.term_to_vector:
-            # create a new id for this input argument
-            self.term_to_vector[base_term] = []
+            self.term_to_vector[base_term] = [
+                [] for _ in range(len(self.input_cache[base.cs[0]]))
+            ]
             self.term_to_id[base_term] = f"%{self.next_id}"
             self.next_id += 1
-
-            # update base type
-            self.term_to_type[base_term] = self.term_input_type(
-                self.input_cache[layout], base_term_secret
-            )
-        # add base vector values to term_to_vector to serialize later
-        if term not in self.term_to_id:
-            self.term_to_vector[base_term].append(vector)
-
-        # create extracted term id to reference in the rest of the computation
-        if term not in self.term_to_id:
-            # create an id for the extracted ct
-            self.term_to_id[term] = f"%{self.next_id}"
-            self.term_to_type[term] = self.term_type()
-            self.next_id += 1
-
-            extract_term_id = self.term_to_id[term]
-            extract_term_type = self.term_to_type[term]
-
-            line = f"{extract_term_id} = tensor.extract_slice {self.term_to_id[base_term]} [{len(self.term_to_vector[base_term])-1}, 0] [1, {self.n}] [1, 1] : {self.term_to_type[base_term]} to {extract_term_type}"
-            self.lines.append(line)
-        return vector
+        self.term_to_vector[base_term][extract_idx] = vector
+        base_term_id = self.term_to_id[base_term]
+        self.term_to_type[base_term] = self.term_input_type(
+            self.input_cache[base.cs[0]], base_term_secret
+        )
+        base_term_type = self.term_input_type(self.input_cache[base.cs[0]], False)
+        self.term_to_id[term] = f"%{self.next_id}"
+        self.term_to_type[term] = self.term_type()
+        self.next_id += 1
+        extract_term_id = self.term_to_id[term]
+        extract_term_type = self.term_to_type[term]
+        line = f"{extract_term_id} = tensor.extract_slice {base_term_id} [{extract_idx}, 0] [1, {self.n}] [1, 1] : {base_term_type} to {extract_term_type}"
+        self.lines.append(line)
 
     def eval_indices(self, term):
         tensor = self.inputs[term.cs[0].cs[0]]
@@ -133,6 +140,8 @@ class HEIR:
 
     def eval_rot(self, term):
         """positive == left rotate"""
+
+        self.eval_cs(term.cs[0])
         rot_amt = term.cs[1]
         if rot_amt not in self.term_to_id:
             self.term_to_id[rot_amt] = f"%c{self.next_id}"
@@ -146,10 +155,13 @@ class HEIR:
         b_term_id = self.term_to_id[term.cs[1]]
         b_term_type = self.term_to_type[term.cs[1]]
         out_term_id = self.term_to_id[term]
+        assert term.cs[0].secret
         line = f"{out_term_id} = tensor_ext.rotate {a_term_id}, {b_term_id} : {a_term_type}, {b_term_type}"
         self.lines.append(line)
 
     def eval_add(self, term):
+        self.eval_cs(term.cs[0])
+        self.eval_cs(term.cs[1])
         a_term_id = self.term_to_id[term.cs[0]]
         b_term_id = self.term_to_id[term.cs[1]]
         out_term_id = self.term_to_id[term]
@@ -158,6 +170,8 @@ class HEIR:
         self.lines.append(line)
 
     def eval_sub(self, term):
+        self.eval_cs(term.cs[0])
+        self.eval_cs(term.cs[1])
         a_term_id = self.term_to_id[term.cs[0]]
         b_term_id = self.term_to_id[term.cs[1]]
         out_term_id = self.term_to_id[term]
@@ -166,6 +180,8 @@ class HEIR:
         self.lines.append(line)
 
     def eval_mul(self, term):
+        self.eval_cs(term.cs[0])
+        self.eval_cs(term.cs[1])
         a_term_id = self.term_to_id[term.cs[0]]
         b_term_id = self.term_to_id[term.cs[1]]
         out_term_id = self.term_to_id[term]
@@ -199,56 +215,6 @@ class HEIR:
     def term_type(self):
         return f"tensor<1x{self.n}xf64>"
 
-    def eval_cs(self, term):
-        match term.op:
-            case HEOp.MUL | HEOp.ADD | HEOp.SUB:
-                for cs_term in term.cs:
-                    # if the cs_term does not have an id
-                    if cs_term not in self.term_to_id:
-                        # this means that the cs_term is something extracted
-                        # from an argument term, so we need to get the id of the
-                        # argument term, extract the vector, and create an id
-                        # for the cs_term
-                        vector = (
-                            self.env[cs_term]
-                            if cs_term.secret
-                            else self.pt_env[cs_term]
-                        )
-
-                        # get the base term
-                        base = self.get_base_term(cs_term)
-                        base_term = self.get_base_term_name(base)
-                        base_term_secret = self.get_base_term_secret(base)
-
-                        # check if the base term is defined already
-                        if base_term not in self.term_to_vector:
-                            self.term_to_vector[base_term] = []
-                            self.term_to_id[base_term] = f"%{self.next_id}"
-                            self.next_id += 1
-
-                        # add the vector for serialization
-                        self.term_to_vector[base_term].append(vector)
-
-                        # get base_term id and type
-                        base_term_id = self.term_to_id[base_term]
-                        self.term_to_type[base_term] = self.term_input_type(
-                            self.input_cache[base.cs[0]], base_term_secret
-                        )
-                        base_term_type = self.term_input_type(
-                            self.input_cache[base.cs[0]], False
-                        )
-
-                        # create cs_term id and type
-                        self.term_to_id[cs_term] = f"%{self.next_id}"
-                        self.term_to_type[cs_term] = self.term_type()
-                        self.next_id += 1
-
-                        # extract the cs_term
-                        extract_term_id = self.term_to_id[cs_term]
-                        extract_term_type = self.term_to_type[cs_term]
-                        line = f"{extract_term_id} = tensor.extract_slice {base_term_id} [{len(self.term_to_vector[base_term])-1}, 0] [1, {self.n}] [1, 1] : {base_term_type} to {extract_term_type}"
-                        self.lines.append(line)
-
     def eval(self, term):
         if term in self.term_to_id:
             return
@@ -258,11 +224,11 @@ class HEIR:
             self.term_to_type[term] = self.term_type()
             self.next_id += 1
 
-        self.eval_cs(term)
-
         match term.op:
             case HEOp.PACK:
                 self.eval_pack(term)
+            case HEOp.CONST:
+                self.eval_const(term)
             case HEOp.MASK:
                 self.eval_mask(term)
             case HEOp.ADD:

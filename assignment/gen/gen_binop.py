@@ -14,6 +14,7 @@ Key functions:
 
 from copy import deepcopy as copy
 from traceback import print_tb
+from typing import Any
 
 from assignment.alignment import get_dim_alignment
 from assignment.gen.gen_compaction import find_compaction
@@ -1518,7 +1519,90 @@ def apply_sum_rolls(term, replicated_kernels):
     return rolled
 
 
+def match_layout_const(dims):
+    matched_dims = []
+    for dim in dims:
+        if dim.dim is not None:
+            matched_dims.append(Dim(0, dim.extent, dim.stride))
+        else:
+            matched_dims.append(Dim(None, dim.extent, dim.stride, dim.dim_type))
+    return matched_dims
+
+
+def gen_binop_const(term, cs_kernels):
+    assert term.op in [TensorOp.ADD, TensorOp.SUB, TensorOp.MUL]
+    match term.op:
+        case TensorOp.ADD:
+            kernel_op = KernelOp.ADD
+        case TensorOp.SUB:
+            kernel_op = KernelOp.SUB
+        case TensorOp.MUL:
+            kernel_op = KernelOp.MUL
+
+    output_kernels = {}
+    if term.cs[0].op == TensorOp.CONST:
+        for cs_kernel in cs_kernels[1]:
+            dims = cs_kernel.layout.get_dims()
+            matched_dims = match_layout_const(dims)
+            matched_layout = Layout(
+                term.cs[0],
+                [],
+                matched_dims,
+                cs_kernel.layout.n,
+                cs_kernel.layout.secret,
+            )
+            matched_kernel = Kernel(KernelOp.CONST, [], matched_layout)
+            if term.cs[0] not in output_kernels:
+                output_kernels[term.cs[0]] = set()
+            output_kernels[term.cs[0]].add(matched_kernel)
+
+            a_cs_placeholder = Kernel(KernelOp.CS, [0], matched_layout)
+            b_cs_placeholder = Kernel(KernelOp.CS, [1], cs_kernel.layout)
+
+            output_layout = Layout(
+                term, [], dims, cs_kernel.layout.n, cs_kernel.layout.secret
+            )
+            output_kernel = Kernel(
+                kernel_op, [a_cs_placeholder, b_cs_placeholder], output_layout
+            )
+            if term not in output_kernels:
+                output_kernels[term] = set()
+            output_kernels[term].add(output_kernel)
+    else:
+        for cs_kernel in cs_kernels[0]:
+            dims = cs_kernel.layout.get_dims()
+            matched_dims = match_layout_const(dims)
+            matched_layout = Layout(
+                term.cs[1],
+                [],
+                matched_dims,
+                cs_kernel.layout.n,
+                cs_kernel.layout.secret,
+            )
+            matched_kernel = Kernel(KernelOp.CONST, [], matched_layout)
+            if term.cs[1] not in output_kernels:
+                output_kernels[term.cs[1]] = set()
+            output_kernels[term.cs[1]].add(matched_kernel)
+
+            a_cs_placeholder = Kernel(KernelOp.CS, [0], cs_kernel.layout)
+            b_cs_placeholder = Kernel(KernelOp.CS, [1], matched_layout)
+
+            output_layout = Layout(
+                term, [], dims, cs_kernel.layout.n, cs_kernel.layout.secret
+            )
+            output_kernel = Kernel(
+                kernel_op, [a_cs_placeholder, b_cs_placeholder], output_layout
+            )
+            if term not in output_kernels:
+                output_kernels[term] = set()
+            output_kernels[term].add(output_kernel)
+    return output_kernels
+
+
 def gen_binop(term, cs_kernels, shapes, roll_flag):
+    if term.cs[0].op == TensorOp.CONST or term.cs[1].op == TensorOp.CONST:
+        return gen_binop_const(term, cs_kernels)
+
     # get alignment
     alignment = get_dim_alignment(term, shapes)
 
@@ -1558,4 +1642,4 @@ def gen_binop(term, cs_kernels, shapes, roll_flag):
             else:
                 output_kernels.add(output_kernel)
     # print("len output:", len(output_kernels))
-    return output_kernels
+    return {term: output_kernels}
