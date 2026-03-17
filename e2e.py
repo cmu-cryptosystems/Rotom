@@ -18,8 +18,13 @@ from util.checker import check_label, check_results
 from util.input_serializer import serialize_mlp_mnist_inputs
 
 
-def main(args):
-    """Run either a microbenchmark or benchmark based on args"""
+def main(args, return_results: bool = False):
+    """Run either a microbenchmark or benchmark based on args.
+
+    If return_results is True, returns a tuple (results, label)
+    where results is the list of backend output vectors and label
+    is the ground-truth class label for the sample.
+    """
     tensor_ir = None
     inputs = None
     n = args.n
@@ -54,10 +59,11 @@ def main(args):
 
     # Run backend with result checking
     runtime = 0
+    backend_results = None
     if args.backend.lower() == "toy":
-        results = Toy(circuit_ir, inputs, args).run()
-        check_results(tensor_ir, inputs, kernel, results, runtime, args)
-        check_label(kernel, results, label)
+        backend_results = Toy(circuit_ir, inputs, args).run()
+        check_results(tensor_ir, inputs, kernel, backend_results, runtime, args)
+        check_label(kernel, backend_results, label)
     elif args.backend.lower() == "heir":
         # HEIR backend generates MLIR output
         heir_backend = HEIR(circuit_ir, inputs, args)
@@ -67,9 +73,8 @@ def main(args):
         mlir_results = run_mlir_interpreter(mlir_file, n)
         # Check MLIR results against tensor_ir.eval()
         check_results(tensor_ir, inputs, kernel, mlir_results, runtime, args)
-        # heir_backend.serialize_results(mlir_results)
-        # Check label
-        # check_label(kernel, mlir_results, label)
+        backend_results = mlir_results
+        # Optionally serialize results or perform additional checks here
     else:
         raise NotImplementedError("unknown backend")
 
@@ -79,6 +84,9 @@ def main(args):
                 serialize_mlp_mnist_inputs(kernel)
             case _:
                 raise NotImplementedError(f"unknown benchmark: {args.fn}")
+
+    if return_results:
+        return backend_results, label
 
 
 if __name__ == "__main__":
