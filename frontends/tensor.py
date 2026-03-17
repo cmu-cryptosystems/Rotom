@@ -360,24 +360,24 @@ class TensorTerm:
         """
         return TensorTerm(TensorOp.TRANSPOSE, [self], layout)
 
-    def poly_call(self, name, upper_bound, lower_bound, layout=None):
+    def poly_call(self, name, lower_bound, upper_bound, layout=None):
         """Call a polynomial approximation.
 
         Args:
             name (str): The name of the polynomial approximation or named function
-            upper_bound (float): The upper bound of the polynomial approximation
             lower_bound (float): The lower bound of the polynomial approximation
+            upper_bound (float): The upper bound of the polynomial approximation
             layout (str, optional): Tensor layout string for the result
 
         Returns:
             TensorTerm: A new tensor term representing the Poly call operation
 
         Example:
-            >>> b = a.poly_call("relu", 20, -20)  # Call ReLU with upper bound 20 and lower bound -20
-            >>> c = a.poly_call("relu", 20, -20, layout="[0:4:1][1:4:1]")  # With layout
+            >>> b = a.poly_call("relu", -20, 20)  # Call ReLU with lower bound -20 and upper bound 20
+            >>> c = a.poly_call("relu", -20, 20, layout="[0:4:1][1:4:1]")  # With layout
         """
         return TensorTerm(
-            TensorOp.POLY_CALL, [self, name, upper_bound, lower_bound], layout
+            TensorOp.POLY_CALL, [self, name, lower_bound, upper_bound], layout
         )
 
     def poly(self, func=None, layout=None):

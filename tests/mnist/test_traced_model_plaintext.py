@@ -74,7 +74,7 @@ def _evaluate_traced_model(
     model_path: str,
     images: torch.Tensor,
     labels: torch.Tensor,
-    batch_size: int = 1,
+    batch_size: int = 128,
 ) -> float:
     """Run accuracy evaluation for a TorchScript MNIST model."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

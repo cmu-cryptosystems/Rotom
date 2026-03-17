@@ -56,6 +56,7 @@ def mnist_poly_call(idx):
     b2 = TensorTerm.Tensor("b2", [1, out_dim], False)
 
     hidden = inp @ fc1 + b1
-    hidden_relu = hidden.poly_call("relu", 20, -20)
+    # poly_call now takes (name, lower_bound, upper_bound)
+    hidden_relu = hidden.poly_call("relu", -20, 20)
     tensor_ir = hidden_relu @ fc2 + b2
     return tensor_ir, inputs, y

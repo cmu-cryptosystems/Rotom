@@ -92,7 +92,7 @@ def run_benchmark_or_microbenchmark(args):
             heir_backend.run()
             # Run MLIR interpreter to get results
             mlir_file = f"heir/{args.fn}/{args.fn}.mlir"
-            mlir_results = run_mlir_interpreter(mlir_file, n)
+            mlir_results = run_mlir_interpreter(mlir_file)
             # Check MLIR results against kernel.term.eval()
             check_results(kernel.term, inputs, kernel, mlir_results, runtime, args)
             heir_backend.serialize_results(mlir_results)
@@ -224,7 +224,7 @@ def main(args):
     a = TensorTerm.Tensor("a", [64, 64], True)
     b = TensorTerm.Tensor("b", [64, 64], False)
     c = TensorTerm.Tensor("c", [64, 64], False)
-    tensor_ir = a @ b
+    tensor_ir = a @ b @ c
     inputs = {}
     inputs["a"] = np.array(
         [[np.random.randint(0, 10) * 0.1 for j in range(64)] for i in range(64)]
