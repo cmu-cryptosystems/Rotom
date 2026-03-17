@@ -11,6 +11,7 @@ def serialize_mlp_mnist_inputs(kernel):
         _load_mnist_test_set,
     )
 
+    input_layout = None
     for k in kernel.post_order():
         if (
             k.op == KernelOp.TENSOR
