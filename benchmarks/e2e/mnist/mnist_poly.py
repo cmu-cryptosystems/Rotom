@@ -8,13 +8,12 @@ using HEIR CKKS.
   - FC2: 512x10
 """
 
-from frontends.tensor import TensorTerm
-from tests.mnist.test_mlp_mnist import (
+from benchmarks.e2e.mnist.mnist_data import (
     MODEL_FILE,
-    _build_rotom_mnist_ir,
-    _extract_traced_mnist_linears,
-    _load_mnist_test_set,
+    extract_traced_mnist_linears,
+    load_mnist_test_set,
 )
+from frontends.tensor import TensorTerm
 
 
 def relu(x):
@@ -25,20 +24,20 @@ def relu(x):
     x10 = x8 * x2  # x^10, depth 4
     x12 = x8 * x4  # x^12, depth 4
     return (
-        TensorTerm.const(4.113641024556607e-01)
-        + TensorTerm.const(5.000000000000002e-01) * x
-        + TensorTerm.const(1.223805757222573e-01) * x2
-        - TensorTerm.const(1.937688573683916e-03) * x4
-        + TensorTerm.const(2.034568933371524e-05) * x6
-        - TensorTerm.const(1.193749792878656e-07) * x8
-        + TensorTerm.const(3.868625851050720e-10) * x10
-        - TensorTerm.const(6.474340232242984e-13) * x12
+        4.113641024556607e-01
+        + 5.000000000000002e-01 * x
+        + 1.223805757222573e-01 * x2
+        - 1.937688573683916e-03 * x4
+        + 2.034568933371524e-05 * x6
+        - 1.193749792878656e-07 * x8
+        + 3.868625851050720e-10 * x10
+        - 6.474340232242984e-13 * x12
     )
 
 
 def mnist_poly(idx):
     # Load a single MNIST test sample.
-    images, labels = _load_mnist_test_set()
+    images, labels = load_mnist_test_set()
     assert images.shape[0] == labels.shape[0] and images.shape[0] > 0
     x = images[idx : idx + 1]  # [1, 1, 28, 28]
     y = int(labels[idx].item())
@@ -47,11 +46,10 @@ def mnist_poly(idx):
     x_flat = x.view(1, -1).numpy()
 
     # Extract trained weights/biases from the TorchScript model.
-    params = _extract_traced_mnist_linears(MODEL_FILE)
+    params = extract_traced_mnist_linears(MODEL_FILE)
     in_dim = params["in_dim"]
     hidden_dim = params["hidden_dim"]
     out_dim = params["out_dim"]
-    tensor_ir = _build_rotom_mnist_ir(in_dim, hidden_dim, out_dim)
 
     # Convert from PyTorch's [out_features, in_features] convention to the
     # Tensor frontend's [in_dim, hidden_dim] / [hidden_dim, out_dim].

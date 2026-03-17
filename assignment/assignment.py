@@ -170,8 +170,6 @@ class LayoutAssignment:
                 kernels = gen_index(term, cs_kernels[0])
             case TensorOp.BLOCK_MATMUL:
                 kernels = gen_block_matmul(term, cs_kernels)
-            case TensorOp.POLY:
-                kernels = gen_poly(term, cs_kernels[0])
             case TensorOp.POLY_CALL:
                 kernels = gen_poly_call(term, cs_kernels[0])
             case _:
@@ -394,7 +392,6 @@ class LayoutAssignment:
                 return [a, b]
             case (
                 TensorOp.TRANSPOSE
-                | TensorOp.POLY
                 | TensorOp.POLY_CALL
                 | TensorOp.SUM
                 | TensorOp.RESHAPE
