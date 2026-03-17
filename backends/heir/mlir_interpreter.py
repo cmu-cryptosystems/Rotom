@@ -91,7 +91,7 @@ def interpret_mlir(mlir_file, n, inputs_dir=None):
                 input_file = os.path.join(inputs_dir, f"{var_filename}.npz")
                 if os.path.exists(input_file):
                     input_vectors[var_name] = read_input_vector(input_file)
-
+    
     env = {}
     env.update(input_vectors)
 
@@ -131,7 +131,7 @@ def interpret_mlir(mlir_file, n, inputs_dir=None):
                     else:
                         env[result_var] = np.array(values, dtype=np.float32)
             else:
-                # rot offset
+                # rot offset 
                 const_match = re.match(r"(-?\d+)", args_str)
                 if const_match:
                     env[result_var] = int(const_match.group(1))
@@ -141,6 +141,8 @@ def interpret_mlir(mlir_file, n, inputs_dir=None):
             arg2 = env.get(args[1])
             if arg1 is None or arg2 is None:
                 raise ValueError("arg1 or arg2 is None")
+            arg1 = np.asarray(arg1).flatten()
+            arg2 = np.asarray(arg2).flatten()
             env[result_var] = np.array([a * b for a, b in zip(arg1, arg2)])
 
         elif operation == "arith.addf":
@@ -155,6 +157,8 @@ def interpret_mlir(mlir_file, n, inputs_dir=None):
             arg2 = env.get(args[1])
             if arg1 is None or arg2 is None:
                 raise ValueError("arg1 or arg2 is None")
+            arg1 = np.asarray(arg1).flatten()
+            arg2 = np.asarray(arg2).flatten()
             env[result_var] = np.array([a - b for a, b in zip(arg1, arg2)])
 
         elif operation == "tensor_ext.rotate":
@@ -259,16 +263,9 @@ def run_mlir_interpreter(mlir_file, inputs_dir=None):
     """
     try:
         mlir_result = interpret_mlir(mlir_file, inputs_dir)
-
         if mlir_result is None:
             raise ValueError("MLIR interpretation returned None")
-
-        # Convert to list of vectors format expected by check_results
-        # MLIR typically returns a single result vector
-        if mlir_result.ndim == 1:
-            return [mlir_result.tolist()]
-        else:
-            return [mlir_result.tolist()]
+        return [mlir_result.tolist()]
 
     except Exception as e:
         raise RuntimeError(f"MLIR interpretation failed: {str(e)}") from e
