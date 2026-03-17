@@ -91,7 +91,7 @@ def interpret_mlir(mlir_file, n, inputs_dir=None):
                 input_file = os.path.join(inputs_dir, f"{var_filename}.npz")
                 if os.path.exists(input_file):
                     input_vectors[var_name] = read_input_vector(input_file)
-    
+
     env = {}
     env.update(input_vectors)
 
@@ -131,7 +131,7 @@ def interpret_mlir(mlir_file, n, inputs_dir=None):
                     else:
                         env[result_var] = np.array(values, dtype=np.float32)
             else:
-                # rot offset 
+                # rot offset
                 const_match = re.match(r"(-?\d+)", args_str)
                 if const_match:
                     env[result_var] = int(const_match.group(1))
