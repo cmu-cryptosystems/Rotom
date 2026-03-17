@@ -42,7 +42,7 @@ class Secret:
         """find if each term is secret or public"""
         match term.op:
             case TensorOp.TENSOR:
-                from frontends.tensor import TensorPlaceholderArgs
+                from frontends.tensor_args import TensorPlaceholderArgs
 
                 return TensorPlaceholderArgs.from_term(term).secret
             case TensorOp.CONST:
@@ -96,7 +96,7 @@ class Secret:
                 kernel_secret = self.get_secret(term, cs_secrets)
                 self.secret[term] = kernel_secret
             case TensorOp.CONV2D:
-                from frontends.tensor import Conv2dArgs
+                from frontends.tensor_args import Conv2dArgs
 
                 args = Conv2dArgs.from_term(term)
                 assert self.secret[args.input]

@@ -1,8 +1,4 @@
-import math
-
-import numpy as np
-
-from frontends.tensor import Conv2dArgs
+from frontends.tensor_args import Conv2dArgs
 from ir.analysis.shape import Shape
 from ir.dim import DimType
 from ir.he import HEOp, HETerm

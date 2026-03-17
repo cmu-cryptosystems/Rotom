@@ -28,83 +28,26 @@ Layout Example:
     >>> d = a.sum(0, layout="[0:1:1]")  # Sum with specific layout
 """
 
-from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Iterable, List, Optional
 
+from .tensor_args import (
+    Conv2dArgs,
+    PolyCallArgs,
+    ReshapeArgs,
+    TensorPlaceholderArgs,
+)
 from .tensor_evaluator import TensorEvaluator
 
-
-@dataclass(frozen=True)
-class PolyCallArgs:
-    """Structured view of a PolyCall TensorTerm."""
-
-    name: str
-    lower_bound: float
-    upper_bound: float
-
-    @classmethod
-    def from_term(cls, term: Any) -> "PolyCallArgs":
-        """Build PolyCallArgs from a POLY_CALL TensorTerm (term.cs = [input, name, lower_bound, upper_bound])."""
-        return cls(
-            name=term.cs[1],
-            lower_bound=float(term.cs[2]),
-            upper_bound=float(term.cs[3]),
-        )
-
-
-@dataclass(frozen=True)
-class Conv2dArgs:
-    """Structured view of a CONV2D TensorTerm (term.cs = [input, filter, stride, padding]).
-    After assignment, term.cs may have computed padding at index 4; use get_computed_padding(term).
-    """
-
-    input: Any
-    filter: Any  # noqa: A003
-    stride: int
-    padding: str
-
-    @classmethod
-    def from_term(cls, term: Any) -> "Conv2dArgs":
-        return cls(
-            input=term.cs[0],
-            filter=term.cs[1],
-            stride=term.cs[2],
-            padding=term.cs[3],
-        )
-
-    @staticmethod
-    def get_computed_padding(term: Any) -> Optional[List[int]]:
-        """Return [pad_top, pad_bottom, pad_left, pad_right] if set by assignment (term.cs[4])."""
-        if len(term.cs) > 4:
-            return term.cs[4]
-        return None
-
-
-@dataclass(frozen=True)
-class ReshapeArgs:
-    """Structured view of a RESHAPE TensorTerm (term.cs = [input, dim, shape])."""
-
-    input: Any
-    dim: int
-    shape: Dict[int, int]
-
-    @classmethod
-    def from_term(cls, term: Any) -> "ReshapeArgs":
-        return cls(input=term.cs[0], dim=term.cs[1], shape=term.cs[2])
-
-
-@dataclass(frozen=True)
-class TensorPlaceholderArgs:
-    """Structured view of a TENSOR placeholder TensorTerm (term.cs = [name, shape, secret])."""
-
-    name: str
-    shape: List[int]
-    secret: bool
-
-    @classmethod
-    def from_term(cls, term: Any) -> "TensorPlaceholderArgs":
-        return cls(name=term.cs[0], shape=term.cs[1], secret=term.cs[2])
+# Re-export args so "from frontends.tensor import Conv2dArgs" still works.
+__all__ = [
+    "Conv2dArgs",
+    "PolyCallArgs",
+    "ReshapeArgs",
+    "TensorPlaceholderArgs",
+    "TensorOp",
+    "TensorTerm",
+]
 
 
 class TensorOp(Enum):

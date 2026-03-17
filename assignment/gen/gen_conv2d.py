@@ -17,7 +17,7 @@ Key functions:
 
 from copy import deepcopy as copy
 
-from frontends.tensor import Conv2dArgs
+from frontends.tensor_args import Conv2dArgs
 from ir.dim import Dim, DimType
 from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout

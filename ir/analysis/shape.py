@@ -15,7 +15,8 @@ Key Concepts:
 
 from copy import deepcopy as copy
 
-from frontends.tensor import Conv2dArgs, ReshapeArgs, TensorOp, TensorPlaceholderArgs
+from frontends.tensor import TensorOp
+from frontends.tensor_args import Conv2dArgs, ReshapeArgs, TensorPlaceholderArgs
 from util.util import round_to_ceiling_power_of_2
 
 
