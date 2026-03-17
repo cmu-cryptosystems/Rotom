@@ -6,7 +6,6 @@ in the Rotom homomorphic encryption system.
 """
 
 import numpy as np
-import pytest
 
 from assignment.assignment import LayoutAssignment
 from frontends.tensor import TensorTerm

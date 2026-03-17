@@ -269,7 +269,7 @@ class CKKS:
         base = self.env[term.cs[0]]
         try:
             return self.cc.EvalRotate(base, term.cs[1])
-        except:
+        except Exception:
             return base
 
     def eval_add(self, term):

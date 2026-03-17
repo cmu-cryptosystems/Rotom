@@ -8,9 +8,8 @@ organization, debugging, and potential external execution of circuits.
 
 import json
 import os
-from typing import Any, Dict
+from typing import Dict
 
-from ir.he import HETerm
 from lower.layout_cts import LayoutCiphertexts
 
 
@@ -116,11 +115,11 @@ class CircuitSerializer:
         """
         with open(filepath, "w") as f:
             # Write header
-            f.write(f"# HE Kernel Instruction File\n")
+            f.write("# HE Kernel Instruction File\n")
             f.write(f"# Kernel Index: {kernel_idx}\n")
             f.write(f"# Operation: {kernel_term.op}\n")
             f.write(f"# Layout: {kernel_term.layout}\n")
-            f.write(f"# Format: {{index}} {{is_secret}}: {{operation}} {{operands}}\n")
+            f.write("# Format: {index} {is_secret}: {operation} {operands}\n")
             f.write("#" + "=" * 70 + "\n\n")
 
             # Track kernel-specific metadata

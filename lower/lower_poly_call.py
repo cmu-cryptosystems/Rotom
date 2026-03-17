@@ -1,4 +1,4 @@
-from frontends.tensor import PolyCallArgs
+from frontends.tensor_args import PolyCallArgs
 from ir.he import HEOp, HETerm
 from lower.layout_cts import LayoutCiphertexts
 

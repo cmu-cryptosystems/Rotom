@@ -56,8 +56,8 @@ def visualize_layout(layout_str, n, tensor_shape=None, secret=False):
         layout_tensor = apply_layout(tensor, layout)
         print("Packed vector:")
         if isinstance(layout_tensor, list) and len(layout_tensor) > 1:
-            for i, l in enumerate(layout_tensor):
-                print(f"Ciphertext {i}: {l}")
+            for i, vec in enumerate(layout_tensor):
+                print(f"Ciphertext {i}: {vec}")
         else:
             print(layout_tensor)
         print()

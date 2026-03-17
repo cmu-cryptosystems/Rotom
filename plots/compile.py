@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib import rc
-from matplotlib.ticker import FuncFormatter, LogFormatter, LogLocator
+from matplotlib.ticker import FuncFormatter
 
 # Method 1: Using rc parameters
 rc("text", usetex=True)
@@ -287,7 +287,7 @@ for i, benchmark in enumerate(benchmarks):
                     elif orig_value < 1000:
                         label_text = f"{int(orig_value)}"
                     else:
-                        label_text = f"{int(orig_value/1000)}K"
+                        label_text = f"{int(orig_value / 1000)}K"
 
                     # Calculate position for label, ensuring it's above the bar but within subplot limits
                     if orig_value >= max_label_position * 0.85:

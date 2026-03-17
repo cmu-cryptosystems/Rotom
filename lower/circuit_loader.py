@@ -9,8 +9,6 @@ import json
 import os
 from typing import Any, Dict, List, Tuple
 
-from ir.he import HEOp, HETerm
-
 
 class InstructionParser:
     """Parser for HE instruction strings."""

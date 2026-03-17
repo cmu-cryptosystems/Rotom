@@ -1,4 +1,5 @@
-from frontends.tensor import TensorOp, TensorPlaceholderArgs
+from frontends.tensor import TensorOp
+from frontends.tensor_args import TensorPlaceholderArgs
 from util.util import prod
 
 

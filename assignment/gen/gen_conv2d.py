@@ -17,12 +17,11 @@ Key functions:
 
 from copy import deepcopy as copy
 
-from frontends.tensor import Conv2dArgs
+from frontends.tensor_args import Conv2dArgs
 from ir.dim import Dim, DimType
 from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
 from ir.roll import Roll
-from util.shape_util import get_term_shape
 from util.util import round_to_ceiling_power_of_2
 
 
@@ -129,8 +128,8 @@ def add_replicated_dimensions_roll(a_shape, b_shape):
 
     replicated_dims = {}
     c_in = b_shape[1]  # Number of input channels
-    h_f = b_shape[2]  # Filter height
-    w_f = b_shape[3]  # Filter width
+    b_shape[2]  # Filter height
+    b_shape[3]  # Filter width
 
     # Replicate for input channels (but only if we need different filters per channel)
     if c_in > 1:

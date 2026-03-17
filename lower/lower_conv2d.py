@@ -1,8 +1,4 @@
-import math
-
-import numpy as np
-
-from frontends.tensor import Conv2dArgs
+from frontends.tensor_args import Conv2dArgs
 from ir.analysis.shape import Shape
 from ir.dim import DimType
 from ir.he import HEOp, HETerm
@@ -36,21 +32,20 @@ def lower_conv2d(env, kernel):
     b_cs = [HETerm(HEOp.CS, [ct], ct.secret) for ct in b_cts.values()]
 
     # rotate a based a_shape
-    a_shape = get_term_shape(kernel.cs[0].layout.term)
+    get_term_shape(kernel.cs[0].layout.term)
     b_shape = get_term_shape(kernel.cs[1].layout.term)
 
-    conv_args = Conv2dArgs.from_term(kernel.layout.term)
+    Conv2dArgs.from_term(kernel.layout.term)
     computed = Conv2dArgs.get_computed_padding(kernel.layout.term)
     assert (
         computed is not None
     ), "CONV2D term should have computed padding from assignment"
-    pad_top, pad_bottom, pad_left, pad_right = (
+    pad_top, _pad_bottom, pad_left, _pad_right = (
         computed[0],
         computed[1],
         computed[2],
         computed[3],
     )
-    stride = conv_args.stride
 
     # calculate rotation amounts for input ciphertexts
     # assumes dim 1 and 2 are continuous and in the slot dimensions
@@ -82,23 +77,22 @@ def lower_conv2d(env, kernel):
             segment_1 = dim_map[1][1] * dim_map[1][2]
             mask = [1] * kernel.cs[0].layout.n
             for k in range(kernel.cs[0].layout.n // segment_0):
-                for l in range(segment_0):
-                    if not 0 <= l + rot_0 - (pad_top * dim_map[0][2]) < segment_0:
-                        mask[k * segment_0 + l] = 0
+                for idx in range(segment_0):
+                    if not 0 <= idx + rot_0 - (pad_top * dim_map[0][2]) < segment_0:
+                        mask[k * segment_0 + idx] = 0
 
             for k in range(kernel.cs[0].layout.n // segment_1):
-                for l in range(segment_1):
-                    if not 0 <= l + rot_1 - pad_left < segment_1:
-                        mask[k * segment_1 + l] = 0
+                for idx in range(segment_1):
+                    if not 0 <= idx + rot_1 - pad_left < segment_1:
+                        mask[k * segment_1 + idx] = 0
             filter_masks.append(mask)
 
     # Replicate filter masks for each CT in b layout - use layout to get filter position per ct_idx
     num_filter_positions = b_shape[2] * b_shape[3]
     b_num_cts = kernel.cs[1].layout.num_ct()
     b_ct_dims = kernel.cs[1].layout.ct_dims
-    inner_stride = 1
     if b_ct_dims and b_ct_dims[-1].dim is None:
-        inner_stride = b_ct_dims[-1].extent
+        b_ct_dims[-1].extent
     dim_indices_masks = get_dim_indices(b_ct_dims)
     dim_map_masks = get_dim_map(b_ct_dims)
     dim_to_pos_masks = {
@@ -143,9 +137,8 @@ def lower_conv2d(env, kernel):
     c_in_count = b_shape[1]
     b_ct_dims = kernel.cs[1].layout.ct_dims
     # Stride to skip within a filter position (e.g. R dim extent)
-    inner_stride = 1
     if b_ct_dims and b_ct_dims[-1].dim is None:
-        inner_stride = b_ct_dims[-1].extent
+        b_ct_dims[-1].extent
 
     a_rot_cs = []
     if original_input_layout is not None:
@@ -182,7 +175,7 @@ def lower_conv2d(env, kernel):
     dim_map = get_dim_map(b_ct_dims)
     # Tensor dims: 0=c_out, 1=c_in, 2=f_h, 3=f_w. Find which ct_dim has each.
     dim_to_pos = {dim.dim: dim_map[dim] for dim in b_ct_dims if dim.dim is not None}
-    f_h_extent = b_shape[2]
+    b_shape[2]
     f_w_extent = b_shape[3]
     cts = {}
     for b_idx, b_ct in enumerate(b_cs):

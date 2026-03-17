@@ -1,8 +1,4 @@
-import math
-
-import numpy as np
-
-from frontends.tensor import Conv2dArgs
+from frontends.tensor_args import Conv2dArgs
 from ir.analysis.shape import Shape
 from ir.dim import DimType
 from ir.he import HEOp, HETerm
@@ -56,12 +52,12 @@ def lower_conv2d_roll(env, kernel):
     padding = computed
     a_shape = shape.shapes[args.input]
     b_shape = shape.shapes[args.filter]
-    i_c = a_shape[0]
+    a_shape[0]
     i_h = a_shape[1]
     i_w = a_shape[2]
     assert i_h == i_w
-    f_o = b_shape[0]
-    f_i = b_shape[1]
+    b_shape[0]
+    b_shape[1]
     f_h = b_shape[2]
     f_w = b_shape[3]
 

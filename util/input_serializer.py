@@ -1,7 +1,7 @@
 import numpy as np
 from tqdm import tqdm
 
-from frontends.tensor import TensorPlaceholderArgs
+from frontends.tensor_args import TensorPlaceholderArgs
 from ir.kernel import KernelOp
 from util.layout_util import apply_layout
 

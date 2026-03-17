@@ -3,7 +3,6 @@ Lowering should account for layout and dimensions at each step
 """
 
 from ir.kernel import KernelOp
-from lower.circuit_opts.lift_rot_to_pack import lift_rotations_to_pack
 from lower.circuit_opts.mask_opts import (
     mask_identity_opt,
     zero_mask_identity_opt,

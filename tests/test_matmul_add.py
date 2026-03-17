@@ -23,7 +23,7 @@ class TestMatrixMultiplicationAddition:
         """Helper method to create matrix multiplication + addition computation."""
         a = TensorTerm.Tensor("a", list(inputs["a"].shape), True)
         b = TensorTerm.Tensor("b", list(inputs["b"].shape), False)
-        c = TensorTerm.Tensor("c", list(inputs["c"].shape), False)
+        TensorTerm.Tensor("c", list(inputs["c"].shape), False)
         # return (a @ b) + c, (inputs["a"] @ inputs["b"]) + inputs["c"]
         return a @ b, inputs["a"] @ inputs["b"]
 

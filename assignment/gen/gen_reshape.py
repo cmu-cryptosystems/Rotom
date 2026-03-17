@@ -12,13 +12,12 @@ Key functions:
 
 from copy import deepcopy as copy
 
-from frontends.tensor import ReshapeArgs
-from ir.dim import DimType
+from frontends.tensor_args import ReshapeArgs
 from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
 from ir.layout_utils import dimension_merging
 from util.layout_util import get_extent_dims
-from util.util import prod, round_to_ceiling_power_of_2
+from util.util import round_to_ceiling_power_of_2
 
 
 def gen_reshape(term, cs_kernels):

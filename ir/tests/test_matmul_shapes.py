@@ -4,9 +4,7 @@ Test script to verify the generalized matmul shape checking works correctly.
 This tests various tensor dimension combinations that should now be supported.
 """
 
-import numpy as np
-
-from frontends.tensor import TensorOp, TensorTerm
+from frontends.tensor import TensorTerm
 from ir.analysis.shape import Shape
 
 
@@ -32,7 +30,7 @@ def test_generalized_matmul_shapes():
     print("Testing generalized matmul shape checking...")
 
     for i, (a_shape, b_shape, expected) in enumerate(test_cases):
-        print(f"\nTest case {i+1}: {a_shape} × {b_shape} = {expected}")
+        print(f"\nTest case {i + 1}: {a_shape} × {b_shape} = {expected}")
 
         try:
             # Create tensor terms
@@ -55,7 +53,7 @@ def test_generalized_matmul_shapes():
 
             # Verify the shape matches expected
             assert result_shape == expected, f"Expected {expected}, got {result_shape}"
-            print(f"  ✓ PASS")
+            print("  ✓ PASS")
 
         except Exception as e:
             print(f"  ✗ FAIL: {e}")
@@ -86,7 +84,7 @@ def test_invalid_matmul_shapes():
     print("\nTesting invalid matmul shapes (should raise errors)...")
 
     for i, (a_shape, b_shape, description) in enumerate(invalid_cases):
-        print(f"\nInvalid test case {i+1}: {a_shape} × {b_shape} ({description})")
+        print(f"\nInvalid test case {i + 1}: {a_shape} × {b_shape} ({description})")
 
         try:
             # Create tensor terms
@@ -100,7 +98,7 @@ def test_invalid_matmul_shapes():
             shape_analyzer = Shape(matmul_op)
             shape_analyzer.run()
 
-            print(f"  ✗ FAIL: Should have raised an error but didn't")
+            print("  ✗ FAIL: Should have raised an error but didn't")
 
         except Exception as e:
             print(f"  ✓ PASS: Correctly raised error: {e}")

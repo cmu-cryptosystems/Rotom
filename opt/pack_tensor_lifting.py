@@ -59,7 +59,6 @@ def find_replicate_patterns(kernel, parent_map=None):
                     and hasattr(replicate_child.layout.term, "op")
                     and replicate_child.layout.term.op == TensorOp.TENSOR
                 ):
-
                     # Check if this REPLICATE has a ROT_ROLL parent
                     rot_roll_parent = None
                     if k in parent_map:
@@ -112,7 +111,7 @@ def create_packed_tensor(replicate_kernel, rot_roll_kernel, tensor_term):
             packed_layout,
         )
         return packed_kernel
-    except (AssertionError, ValueError) as e:
+    except (AssertionError, ValueError):
         # Layout creation failed (e.g., roll dimension mismatch)
         return None
 

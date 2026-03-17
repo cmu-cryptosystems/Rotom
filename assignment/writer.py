@@ -10,7 +10,6 @@ Key classes:
 - Writer: Main class for writing circuit metadata and implementations
 """
 
-from ir.kernel import KernelOp
 from lower.lower import Lower
 
 

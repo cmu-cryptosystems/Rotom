@@ -8,8 +8,8 @@ from ir.roll import Roll
 from util.util import prod, split_dim
 
 
-def transpose(l):
-    return list(map(list, zip(*l)))
+def transpose(lst):
+    return list(map(list, zip(*lst)))
 
 
 def swap_rolls(layout, roll):

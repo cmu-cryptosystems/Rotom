@@ -212,7 +212,7 @@ class TensorEvaluator:
             case "Transpose":
                 return env[term.cs[0]].T
             case "Conv":
-                from .tensor import Conv2dArgs
+                from .tensor_args import Conv2dArgs
 
                 args = Conv2dArgs.from_term(term)
                 return self._eval_conv2d(
@@ -239,7 +239,7 @@ class TensorEvaluator:
 
                 return env[term.cs[0]][item]
             case "Reshape":
-                from .tensor import ReshapeArgs
+                from .tensor_args import ReshapeArgs
 
                 args = ReshapeArgs.from_term(term)
                 tensor = env[args.input]
@@ -260,7 +260,7 @@ class TensorEvaluator:
             case "PolyCall":
                 x = env[term.cs[0]]
                 if len(term.cs) >= 4:
-                    from .tensor import PolyCallArgs
+                    from .tensor_args import PolyCallArgs
 
                     func = PolyCallArgs.from_term(term).name
                 else:
