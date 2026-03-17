@@ -20,7 +20,8 @@ def lower_poly(env, kernel):
             and poly_func[0] == "batchnorm"
             else None
         )
-        cts[k] = HETerm(
-            HEOp.POLY, [v], v.secret, poly_func=poly_func, poly_channel=poly_channel
-        )
+        metadata = {}
+        metadata["poly_func"] = poly_func
+        metadata["poly_channel"] = poly_channel
+        cts[k] = HETerm(HEOp.POLY, [v, metadata], v.secret)
     return LayoutCiphertexts(layout=kernel.layout, cts=cts)

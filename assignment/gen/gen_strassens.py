@@ -201,7 +201,7 @@ def add_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
             roll_flag,
         )
         optimizer = Optimizer(roll_flag)
-        add_kernels = optimizer.run(add_kernels)
+        add_kernels = optimizer.run(add_kernels[term])
         if term not in kernel_map:
             kernel_map[term] = []
         kernel_map[term] += add_kernels
@@ -236,7 +236,7 @@ def sub_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
             roll_flag,
         )
         optimizer = Optimizer(roll_flag)
-        sub_kernels = optimizer.run(sub_kernels)
+        sub_kernels = optimizer.run(sub_kernels[term])
         if term not in kernel_map:
             kernel_map[term] = []
         kernel_map[term] += sub_kernels
@@ -353,7 +353,7 @@ def matmul_tiles(kernel_map, a_kernels, b_kernels, roll_flag, network):
                     roll_flag,
                 )
                 optimizer = Optimizer(roll_flag)
-                matmul_kernels = optimizer.run(matmul_kernels)
+                matmul_kernels = optimizer.run(matmul_kernels[term])
             if term not in kernel_map:
                 kernel_map[term] = []
             kernel_map[term] += matmul_kernels

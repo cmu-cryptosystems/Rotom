@@ -1,6 +1,7 @@
 import os
 import os.path
 import shutil
+import struct
 
 import numpy as np
 
@@ -19,14 +20,15 @@ class HEIR:
         self.n = args.n
         self.env = {}
         self.pt_env = {}
+        self.poly_calls = set()
         self.fn = args.fn
 
         if os.path.exists(f"heir/{self.fn}"):
             shutil.rmtree(f"heir/{self.fn}")
-        os.mkdir(f"heir/{self.fn}")
-        os.mkdir(f"heir/{self.fn}/base")
-        os.mkdir(f"heir/{self.fn}/inputs")
-        os.mkdir(f"heir/{self.fn}/results")
+        os.makedirs(f"heir/{self.fn}", exist_ok=True)
+        os.makedirs(f"heir/{self.fn}/base", exist_ok=True)
+        os.makedirs(f"heir/{self.fn}/inputs", exist_ok=True)
+        os.makedirs(f"heir/{self.fn}/results", exist_ok=True)
 
         self.input_cache = {}
         self.lines = []
@@ -62,13 +64,27 @@ class HEIR:
         data = np.load(fn)
         return data["data"]
 
+    def to_mlir_hex(self, vec: np.ndarray) -> str:
+        """Serialize a float vector to MLIR dense hex string (little-endian f32)."""
+        result = ""
+        for val in vec:
+            result += struct.pack("<f", float(val)).hex()
+        return "0x" + result
+
     def eval_mask(self, term):
+        if term not in self.term_to_id:
+            self.term_to_id[term] = f"%{self.next_id}"
+            self.term_to_type[term] = self.term_type()
+            self.next_id += 1
+
         out_id = self.term_to_id[term]
         out_type = self.term_to_type[term]
-        line = f"{out_id} = arith.constant dense<{term.cs[0]}> : {out_type}"
+        hex_str = self.to_mlir_hex(term.cs[0])
+        line = f'{out_id} = arith.constant dense<"{hex_str}"> : {out_type}'
         self.lines.append(line)
 
     def eval_pack(self, term):
+        # calculate the plaintext vectors to pack and store in input_cache
         layout = term.cs[0]
         if layout not in self.input_cache:
             fn = f"heir/{self.fn}/base/{layout.term}_{layout}.txt"
@@ -79,10 +95,49 @@ class HEIR:
                 packed_tensor = apply_layout(tensor, layout)
                 self.input_cache[layout] = packed_tensor
 
-        # get packing index and return packed vector
+        # get packed vector
         packing_idx = int(term.metadata.split()[0])
         vector = self.input_cache[layout][packing_idx]
         return vector
+
+    def eval_const(self, term):
+        out_id = self.term_to_id[term]
+        out_type = self.term_to_type[term]
+        layout = term.cs[0]
+        vector = np.array([term.cs[1]] * self.n)
+        packed_tensor = apply_layout(vector, layout)
+        line = f"{out_id} = arith.constant dense<[{packed_tensor}]> : {out_type}"
+        self.lines.append(line)
+
+    def eval_cs(self, term):
+        if term in self.term_to_id and term.op != HEOp.PACK:
+            return
+        base = self.get_base_term(term)
+        base_term = self.get_base_term_name(base)
+        extract_idx = int(base.metadata.split()[0])
+        base_term_secret = self.get_base_term_secret(base)
+
+        vector = self.env[term] if term.secret else self.pt_env[term]
+
+        if base_term not in self.term_to_vector:
+            self.term_to_vector[base_term] = [
+                [] for _ in range(len(self.input_cache[base.cs[0]]))
+            ]
+            self.term_to_id[base_term] = f"%{self.next_id}"
+            self.next_id += 1
+        self.term_to_vector[base_term][extract_idx] = vector
+        base_term_id = self.term_to_id[base_term]
+        self.term_to_type[base_term] = self.term_input_type(
+            self.input_cache[base.cs[0]], base_term_secret
+        )
+        base_term_type = self.term_input_type(self.input_cache[base.cs[0]], False)
+        self.term_to_id[term] = f"%{self.next_id}"
+        self.term_to_type[term] = self.term_type()
+        self.next_id += 1
+        extract_term_id = self.term_to_id[term]
+        extract_term_type = self.term_to_type[term]
+        line = f"{extract_term_id} = tensor.extract_slice {base_term_id} [{extract_idx}, 0] [1, {self.n}] [1, 1] : {base_term_type} to {extract_term_type}"
+        self.lines.append(line)
 
     def eval_indices(self, term):
         tensor = self.inputs[term.cs[0].cs[0]]
@@ -96,6 +151,7 @@ class HEIR:
     def eval_rot(self, term):
         """positive == left rotate"""
 
+        self.eval_cs(term.cs[0])
         rot_amt = term.cs[1]
         if rot_amt not in self.term_to_id:
             self.term_to_id[rot_amt] = f"%c{self.next_id}"
@@ -109,10 +165,13 @@ class HEIR:
         b_term_id = self.term_to_id[term.cs[1]]
         b_term_type = self.term_to_type[term.cs[1]]
         out_term_id = self.term_to_id[term]
+        assert term.cs[0].secret
         line = f"{out_term_id} = tensor_ext.rotate {a_term_id}, {b_term_id} : {a_term_type}, {b_term_type}"
         self.lines.append(line)
 
     def eval_add(self, term):
+        self.eval_cs(term.cs[0])
+        self.eval_cs(term.cs[1])
         a_term_id = self.term_to_id[term.cs[0]]
         b_term_id = self.term_to_id[term.cs[1]]
         out_term_id = self.term_to_id[term]
@@ -121,6 +180,8 @@ class HEIR:
         self.lines.append(line)
 
     def eval_sub(self, term):
+        self.eval_cs(term.cs[0])
+        self.eval_cs(term.cs[1])
         a_term_id = self.term_to_id[term.cs[0]]
         b_term_id = self.term_to_id[term.cs[1]]
         out_term_id = self.term_to_id[term]
@@ -129,57 +190,8 @@ class HEIR:
         self.lines.append(line)
 
     def eval_mul(self, term):
-        # Add inputs when they're determined to be private
-        if term.cs[0] not in self.term_to_id:
-            vector = (
-                self.env[term.cs[0]] if term.cs[0].secret else self.pt_env[term.cs[0]]
-            )
-            base = self.get_base_term(term.cs[0])
-            base_term = self.get_base_term_name(base)
-            base_term_secret = self.get_base_term_secret(base)
-            if base_term not in self.term_to_vector:
-                self.term_to_vector[base_term] = []
-                self.term_to_id[base_term] = f"%{self.next_id}"
-                self.next_id += 1
-            self.term_to_vector[base_term].append(vector)
-            base_term_id = self.term_to_id[base_term]
-            self.term_to_type[base_term] = self.term_input_type(
-                self.input_cache[base.cs[0]], base_term_secret
-            )
-            base_term_type = self.term_input_type(self.input_cache[base.cs[0]], False)
-            self.term_to_id[term.cs[0]] = f"%{self.next_id}"
-            self.term_to_type[term.cs[0]] = self.term_type(term.cs[0])
-            self.next_id += 1
-            extract_term_id = self.term_to_id[term.cs[0]]
-            extract_term_type = self.term_to_type[term.cs[0]]
-            line = f"{extract_term_id} = tensor.extract_slice {base_term_id} [{len(self.term_to_vector[base_term])-1}, 0] [1, {self.n}] [1, 1] : {base_term_type} to {extract_term_type}"
-            self.lines.append(line)
-
-        if term.cs[1] not in self.term_to_id:
-            vector = (
-                self.env[term.cs[1]] if term.cs[1].secret else self.pt_env[term.cs[1]]
-            )
-            base = self.get_base_term(term.cs[1])
-            base_term = self.get_base_term_name(base)
-            base_term_secret = self.get_base_term_secret(base)
-            if base_term not in self.term_to_vector:
-                self.term_to_vector[base_term] = []
-                self.term_to_id[base_term] = f"%{self.next_id}"
-                self.next_id += 1
-            self.term_to_vector[base_term].append(vector)
-            base_term_id = self.term_to_id[base_term]
-            self.term_to_type[base_term] = self.term_input_type(
-                self.input_cache[base.cs[0]], base_term_secret
-            )
-            base_term_type = self.term_input_type(self.input_cache[base.cs[0]], False)
-            self.term_to_id[term.cs[1]] = f"%{self.next_id}"
-            self.term_to_type[term.cs[1]] = self.term_type(term.cs[1])
-            self.next_id += 1
-            extract_term_id = self.term_to_id[term.cs[1]]
-            extract_term_type = self.term_to_type[term.cs[1]]
-            line = f"{extract_term_id} = tensor.extract_slice {base_term_id} [{len(self.term_to_vector[base_term])-1}, 0] [1, {self.n}] [1, 1] : {base_term_type} to {extract_term_type}"
-            self.lines.append(line)
-
+        self.eval_cs(term.cs[0])
+        self.eval_cs(term.cs[1])
         a_term_id = self.term_to_id[term.cs[0]]
         b_term_id = self.term_to_id[term.cs[1]]
         out_term_id = self.term_to_id[term]
@@ -187,14 +199,32 @@ class HEIR:
         line = f"{out_term_id} = arith.mulf {a_term_id}, {b_term_id} : {out_term_type}"
         self.lines.append(line)
 
+    def eval_poly_call(self, term):
+        # get the poly call term id and type
+        poly_call_term_id = self.term_to_id[term]
+        poly_call_term_type = self.term_to_type[term]
+
+        # get the mapped term id and type
+        mapped_term_id = self.term_to_id[term.cs[0]]
+        assert poly_call_term_type == self.term_to_type[term.cs[0]]
+
+        metadata = term.cs[1]
+        func_name = metadata["poly_func"]
+        domain_lower = float(metadata["lower_bound"])
+        domain_upper = float(metadata["upper_bound"])
+        # create the poly call line
+        line = f"{poly_call_term_id} = call @{func_name}({mapped_term_id}) {{domain_lower = {domain_lower}, domain_upper = {domain_upper}}} : ({poly_call_term_type}) -> ({poly_call_term_type})"
+        self.lines.append(line)
+        self.poly_calls.add(func_name)
+
     def term_input_type(self, vectors, secret):
         if secret:
-            return f"tensor<{len(vectors)}x{self.n}xf64> " + "{secret.secret}"
+            return f"tensor<{len(vectors)}x{self.n}xf32> " + "{secret.secret}"
         else:
-            return f"tensor<{len(vectors)}x{self.n}xf64>"
+            return f"tensor<{len(vectors)}x{self.n}xf32>"
 
-    def term_type(self, term):
-        return f"tensor<1x{self.n}xf64>"
+    def term_type(self):
+        return f"tensor<1x{self.n}xf32>"
 
     def eval(self, term):
         if term in self.term_to_id:
@@ -202,12 +232,14 @@ class HEIR:
 
         if term.op not in [HEOp.CS] and term not in self.term_to_id:
             self.term_to_id[term] = f"%{self.next_id}"
-            self.term_to_type[term] = self.term_type(term)
+            self.term_to_type[term] = self.term_type()
             self.next_id += 1
 
         match term.op:
             case HEOp.PACK:
                 self.eval_pack(term)
+            case HEOp.CONST:
+                self.eval_const(term)
             case HEOp.MASK:
                 self.eval_mask(term)
             case HEOp.ADD:
@@ -218,6 +250,8 @@ class HEIR:
                 self.eval_mul(term)
             case HEOp.ROT:
                 self.eval_rot(term)
+            case HEOp.POLY_CALL:
+                self.eval_poly_call(term)
             case HEOp.CS:
                 self.term_to_id[term] = self.term_to_id[term.cs[0]]
                 self.term_to_type[term] = self.term_to_type[term.cs[0]]
@@ -245,22 +279,44 @@ class HEIR:
         return_types_str = ", ".join(return_types)
 
         lines = []
-        header = f"func.func @{self.fn}({parameter_str}) -> {return_types_str} " + "{\n"
+        lines.append("module {\n")
+
+        header = (
+            f"  func.func @{self.fn}({parameter_str}) -> {return_types_str} " + "{\n"
+        )
         lines.append(header)
         for c in self.constants:
-            lines.append("  " + c + "\n")
+            lines.append("    " + c + "\n")
         for line in self.lines:
-            lines.append("  " + line + "\n")
+            lines.append("    " + line + "\n")
         for ret in self.returns:
             lines.append(
-                "  return "
+                "    return "
                 + self.term_to_id[ret]
                 + " : "
                 + self.term_to_type[ret]
                 + "\n"
             )
-        closer = "}\n"
-        lines.append(closer)
+        lines.append("  }\n")
+
+        for poly_call in self.poly_calls:
+            match poly_call:
+                case "relu":
+                    relu_lines = [
+                        f"\n  func.func private @relu(%arg0: tensor<1x{self.n}xf32>) -> tensor<1x{self.n}xf32> {{\n",
+                        f"    %cst = arith.constant dense<0.000000e+00> : tensor<f32>\n",
+                        f"    %0 = tensor.empty() : tensor<1x{self.n}xf32>\n",
+                        f"    %broadcasted = linalg.broadcast ins(%cst : tensor<f32>) outs(%0 : tensor<1x{self.n}xf32>) dimensions = [0, 1]\n",
+                        f"    %1 = tensor.empty() : tensor<1x{self.n}xf32>\n",
+                        f"    %mapped = linalg.map {{ arith.maximumf }} ins(%arg0, %broadcasted : tensor<1x{self.n}xf32>, tensor<1x{self.n}xf32>) outs(%1 : tensor<1x{self.n}xf32>)\n",
+                        f"    return %mapped : tensor<1x{self.n}xf32>\n",
+                        "  }\n",
+                    ]
+                    lines.extend(relu_lines)
+                case _:
+                    raise NotImplementedError(poly_call)
+
+        lines.append("}\n")
 
         with open(f"heir/{self.fn}/{self.fn}.mlir", "w") as f:
             f.writelines(lines)
@@ -305,6 +361,8 @@ class HEIR:
                             self.pt_env[ct_term] = self.eval_pack(ct_term)
                         else:
                             self.env[ct_term] = self.eval_pack(ct_term)
+                    case HEOp.MASK:
+                        self.pt_env[ct_term] = self.eval_mask(ct_term)
 
     def preprocess_pt_compute(self, cts):
         print("preprocessing pt compute...")
@@ -372,7 +430,6 @@ class HEIR:
                         raise NotImplementedError(ct_term.op)
 
     def run(self):
-        print("evaluating terms...")
         cts = self.dagify_fhe_circuit()
 
         self.preprocess_packing(cts)
@@ -381,9 +438,7 @@ class HEIR:
         for ct in cts:
             self.returns = []
             for ct_term in ct.post_order():
-                if not ct_term.secret:
-                    continue
-                if ct_term in self.env:
+                if not ct_term.secret or ct_term in self.term_to_id:
                     continue
                 self.eval(ct_term)
             self.returns.append(ct)

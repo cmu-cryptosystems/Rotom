@@ -23,7 +23,7 @@ from benchmarks.rotom_benchmarks.mlp_mnist_square import mlp_mnist_square
 from frontends.tensor import TensorTerm
 from lower.lower import Lower
 from tests.conftest import assert_results_equal, run_backend
-from tests.e2e.mnist.test_traced_model_plaintext import (
+from tests.mnist.test_traced_model_plaintext import (
     MODEL_FILE,
     _load_mnist_test_set,
 )

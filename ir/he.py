@@ -46,6 +46,7 @@ class HEOp(Enum):
     CS_PACK = "CS_PACK"
     PACK = "PACK"
     PUNCTURED_PACK = "PUNCTURED_PACK"
+    CONST = "CONST"
     INDICES = "INDICES"
     ADD = "ADD"
     SUB = "SUB"
@@ -53,6 +54,7 @@ class HEOp(Enum):
     ROT = "ROT"
     MASK = "MASK"
     POLY = "POLY"
+    POLY_CALL = "POLY_CALL"
     RESCALE = "RESCALE"
     ZERO_MASK = "ZERO_MASK"
 
@@ -74,7 +76,7 @@ class HETerm:
         hash: Computed hash for term identity and comparison
     """
 
-    def __init__(self, op, cs, secret, metadata="", poly_func=None, poly_channel=None):
+    def __init__(self, op, cs, secret, metadata=""):
         """
         Create a homomorphic encryption term.
 
@@ -95,8 +97,6 @@ class HETerm:
         self.op = op
         self.cs = cs
         self.metadata = metadata
-        self.poly_func = poly_func if op == HEOp.POLY else None
-        self.poly_channel = poly_channel if op == HEOp.POLY else None
 
         assert isinstance(secret, bool)
         self.secret = secret
@@ -112,10 +112,6 @@ class HETerm:
             or self.op == HEOp.PUNCTURED_PACK
         ):
             self.hash = hash(f"{self.op}:{cs_hashes}:{self.metadata}")
-        elif self.op == HEOp.POLY and self.poly_func is not None:
-            self.hash = hash(
-                f"{self.op}:{cs_hashes}:{repr(self.poly_func)}:{self.poly_channel}"
-            )
         else:
             self.hash = hash(f"{self.op}:{cs_hashes}")
 
@@ -310,7 +306,7 @@ class HETerm:
                     a = env[term.cs[0]]
                     b = str(term.cs[1])
                     instruction_strs.append(f"{idx} {term.secret}: (<< {a} {b})")
-                case HEOp.POLY:
+                case HEOp.POLY | HEOp.POLY_CALL:
                     a = env[term.cs[0]]
                     instruction_strs.append(f"{idx} {term.secret}: (poly {a})")
                 case HEOp.RESCALE:
@@ -333,7 +329,7 @@ class HETerm:
         """
         match self.op:
             case HEOp.MASK:
-                return f"{self.op} {self.cs[0]} {self.metadata}"
+                return f"{self.op}"
             case HEOp.ROT:
                 return f"{self.op} {self.cs[1]} {self.metadata}"
             case HEOp.RESCALE:
@@ -355,14 +351,19 @@ class HETerm:
         seen.add(self)
         match self.op:
             case (
-                HEOp.PACK | HEOp.PUNCTURED_PACK | HEOp.INDICES | HEOp.CS | HEOp.CS_PACK
+                HEOp.PACK
+                | HEOp.PUNCTURED_PACK
+                | HEOp.INDICES
+                | HEOp.CS
+                | HEOp.CS_PACK
+                | HEOp.CONST
             ):
                 return [self]
             case HEOp.ADD | HEOp.SUB | HEOp.MUL:
                 a = self.cs[0].helper_post_order(seen)
                 b = self.cs[1].helper_post_order(seen)
                 return a + b + [self]
-            case HEOp.ROT | HEOp.POLY | HEOp.RESCALE:
+            case HEOp.ROT | HEOp.POLY | HEOp.POLY_CALL | HEOp.RESCALE:
                 a = self.cs[0].helper_post_order(seen)
                 return a + [self]
             case HEOp.MASK | HEOp.ZERO_MASK:

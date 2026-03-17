@@ -38,12 +38,14 @@ def get_dim_alignment(term, shapes):
         NotImplementedError: If the operation type alignment is not implemented
     """
     alignment = set()
+
+    a_shape = shapes[0]
+    b_shape = shapes[1]
+    a_dims = list(range(len(a_shape)))[::-1]
+    b_dims = list(range(len(b_shape)))[::-1]
+
     match term.op:
         case TensorOp.ADD | TensorOp.SUB | TensorOp.MUL:
-            a_shape = shapes[0]
-            b_shape = shapes[1]
-            a_dims = list(range(len(a_shape)))[::-1]
-            b_dims = list(range(len(b_shape)))[::-1]
             for i in range(min(len(a_dims), len(b_dims))):
                 alignment.add((a_dims[i], b_dims[i]))
             if len(a_dims) > len(b_dims):
@@ -54,11 +56,6 @@ def get_dim_alignment(term, shapes):
                     alignment.add((None, b_dims[i]))
             return alignment
         case TensorOp.MATMUL:
-            a_shape = shapes[0]
-            b_shape = shapes[1]
-            a_dims = list(range(len(a_shape)))
-            b_dims = list(range(len(b_shape)))
-
             # align dimensions
             if len(a_shape) == 2 and len(b_shape) == 1:
                 alignment.add((0, None))

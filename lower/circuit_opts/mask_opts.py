@@ -11,6 +11,8 @@ def zero_mask_opt(he_term):
         for i, cs in enumerate(term.cs):
             if term.op in [HEOp.PACK, HEOp.MASK, HEOp.ZERO_MASK]:
                 continue
+            if isinstance(cs, dict):
+                continue
             if cs in update_map:
                 term.cs[i] = update_map[cs]
 
@@ -27,6 +29,8 @@ def zero_mask_opt(he_term):
     for i, cs in enumerate(he_term.cs):
         if he_term.op in [HEOp.PACK, HEOp.MASK, HEOp.ZERO_MASK]:
             continue
+        if isinstance(cs, dict):
+            continue
         if cs in update_map:
             he_term.cs[i] = update_map[cs]
     return update_map[he_term]
@@ -41,6 +45,8 @@ def mask_identity_opt(he_term):
         # update term cs
         for i, cs in enumerate(term.cs):
             if term.op in [HEOp.PACK, HEOp.MASK, HEOp.ZERO_MASK]:
+                continue
+            if isinstance(cs, dict):
                 continue
             if cs in update_map:
                 term.cs[i] = update_map[cs]
@@ -71,6 +77,8 @@ def mask_identity_opt(he_term):
     for i, cs in enumerate(he_term.cs):
         if he_term.op in [HEOp.PACK, HEOp.MASK, HEOp.ZERO_MASK]:
             continue
+        if isinstance(cs, dict):
+            continue
         if cs in update_map:
             he_term.cs[i] = update_map[cs]
     return update_map[he_term]
@@ -85,6 +93,8 @@ def zero_mask_identity_opt(he_term):
         # update term cs
         for i, cs in enumerate(term.cs):
             if term.op in [HEOp.PACK, HEOp.MASK, HEOp.ZERO_MASK]:
+                continue
+            if isinstance(cs, dict):
                 continue
             if cs in update_map:
                 term.cs[i] = update_map[cs]
@@ -115,6 +125,8 @@ def zero_mask_identity_opt(he_term):
     # update term cs
     for i, cs in enumerate(he_term.cs):
         if he_term.op in [HEOp.PACK, HEOp.MASK, HEOp.ZERO_MASK]:
+            continue
+        if isinstance(cs, dict):
             continue
         if cs in update_map:
             he_term.cs[i] = update_map[cs]

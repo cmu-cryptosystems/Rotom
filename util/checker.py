@@ -40,4 +40,19 @@ def check_results(tensor_ir, inputs, kernel, results, runtime, args):
         print(kernel.layout)
 
     assert all_close, f"Values not close enough. Max diff: {max_diff}"
-    print("passed!")
+    print("[pt eval] passed!")
+
+
+def check_label(kernel, results, label):
+    non_zero_results = [result for result in results[0] if result != 0]
+    guessed_label = non_zero_results.index(max(non_zero_results))
+    if guessed_label == label:
+        print("[check label] passed!")
+    else:
+        print(
+            "[check label] failed! Guessed label: ",
+            guessed_label,
+            "Expected label: ",
+            label,
+        )
+        print("non-zero results: ", non_zero_results)
