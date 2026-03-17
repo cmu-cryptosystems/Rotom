@@ -23,6 +23,24 @@ class CKKS:
         self.inputs = inputs
         self.n = args.n
         self.benchmark = args.benchmark
+        # Where to serialize crypto context / keys / ciphertexts.
+        # Tests and callers can override this to avoid cross-test collisions.
+        default_modules_root = "./modules"
+        # Use benchmark to namespace output by default (when not overridden).
+        benchmark_suffix = (
+            str(self.benchmark).strip() if self.benchmark is not None else ""
+        )
+        default_modules_dir = (
+            os.path.join(default_modules_root, benchmark_suffix)
+            if benchmark_suffix
+            else default_modules_root
+        )
+        self.modules_dir = (
+            getattr(args, "modules_dir", None)
+            or getattr(args, "output_dir", None)
+            or os.environ.get("ROTOM_MODULES_DIR")
+            or default_modules_dir
+        )
         self.cache = args.cache
         self.mock_inputs = args.mock
         self.serialize = args.serialize
@@ -40,12 +58,13 @@ class CKKS:
         self.margin_depth = 4
 
         # clean data path
-        if os.path.exists("./modules"):
-            shutil.rmtree("./modules")
-        os.mkdir("./modules")
+        if os.path.exists(self.modules_dir):
+            shutil.rmtree(self.modules_dir)
+        # Create parent directories as needed (e.g. ./modules/<benchmark>).
+        os.makedirs(self.modules_dir, exist_ok=True)
 
     def get_directory_size(self):
-        path = "./modules"
+        path = self.modules_dir
         total_size = 0
         for dirpath, dirnames, filenames in os.walk(path):
             for file in filenames:
@@ -128,20 +147,26 @@ class CKKS:
 
     def serialize_context_and_keys(self):
         serType = BINARY
-        if not SerializeToFile("modules/cryptocontext.txt", self.cc, serType):
+        if not SerializeToFile(
+            os.path.join(self.modules_dir, "cryptocontext.txt"),
+            self.cc,
+            serType,
+        ):
             raise Exception(
                 "Error writing serialization of the crypto context to cryptocontext.txt"
             )
 
         # Serialize the relinearization key
-        if not self.cc.SerializeEvalMultKey("modules/key-eval-mult.txt", serType):
+        if not self.cc.SerializeEvalMultKey(
+            os.path.join(self.modules_dir, "key-eval-mult.txt"), serType
+        ):
             raise Exception(
                 'Error writing serialization of the eval mult keys to "key-eval-mult.txt"'
             )
 
         # Serialize the rotation evaluation keys
         if not self.cc.SerializeEvalAutomorphismKey(
-            "modules/key-eval-rot.txt", serType
+            os.path.join(self.modules_dir, "key-eval-rot.txt"), serType
         ):
             raise Exception(
                 'Error writing serialization of the eval rotate keys to "key-eval-rot.txt"'
@@ -160,11 +185,15 @@ class CKKS:
         return term.cs[0]
 
     def serialize_ct(self, term, ct):
-        if not SerializeToFile(f"modules/{term}.txt", ct, BINARY):
+        if not SerializeToFile(
+            os.path.join(self.modules_dir, f"{term}.txt"), ct, BINARY
+        ):
             raise Exception(f"Error writing serialization of {term}")
 
     def serialize_result(self, i, ct):
-        if not SerializeToFile(f"modules/result_{i}.txt", ct, BINARY):
+        if not SerializeToFile(
+            os.path.join(self.modules_dir, f"result_{i}.txt"), ct, BINARY
+        ):
             raise Exception(f"Error writing serialization of {i}")
 
     def eval_pack(self, term, encrypt=False, cache=False):
