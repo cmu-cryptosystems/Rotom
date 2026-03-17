@@ -77,13 +77,13 @@ class Writer:
             # combine all the kernels into a single circuit file
             # map cs from output kernels to input kernels
 
-            env = {}  # fhe_term to index
+            env = {}  # he_term to index
             kernel_env = {}  # kernel_term to index
             for kernel_dag_term in kernel_dag.post_order():
-                # lower each kernel to fhe_terms
+                # lower each kernel to he_terms
                 cts = Lower(kernel_dag_term.kernel).run()
                 kernel_term = list(cts)[-1]
-                fhe_term = cts[kernel_term]
+                he_term = cts[kernel_term]
                 layout_term = kernel_term.layout
                 f.write("=" * 60 + "\n")
 
@@ -91,7 +91,7 @@ class Writer:
                 f.write(f"# {kernel_term.layout}\n")
 
                 # write circuit
-                for _, ct in fhe_term.items():
+                for _, ct in he_term.items():
                     instrs, env = ct.instrs(env=env, kernel_env=kernel_env)
                     if not instrs:
                         continue

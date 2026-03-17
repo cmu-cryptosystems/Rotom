@@ -53,7 +53,6 @@ class HEOp(Enum):
     MUL = "MUL"
     ROT = "ROT"
     MASK = "MASK"
-    POLY = "POLY"
     POLY_CALL = "POLY_CALL"
     RESCALE = "RESCALE"
     ZERO_MASK = "ZERO_MASK"
@@ -306,7 +305,7 @@ class HETerm:
                     a = env[term.cs[0]]
                     b = str(term.cs[1])
                     instruction_strs.append(f"{idx} {term.secret}: (<< {a} {b})")
-                case HEOp.POLY | HEOp.POLY_CALL:
+                case HEOp.POLY_CALL:
                     a = env[term.cs[0]]
                     instruction_strs.append(f"{idx} {term.secret}: (poly {a})")
                 case HEOp.RESCALE:
@@ -363,7 +362,7 @@ class HETerm:
                 a = self.cs[0].helper_post_order(seen)
                 b = self.cs[1].helper_post_order(seen)
                 return a + b + [self]
-            case HEOp.ROT | HEOp.POLY | HEOp.POLY_CALL | HEOp.RESCALE:
+            case HEOp.ROT | HEOp.POLY_CALL | HEOp.RESCALE:
                 a = self.cs[0].helper_post_order(seen)
                 return a + [self]
             case HEOp.MASK | HEOp.ZERO_MASK:

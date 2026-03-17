@@ -28,12 +28,27 @@ Layout Example:
     >>> d = a.sum(0, layout="[0:1:1]")  # Sum with specific layout
 """
 
-import math
+from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Dict, Iterable, List, Optional
 
 import numpy as np
 
 from .poly import APPROX_RELU_CHEBYSHEV_COEFFS
+from .tensor_evaluator import TensorEvaluator
+
+
+@dataclass(frozen=True)
+class PolyCallArgs:
+    """Structured view of a PolyCall TensorTerm.
+
+    This avoids sprinkling magic indices (cs[1], cs[2], cs[3]) throughout
+    the codebase and makes the frontend/backends less brittle.
+    """
+
+    name: str
+    lower_bound: float
+    upper_bound: float
 
 
 class TensorOp(Enum):
@@ -54,8 +69,7 @@ class TensorOp(Enum):
         MATMUL: Matrix multiplication
         BLOCK_MATMUL: Block matrix multiplication
         CONV2D: 2D convolution
-        POLY: Polynomial approximation
-        POLY_CALL: Polynomial approximation call
+        POLY_CALL: Polynomial approximation
         RESHAPE: Tensor reshaping
         PERMUTE: Dimension permutation
         INDEX: Tensor indexing
@@ -72,7 +86,6 @@ class TensorOp(Enum):
     MATMUL = "MatMul"  # matmul
     BLOCK_MATMUL = "Block_MatMul"  # block matmul
     CONV2D = "Conv"  # convolutions
-    POLY = "Poly"  # polynomial approximation
     POLY_CALL = "PolyCall"  # polynomial approximation call
     RESHAPE = "Reshape"  # tensor reshape
     PERMUTE = "Permute"  # permute dims
@@ -115,7 +128,7 @@ class TensorTerm:
         >>> i = a.sum(0, layout="[0:1:1]")  # Sum with layout
     """
 
-    def __init__(self, op, cs, layout=None):
+    def __init__(self, op: TensorOp, cs: List[Any], layout: Optional[str] = None):
         """Initialize a tensor term.
 
         Args:
@@ -173,15 +186,14 @@ class TensorTerm:
                     self._str_cache = f"({self.cs[0]}[{self.cs[1]}])"
                 case TensorOp.CONV2D:
                     self._str_cache = f"(conv2d {str(self.cs[0])} {str(self.cs[1])})"
-                case TensorOp.POLY:
-                    func = self.cs[1] if len(self.cs) > 1 else "identity"
-                    self._str_cache = f"(poly {cs} {func!r})"
                 case _:
                     self._str_cache = f"({self.op} {cs})"
         return self._str_cache
 
     @staticmethod
-    def Tensor(name, shape, secret, layout=None):
+    def Tensor(
+        name: str, shape: Iterable[int], secret: bool, layout: Optional[str] = None
+    ) -> "TensorTerm":
         """Create a tensor placeholder term.
 
         Args:
@@ -201,7 +213,7 @@ class TensorTerm:
         return TensorTerm(TensorOp.TENSOR, [name, shape, secret], layout)
 
     @staticmethod
-    def const(value, layout=None):
+    def const(value: Any, layout: Optional[str] = None) -> "TensorTerm":
         """Create a public constant tensor term.
 
         Args:
@@ -217,11 +229,11 @@ class TensorTerm:
         """
         return TensorTerm(TensorOp.CONST, [value], layout)
 
-    def __add__(self, other, layout=None):
+    def __add__(self, other: Any, layout: Optional[str] = None) -> "TensorTerm":
         """Element-wise addition operator.
 
         Args:
-            other (TensorTerm): The tensor to add
+            other (TensorTerm | scalar): The tensor or scalar to add
             layout (str, optional): Tensor layout string for the result
 
         Returns:
@@ -231,13 +243,21 @@ class TensorTerm:
             >>> c = a + b  # Element-wise addition
             >>> d = a.__add__(b, layout="[0:4:1][1:4:1]")  # With layout
         """
+        if not isinstance(other, TensorTerm):
+            other = TensorTerm.const(other)
         return TensorTerm(TensorOp.ADD, [self, other], layout)
 
-    def __sub__(self, other, layout=None):
+    def __radd__(self, other: Any, layout: Optional[str] = None) -> "TensorTerm":
+        """Right-hand addition to support scalar + TensorTerm."""
+        if not isinstance(other, TensorTerm):
+            other = TensorTerm.const(other)
+        return TensorTerm(TensorOp.ADD, [other, self], layout)
+
+    def __sub__(self, other: Any, layout: Optional[str] = None) -> "TensorTerm":
         """Element-wise subtraction operator.
 
         Args:
-            other (TensorTerm): The tensor to subtract
+            other (TensorTerm | scalar): The tensor or scalar to subtract
             layout (str, optional): Tensor layout string for the result
 
         Returns:
@@ -247,13 +267,15 @@ class TensorTerm:
             >>> c = a - b  # Element-wise subtraction
             >>> d = a.__sub__(b, layout="[0:4:1][1:4:1]")  # With layout
         """
+        if not isinstance(other, TensorTerm):
+            other = TensorTerm.const(other)
         return TensorTerm(TensorOp.SUB, [self, other], layout)
 
-    def __mul__(self, other, layout=None):
+    def __mul__(self, other: Any, layout: Optional[str] = None) -> "TensorTerm":
         """Element-wise multiplication operator.
 
         Args:
-            other (TensorTerm): The tensor to multiply
+            other (TensorTerm | scalar): The tensor or scalar to multiply
             layout (str, optional): Tensor layout string for the result
 
         Returns:
@@ -263,9 +285,17 @@ class TensorTerm:
             >>> c = a * b  # Element-wise multiplication
             >>> d = a.__mul__(b, layout="[0:4:1][1:4:1]")  # With layout
         """
+        if not isinstance(other, TensorTerm):
+            other = TensorTerm.const(other)
         return TensorTerm(TensorOp.MUL, [self, other], layout)
 
-    def sum(self, dim_idx, layout=None):
+    def __rmul__(self, other: Any, layout: Optional[str] = None) -> "TensorTerm":
+        """Right-hand multiplication to support scalar * TensorTerm."""
+        if not isinstance(other, TensorTerm):
+            other = TensorTerm.const(other)
+        return TensorTerm(TensorOp.MUL, [other, self], layout)
+
+    def sum(self, dim_idx: int, layout: Optional[str] = None) -> "TensorTerm":
         """Sum along a specific dimension.
 
         Args:
@@ -281,7 +311,7 @@ class TensorTerm:
         """
         return TensorTerm(TensorOp.SUM, [self, dim_idx], layout)
 
-    def product(self, dim_idx, layout=None):
+    def product(self, dim_idx: int, layout: Optional[str] = None) -> "TensorTerm":
         """Product along a specific dimension.
 
         Args:
@@ -297,7 +327,7 @@ class TensorTerm:
         """
         return TensorTerm(TensorOp.PRODUCT, [self, dim_idx], layout)
 
-    def matmul(self, other, layout=None):
+    def matmul(self, other: "TensorTerm", layout: Optional[str] = None) -> "TensorTerm":
         """Matrix multiplication method.
 
         Args:
@@ -313,7 +343,9 @@ class TensorTerm:
         """
         return TensorTerm(TensorOp.MATMUL, [self, other], layout)
 
-    def __matmul__(self, other, layout=None):
+    def __matmul__(
+        self, other: "TensorTerm", layout: Optional[str] = None
+    ) -> "TensorTerm":
         """Matrix multiplication operator (@).
 
         Args:
@@ -329,7 +361,9 @@ class TensorTerm:
         """
         return TensorTerm(TensorOp.MATMUL, [self, other], layout)
 
-    def block_matmul(self, other, layout=None):
+    def block_matmul(
+        self, other: "TensorTerm", layout: Optional[str] = None
+    ) -> "TensorTerm":
         """Block matrix multiplication.
 
         Args:
@@ -345,7 +379,7 @@ class TensorTerm:
         """
         return TensorTerm(TensorOp.BLOCK_MATMUL, [self, other], layout)
 
-    def transpose(self, layout=None):
+    def transpose(self, layout: Optional[str] = None) -> "TensorTerm":
         """Transpose the tensor.
 
         Args:
@@ -360,66 +394,30 @@ class TensorTerm:
         """
         return TensorTerm(TensorOp.TRANSPOSE, [self], layout)
 
-    def poly_call(self, name, lower_bound, upper_bound, layout=None):
-        """Call a polynomial approximation.
+    def poly_call(
+        self,
+        name: str,
+        lower_bound: float,
+        upper_bound: float,
+        layout: Optional[str] = None,
+    ) -> "TensorTerm":
+        """Call a named polynomial approximation on a bounded domain.
 
-        Args:
-            name (str): The name of the polynomial approximation or named function
-            lower_bound (float): The lower bound of the polynomial approximation
-            upper_bound (float): The upper bound of the polynomial approximation
-            layout (str, optional): Tensor layout string for the result
-
-        Returns:
-            TensorTerm: A new tensor term representing the Poly call operation
-
-        Example:
-            >>> b = a.poly_call("relu", -20, 20)  # Call ReLU with lower bound -20 and upper bound 20
-            >>> c = a.poly_call("relu", -20, 20, layout="[0:4:1][1:4:1]")  # With layout
+        Tensor layout:
+            cs[0] = input term
+            cs[1] = name (e.g., "relu", "silu")
+            cs[2] = lower_bound
+            cs[3] = upper_bound
         """
         return TensorTerm(
-            TensorOp.POLY_CALL, [self, name, lower_bound, upper_bound], layout
+            TensorOp.POLY_CALL,
+            [self, name, float(lower_bound), float(upper_bound)],
+            layout,
         )
 
-    def poly(self, func=None, layout=None):
-        """Apply a polynomial approximation or named function element-wise.
-
-        Args:
-            func: Optional. One of:
-                - None or "identity": output = input
-                - callable: any Python function (x) -> array, same shape. Used for
-                  eval only; not serializable.
-                - "silu": SiLU (Swish) x * sigmoid(x), or a polynomial approximation
-                - "relu": ReLU(x) ≈ p(x) where p is a fixed-degree Chebyshev
-                  approximation on [-20, 20], encoded as monomial coefficients
-                - ("batchnorm", mean_key, var_key, gamma_key, beta_key): BatchNorm
-                  with parameter names for inputs dict; eps=1e-5 used internally
-                - list or tuple of floats [c0, c1, c2, ...]: polynomial
-                  c0 + c1*x + c2*x^2 + ... applied element-wise
-            layout (str, optional): Tensor layout string for the result
-
-        Returns:
-            TensorTerm: A new tensor term representing the Poly operation
-
-        Example:
-            >>> b = a.poly()  # identity
-            >>> c = a.poly("silu")
-            >>> d = a.poly("relu")  # approximate ReLU via Chebyshev polynomial
-            >>> d = a.poly([0, 1, 0.1])  # x + 0.1*x^2
-            >>> e = x.poly(("batchnorm", "mean", "var", "gamma", "beta"))
-            >>> f = x.poly(lambda t: gamma * (t - mean) / np.sqrt(var + 1e-5) + beta)
-        """
-        if func is None:
-            func = "identity"
-        # Map named activations to concrete polynomial coefficient lists so that
-        # downstream passes only see a generic Poly with explicit coefficients.
-        # Special strings (e.g. "relu_exact") are left as-is so backends and
-        # eval() can apply a non-polynomial function when appropriate.
-        if isinstance(func, str):
-            if func == "relu":
-                func = APPROX_RELU_CHEBYSHEV_COEFFS
-        return TensorTerm(TensorOp.POLY, [self, func], layout)
-
-    def reshape(self, dim, shape, layout=None):
+    def reshape(
+        self, dim: int, shape: Dict[int, int], layout: Optional[str] = None
+    ) -> "TensorTerm":
         """Reshape the tensor.
 
         Args:
@@ -452,7 +450,7 @@ class TensorTerm:
         """
         return TensorTerm(TensorOp.PERMUTE, [self, dim_map], layout)
 
-    def __getitem__(self, item, layout=None):
+    def __getitem__(self, item: Any, layout: Optional[str] = None) -> "TensorTerm":
         """Index the tensor.
 
         Args:
@@ -469,7 +467,7 @@ class TensorTerm:
         return TensorTerm(TensorOp.INDEX, [self, item], layout)
 
     @property
-    def T(self):
+    def T(self) -> "TensorTerm":
         """Transpose property.
 
         Returns:
@@ -480,7 +478,7 @@ class TensorTerm:
         """
         return TensorTerm(TensorOp.TRANSPOSE, [self])
 
-    def rescale(self, scale_exp, layout=None):
+    def rescale(self, scale_exp: int, layout: Optional[str] = None) -> "TensorTerm":
         """Rescale the tensor by dividing by 2^scale_exp.
 
         Args:
@@ -497,7 +495,13 @@ class TensorTerm:
         return TensorTerm(TensorOp.RESCALE, [self, scale_exp], layout)
 
     @staticmethod
-    def conv2d(a, b, stride, padding, layout=None):
+    def conv2d(
+        a: "TensorTerm",
+        b: "TensorTerm",
+        stride: int,
+        padding: str,
+        layout: Optional[str] = None,
+    ) -> "TensorTerm":
         """Create a 2D convolution operation.
 
         Args:
@@ -515,47 +519,6 @@ class TensorTerm:
             >>> d = TensorTerm.conv2d(input, filter, 1, "same", layout="[0:32:1][1:32:1][2:64:1]")
         """
         return TensorTerm(TensorOp.CONV2D, [a, b, stride, padding], layout)
-
-    @staticmethod
-    def batchnorm(x, mean_key, var_key, gamma_key, beta_key, eps=1e-5):
-        """BatchNorm via Poly: gamma * (x - mean) / sqrt(var + eps) + beta.
-
-        Parameters are looked up from the inputs dict by key. Use poly() with
-        func=("batchnorm", mean_key, var_key, gamma_key, beta_key[, eps]) for eval.
-
-        Args:
-            x (TensorTerm): Input tensor
-            mean_key (str): Key for mean in inputs
-            var_key (str): Key for variance in inputs
-            gamma_key (str): Key for gamma (scale) in inputs
-            beta_key (str): Key for beta (shift) in inputs
-            eps (float): Small constant for numerical stability (default 1e-5)
-
-        Returns:
-            TensorTerm: Poly term that evaluates to BatchNorm(x) when eval(inputs) is called
-        """
-        func = ("batchnorm", mean_key, var_key, gamma_key, beta_key, eps)
-        return TensorTerm(TensorOp.POLY, [x, func])
-
-    def round_to_ceiling_power_of_2(self, n):
-        """Round a number up to the next power of 2.
-
-        Args:
-            n (int): The number to round up
-
-        Returns:
-            int: The smallest power of 2 greater than or equal to n
-
-        Raises:
-            ValueError: If n is not positive
-
-        Example:
-            >>> round_to_ceiling_power_of_2(5)  # Returns 8
-            >>> round_to_ceiling_power_of_2(8)  # Returns 8
-        """
-        if n <= 0:
-            raise ValueError("Input must be a positive number.")
-        return 1 if n == 1 else 2 ** math.ceil(math.log2(n))
 
     def helper_post_order(self, seen):
         """Helper routine for post-order traversal.
@@ -612,320 +575,7 @@ class TensorTerm:
         """
         return self.post_order()[-1]
 
-    def eval_conv2d(self, input_tensor, filter_tensor, stride, padding):
-        """Evaluate a 2D convolution operation.
-
-        Args:
-            input_tensor (numpy.ndarray): Input tensor with shape [C, H, W]
-            filter_tensor (numpy.ndarray): Filter tensor with shape [C_out, C_in, H_f, W_f]
-            stride (int): Stride of the convolution
-            padding (str): Padding mode ("valid" or "same")
-
-        Returns:
-            numpy.ndarray: Output tensor after convolution
-
-        Note:
-            This is a reference implementation for testing purposes.
-            The actual HE implementation will be generated by the backend.
-        """
-        input_shape = input_tensor.shape
-        filter_shape = filter_tensor.shape
-        if padding == "valid":
-            h_o = (input_shape[1] - filter_shape[2]) // stride + 1
-            w_o = (input_shape[2] - filter_shape[3]) // stride + 1
-            output_shape = [filter_shape[0], h_o, w_o]
-        elif padding == "same":
-            # Same padding: stride 1 -> output size = input size; stride > 1 -> ceil(H/stride) x ceil(W/stride)
-            if stride == 1:
-                output_shape = [filter_shape[0], input_shape[1], input_shape[2]]
-            else:
-                h_o = (input_shape[1] + stride - 1) // stride
-                w_o = (input_shape[2] + stride - 1) // stride
-                output_shape = [filter_shape[0], h_o, w_o]
-
-        # pad indices based on padding
-        if padding == "valid":
-            pass
-        elif padding == "same":
-            # Padding so that strided conv yields exactly h_o x w_o output
-            pad_top = max(
-                0,
-                math.floor(
-                    (stride * (output_shape[1] - 1) - input_shape[1] + filter_shape[2])
-                    / 2
-                ),
-            )
-            pad_bot = max(
-                0,
-                math.ceil(
-                    (stride * (output_shape[1] - 1) - input_shape[1] + filter_shape[2])
-                    / 2
-                ),
-            )
-            pad_left = max(
-                0,
-                math.floor(
-                    (stride * (output_shape[2] - 1) - input_shape[2] + filter_shape[3])
-                    / 2
-                ),
-            )
-            pad_right = max(
-                0,
-                math.ceil(
-                    (stride * (output_shape[2] - 1) - input_shape[2] + filter_shape[3])
-                    / 2
-                ),
-            )
-
-            padded_input_tensor = []
-            for channel_tensor in input_tensor:
-                padded_input_tensor.append(
-                    np.pad(
-                        channel_tensor,
-                        pad_width=((pad_top, pad_bot), (pad_left, pad_right)),
-                        mode="constant",
-                        constant_values=0,
-                    )
-                )
-            input_tensor = padded_input_tensor
-
-        output_tensor = np.zeros(output_shape)
-        for in_c in range(input_shape[0]):
-            for out_c in range(output_shape[0]):
-                for i in range(output_shape[1]):
-                    for j in range(output_shape[2]):
-                        # Define the slice of the input tensor
-                        i_start = i * stride
-                        j_start = j * stride
-                        i_end = i_start + filter_shape[2]
-                        j_end = j_start + filter_shape[3]
-
-                        # Extract the patch and compute the dot product
-                        patch = []
-                        for x in range(i_start, i_end):
-                            row = []
-                            for y in range(j_start, j_end):
-                                row.append(input_tensor[in_c][x][y])
-                            patch.append(row)
-                        patch = np.array(patch)
-                        # Multiply patch (from input channel in_c) by filter for that channel.
-                        # If filter has fewer input channels, broadcast (use last filter channel).
-                        f_in_idx = min(in_c, filter_shape[1] - 1)
-                        output_tensor[out_c][i][j] += np.sum(
-                            patch * filter_tensor[out_c][f_in_idx]
-                        )
-
-        return output_tensor
-
-    def eval_helper(self, env, inputs):
-        """Helper method for evaluating tensor terms.
-
-        This method handles the evaluation of individual tensor operations
-        during the computation process. It's called by the main eval method
-        for each term in post-order.
-
-        Args:
-            env (dict): Environment mapping terms to their computed values
-            inputs (dict): Dictionary mapping input tensor names to numpy arrays
-
-        Returns:
-            numpy.ndarray: The computed value for this term
-
-        Raises:
-            NotImplementedError: If the operation is not implemented
-        """
-        match self.op:
-            case TensorOp.TENSOR:
-                shape = inputs[self.cs[0]].shape
-                rounded_shape = [self.round_to_ceiling_power_of_2(s) for s in shape]
-                padding = [0] * len(shape)
-                for i, (a, b) in enumerate(zip(shape, rounded_shape)):
-                    padding[i] = b - a
-
-                if len(padding) == 1:
-                    padded_tensor = np.pad(
-                        inputs[self.cs[0]],
-                        pad_width=((0, padding[0])),
-                        mode="constant",
-                        constant_values=0,
-                    )
-                elif len(padding) == 2:
-                    padded_tensor = np.pad(
-                        inputs[self.cs[0]],
-                        pad_width=((0, padding[0]), (0, padding[1])),
-                        mode="constant",
-                        constant_values=0,
-                    )
-                else:
-                    # HACK don't pad for now
-                    return np.array(inputs[self.cs[0]])
-                return np.array(padded_tensor)
-            case TensorOp.ADD:
-                return env[self.cs[0]] + env[self.cs[1]]
-            case TensorOp.SUB:
-                return env[self.cs[0]] - env[self.cs[1]]
-            case TensorOp.MUL:
-                return env[self.cs[0]] * env[self.cs[1]]
-            case TensorOp.SUM:
-                return np.sum(env[self.cs[0]], axis=self.cs[1], keepdims=False)
-            case TensorOp.MATMUL:
-                return env[self.cs[0]] @ env[self.cs[1]]
-            case TensorOp.TRANSPOSE:
-                return env[self.cs[0]].T
-            case TensorOp.CONV2D:
-                return self.eval_conv2d(
-                    env[self.cs[0]], env[self.cs[1]], self.cs[2], self.cs[3]
-                )
-            case TensorOp.CONST:
-                return self.cs[0]
-            case TensorOp.INDEX:
-                # Support Python-style indexing and slicing.
-                #
-                # `self.cs[1]` is whatever was passed to `__getitem__`, which can be:
-                # - int
-                # - slice
-                # - tuple of (int | slice | Ellipsis | None)
-                # Additionally, for some serialization / interop use-cases, we accept:
-                # - list of [start, stop] or [start, stop, step] (interpreted as slice)
-                # - dict {"start": .., "stop": .., "step": ..} (interpreted as slice)
-                def _to_slice(obj):
-                    if isinstance(obj, slice) or obj is Ellipsis or obj is None:
-                        return obj
-                    # Allow list-based slice specs: [start, stop] or [start, stop, step]
-                    if isinstance(obj, list) and len(obj) in (2, 3):
-                        return slice(*obj)
-                    # Allow dict-based slice specs
-                    if isinstance(obj, dict) and ("start" in obj or "stop" in obj):
-                        return slice(obj.get("start"), obj.get("stop"), obj.get("step"))
-                    return obj
-
-                item = self.cs[1]
-                if isinstance(item, tuple):
-                    item = tuple(_to_slice(x) for x in item)
-                else:
-                    item = _to_slice(item)
-
-                return env[self.cs[0]][item]
-            case TensorOp.RESHAPE:
-                tensor = env[self.cs[0]]
-                shape = {}
-                for i, s in enumerate(tensor.shape):
-                    shape[i] = s
-                del shape[self.cs[1]]  # drop the dimension we're reshaping
-                for k, v in self.cs[2].items():
-                    shape[k] = self.round_to_ceiling_power_of_2(v)
-                shape_list = [shape[k] for k in sorted(shape.keys())]
-                return tensor.reshape(shape_list)
-            case TensorOp.PERMUTE:
-                tensor = env[self.cs[0]]
-                return np.moveaxis(tensor, self.cs[1].keys(), self.cs[1].values())
-            case TensorOp.RESCALE:
-                scale_value = 2 ** self.cs[1]
-                return env[self.cs[0]] / scale_value
-            case TensorOp.POLY:
-                x = env[self.cs[0]]
-                func = self.cs[1] if len(self.cs) > 1 else "identity"
-                if callable(func):
-                    return np.asarray(func(x))
-                if func == "identity":
-                    return x
-                if func == "relu_exact":
-                    return np.maximum(x, 0.0)
-                if func == "silu":
-                    return x * (1.0 / (1.0 + np.exp(-np.clip(x, -20, 20))))
-                if (
-                    isinstance(func, tuple)
-                    and len(func) >= 5
-                    and func[0] == "batchnorm"
-                ):
-                    _, mean_key, var_key, gamma_key, beta_key = func[:5]
-                    eps = float(func[5]) if len(func) > 5 else 1e-5
-                    mean = np.asarray(inputs[mean_key])
-                    var = np.asarray(inputs[var_key])
-                    gamma = np.asarray(inputs[gamma_key])
-                    beta = np.asarray(inputs[beta_key])
-                    # Infer channel dim: last for 2D (N,C), first for 3D+ (C,H,W)
-                    if x.ndim >= 3:
-                        ch_dim = x.shape[0]
-                        bc_shape = (ch_dim,) + (1,) * (x.ndim - 1)
-                    elif x.ndim == 2:
-                        ch_dim = x.shape[-1]
-                        bc_shape = (1, ch_dim)
-                    else:
-                        ch_dim = mean.size
-                        bc_shape = None
-                    if ch_dim > mean.size:
-                        pad_len = ch_dim - mean.size
-                        mean = np.concatenate(
-                            [mean, np.zeros(pad_len, dtype=mean.dtype)]
-                        )
-                        var = np.concatenate([var, np.ones(pad_len, dtype=var.dtype)])
-                        gamma = np.concatenate(
-                            [gamma, np.ones(pad_len, dtype=gamma.dtype)]
-                        )
-                        beta = np.concatenate(
-                            [beta, np.zeros(pad_len, dtype=beta.dtype)]
-                        )
-                    if bc_shape is not None:
-                        mean = mean.reshape(bc_shape)
-                        var = var.reshape(bc_shape)
-                        gamma = gamma.reshape(bc_shape)
-                        beta = beta.reshape(bc_shape)
-                    inv_std = 1.0 / np.sqrt(var + eps)
-                    return gamma * (x - mean) * inv_std + beta
-                if isinstance(func, (list, tuple)) and len(func) > 0:
-                    try:
-                        coeffs = [float(c) for c in func]
-                    except (TypeError, ValueError):
-                        coeffs = None
-                    if coeffs is not None:
-                        out = np.zeros_like(x, dtype=np.float64)
-                        for i, c in enumerate(coeffs):
-                            out = out + c * (x.astype(np.float64) ** i)
-                        return out
-                raise NotImplementedError(
-                    f"Poly func {func!r} not implemented for eval"
-                )
-            case TensorOp.POLY_CALL:
-                x = env[self.cs[0]]
-                func = self.cs[1] if len(self.cs) > 1 else "identity"
-                if func == "identity":
-                    return x
-                if func == "relu_exact":
-                    return np.maximum(x, 0.0)
-                if func == "relu":
-                    return np.maximum(x, 0.0)
-                if func == "silu":
-                    return x * (1.0 / (1.0 + np.exp(-np.clip(x, -20, 20))))
-                raise NotImplementedError(
-                    f"Poly call func {func!r} not implemented for eval"
-                )
-            case _:
-                raise NotImplementedError(self.op)
-
     def eval(self, inputs):
-        """Evaluates the tensor computation represented by this term.
-
-        Performs a post-order traversal of the computation DAG and evaluates each term
-        using the provided input values. The evaluation maintains an environment mapping
-        terms to their computed values.
-
-        Args:
-            inputs (dict): Dictionary mapping input tensor names to their numpy array values
-
-        Returns:
-            numpy.ndarray: The result of evaluating the full tensor computation
-
-        Example:
-            >>> import numpy as np
-            >>> a = TensorTerm.Tensor("a", [64, 64], True)
-            >>> b = TensorTerm.Tensor("b", [64], False)
-            >>> c = a @ b
-            >>>
-            >>> inputs = {"a": np.random.rand(64, 64), "b": np.random.rand(64)}
-            >>> result = c.eval(inputs)
-        """
-        env = {}
-        for term in self.post_order():
-            env[term] = term.eval_helper(env, inputs)
-        return env[term]
+        """Evaluate this tensor computation using the default TensorEvaluator."""
+        evaluator = TensorEvaluator()
+        return evaluator.eval(self, inputs)
