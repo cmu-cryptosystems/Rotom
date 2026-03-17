@@ -5,10 +5,31 @@ This module provides shared fixtures and utilities for running tests
 with different backends (Toy and CKKS).
 """
 
+import os
+
 import pytest
 
 from backends.openfhe_backend import CKKS
 from backends.toy import Toy
+
+
+@pytest.fixture(autouse=True)
+def _isolated_workdir(tmp_path, monkeypatch):
+    """
+    Run every test in an isolated working directory.
+
+    The CKKS backend serializes artifacts into a relative `./modules/` path.
+    Isolating the CWD per test prevents cross-test contamination and keeps
+    each test's `modules/` output in its own directory.
+    """
+    old_cwd = os.getcwd()
+    monkeypatch.chdir(tmp_path)
+    try:
+        yield
+    finally:
+        # monkeypatch will revert the cwd automatically, but keep a defensive
+        # restore in case other code mutates CWD outside monkeypatch semantics.
+        os.chdir(old_cwd)
 
 
 @pytest.fixture(params=["toy", "ckks"])
