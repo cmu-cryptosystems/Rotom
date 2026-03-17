@@ -1133,14 +1133,10 @@ def gen_block_matmul(term, cs_kernels):
         try:
             matched_layouts = match_layout(term, kernels, alignment, True)
             for matched_a_kernel, matched_b_kernel in matched_layouts:
-                print(matched_a_kernel)
-                print(matched_b_kernel)
                 # find output layout
                 output_kernel = output_layout(
                     term, alignment, matched_a_kernel, matched_b_kernel
                 )
-                print(output_kernel)
-                print()
 
                 # compaction:
                 if not output_kernel.layout.rolls:

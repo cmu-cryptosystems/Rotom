@@ -1,6 +1,7 @@
 import os
 import os.path
 import shutil
+import struct
 
 import numpy as np
 
@@ -19,6 +20,7 @@ class HEIR:
         self.n = args.n
         self.env = {}
         self.pt_env = {}
+        self.poly_calls = set()
         self.fn = args.fn
 
         if os.path.exists(f"heir/{self.fn}"):
@@ -62,6 +64,13 @@ class HEIR:
         data = np.load(fn)
         return data["data"]
 
+    def to_mlir_hex(self, vec: np.ndarray) -> str:
+        """Serialize a float vector to MLIR dense hex string (little-endian f32)."""
+        result = ""
+        for val in vec:
+            result += struct.pack("<f", float(val)).hex()
+        return "0x" + result
+
     def eval_mask(self, term):
         if term not in self.term_to_id:
             self.term_to_id[term] = f"%{self.next_id}"
@@ -70,7 +79,8 @@ class HEIR:
 
         out_id = self.term_to_id[term]
         out_type = self.term_to_type[term]
-        line = f"{out_id} = arith.constant dense<{[[float(x) for x in term.cs[0]]]}> : {out_type}"
+        hex_str = self.to_mlir_hex(term.cs[0])
+        line = f'{out_id} = arith.constant dense<"{hex_str}"> : {out_type}'
         self.lines.append(line)
 
     def eval_pack(self, term):
@@ -91,12 +101,9 @@ class HEIR:
         return vector
 
     def eval_const(self, term):
-        vector = np.array([term.cs[1]] * self.n)
-        layout = term.cs[0]
-        packed_tensor = apply_layout(vector, layout)
         out_id = self.term_to_id[term]
         out_type = self.term_to_type[term]
-        line = f"{out_id} = arith.constant dense<{[packed_tensor]}> : {out_type}"
+        line = f"{out_id} = arith.constant dense<{term.cs[1]}> : {out_type}"
         self.lines.append(line)
 
     def eval_cs(self, term):
@@ -200,20 +207,21 @@ class HEIR:
 
         metadata = term.cs[1]
         func_name = metadata["poly_func"]
-        domain_lower = metadata["lower_bound"]
-        domain_upper = metadata["upper_bound"]
+        domain_lower = float(metadata["lower_bound"])
+        domain_upper = float(metadata["upper_bound"])
         # create the poly call line
         line = f"{poly_call_term_id} = call @{func_name}({mapped_term_id}) {{domain_lower = {domain_lower}, domain_upper = {domain_upper}}} : ({poly_call_term_type}) -> ({poly_call_term_type})"
         self.lines.append(line)
+        self.poly_calls.add(func_name)
 
     def term_input_type(self, vectors, secret):
         if secret:
-            return f"tensor<{len(vectors)}x{self.n}xf64> " + "{secret.secret}"
+            return f"tensor<{len(vectors)}x{self.n}xf32> " + "{secret.secret}"
         else:
-            return f"tensor<{len(vectors)}x{self.n}xf64>"
+            return f"tensor<{len(vectors)}x{self.n}xf32>"
 
     def term_type(self):
-        return f"tensor<1x{self.n}xf64>"
+        return f"tensor<1x{self.n}xf32>"
 
     def eval(self, term):
         if term in self.term_to_id:
@@ -268,22 +276,44 @@ class HEIR:
         return_types_str = ", ".join(return_types)
 
         lines = []
-        header = f"func.func @{self.fn}({parameter_str}) -> {return_types_str} " + "{\n"
+        lines.append("module {\n")
+
+        header = (
+            f"  func.func @{self.fn}({parameter_str}) -> {return_types_str} " + "{\n"
+        )
         lines.append(header)
         for c in self.constants:
-            lines.append("  " + c + "\n")
+            lines.append("    " + c + "\n")
         for line in self.lines:
-            lines.append("  " + line + "\n")
+            lines.append("    " + line + "\n")
         for ret in self.returns:
             lines.append(
-                "  return "
+                "    return "
                 + self.term_to_id[ret]
                 + " : "
                 + self.term_to_type[ret]
                 + "\n"
             )
-        closer = "}\n"
-        lines.append(closer)
+        lines.append("  }\n")
+
+        for poly_call in self.poly_calls:
+            match poly_call:
+                case "relu":
+                    relu_lines = [
+                        f"\n  func.func private @relu(%arg0: tensor<1x{self.n}xf32>) -> tensor<1x{self.n}xf32> {{\n",
+                        f"    %cst = arith.constant dense<0.000000e+00> : tensor<f32>\n",
+                        f"    %0 = tensor.empty() : tensor<1x{self.n}xf32>\n",
+                        f"    %broadcasted = linalg.broadcast ins(%cst : tensor<f32>) outs(%0 : tensor<1x{self.n}xf32>) dimensions = [0, 1]\n",
+                        f"    %1 = tensor.empty() : tensor<1x{self.n}xf32>\n",
+                        f"    %mapped = linalg.map {{ arith.maximumf }} ins(%arg0, %broadcasted : tensor<1x{self.n}xf32>, tensor<1x{self.n}xf32>) outs(%1 : tensor<1x{self.n}xf32>)\n",
+                        f"    return %mapped : tensor<1x{self.n}xf32>\n",
+                        "  }\n",
+                    ]
+                    lines.extend(relu_lines)
+                case _:
+                    raise NotImplementedError(poly_call)
+
+        lines.append("}\n")
 
         with open(f"heir/{self.fn}/{self.fn}.mlir", "w") as f:
             f.writelines(lines)

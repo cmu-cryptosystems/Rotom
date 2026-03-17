@@ -7,7 +7,8 @@ from backends.openfhe_backend import CKKS
 from backends.toy import Toy
 
 # heir benchmarks
-from benchmarks.rotom_benchmarks.mlp_mnist_heir import mlp_mnist_heir
+from benchmarks.e2e.mnist.mnist_poly import mnist_poly
+from benchmarks.e2e.mnist.mnist_poly_call import mnist_poly_call
 
 # Import Rotom
 from ir.dim import *
@@ -24,8 +25,11 @@ def main(args):
     n = args.n
 
     match args.fn:
-        case "mlp_mnist_heir":
-            tensor_ir, inputs, label = mlp_mnist_heir(args.label)
+        case "mnist_poly_call":
+            tensor_ir, inputs, label = mnist_poly_call(args.label)
+            args.n = n
+        case "mnist_poly":
+            tensor_ir, inputs, label = mnist_poly(args.label)
             args.n = n
         case "":
             raise NotImplementedError(f"benchmark not set")
@@ -53,9 +57,7 @@ def main(args):
     if args.backend.lower() == "toy":
         results = Toy(circuit_ir, inputs, args).run()
         check_results(tensor_ir, inputs, kernel, results, runtime, args)
-    elif args.backend.lower() == "ckks":
-        runtime, results = CKKS(circuit_ir, inputs, args).run()
-        check_results(tensor_ir, inputs, kernel, results, runtime, args)
+        check_label(kernel, results, label)
     elif args.backend.lower() == "heir":
         # HEIR backend generates MLIR output
         heir_backend = HEIR(circuit_ir, inputs, args)
@@ -73,7 +75,7 @@ def main(args):
 
     if args.serialize_inputs:
         match args.fn:
-            case "mlp_mnist_heir":
+            case "mnist":
                 serialize_mlp_mnist_inputs(kernel)
             case _:
                 raise NotImplementedError(f"unknown benchmark: {args.fn}")

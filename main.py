@@ -30,7 +30,6 @@ from benchmarks.rotom_benchmarks.matmul.matmul_128_64 import matmul_128_64
 from benchmarks.rotom_benchmarks.matmul.matmul_256_128 import matmul_256_128
 
 # heir benchmarks
-from benchmarks.rotom_benchmarks.mlp_mnist_heir import mlp_mnist_heir
 from benchmarks.rotom_benchmarks.mlp_mnist_square import mlp_mnist_square
 from benchmarks.rotom_benchmarks.resnet_silu import resnet_silu, resnet_silu_one_layer
 from benchmarks.rotom_benchmarks.ttm import ttm
@@ -140,9 +139,6 @@ def run_benchmark_or_microbenchmark(args):
                 args.n = n
             case "bert_attention":
                 tensor_ir, inputs, n = bert_attention()
-                args.n = n
-            case "mlp_mnist_heir":
-                tensor_ir, inputs = mlp_mnist_heir(0)
                 args.n = n
             case _:
                 raise NotImplementedError("unknown benchmark")

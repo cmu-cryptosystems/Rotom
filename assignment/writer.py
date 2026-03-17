@@ -82,12 +82,6 @@ class Writer:
             for kernel_dag_term in kernel_dag.post_order():
                 # lower each kernel to fhe_terms
                 cts = Lower(kernel_dag_term.kernel).run()
-
-                if kernel_dag_term.kernel.op == KernelOp.MATMUL:
-                    for k in kernel_dag_term.kernel.post_order():
-                        print(k)
-                        print(k.cs)
-
                 kernel_term = list(cts)[-1]
                 fhe_term = cts[kernel_term]
                 layout_term = kernel_term.layout

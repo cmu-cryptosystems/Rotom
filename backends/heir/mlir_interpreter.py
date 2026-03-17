@@ -8,6 +8,7 @@ expected results.
 
 import os
 import re
+import struct
 
 import numpy as np
 
@@ -26,152 +27,145 @@ def read_input_vector(fn):
     return data["data"]
 
 
+def from_mlir_hex(hex_str: str) -> np.ndarray:
+    """Deserialize an MLIR dense hex string back to a numpy array (f32)."""
+    hex_data = hex_str[2:]  # strip 0x
+    n = len(hex_data) // 8  # 4 bytes per f32 = 8 hex chars
+    vals = struct.unpack("<" + "f" * n, bytes.fromhex(hex_data))
+    return np.array(vals, dtype=np.float32)
+
+
 def interpret_mlir(mlir_file, inputs_dir=None):
-    """
-    Interpret the generated MLIR file and execute it.
-
-    Args:
-        mlir_file: Path to the MLIR file to interpret
-        inputs_dir: Directory containing input files (defaults to inputs/ relative to MLIR file)
-
-    Returns:
-        numpy.ndarray: The computed result vector, or None if no result found
-    """
     if not os.path.exists(mlir_file):
         raise FileNotFoundError(f"MLIR file not found: {mlir_file}")
 
-    # Determine inputs directory
     if inputs_dir is None:
-        # Default to inputs/ directory relative to MLIR file
         mlir_dir = os.path.dirname(mlir_file)
         inputs_dir = os.path.join(mlir_dir, "inputs")
 
-    # Read and parse MLIR
     with open(mlir_file, "r") as f:
-        lines = f.readlines()
+        content = f.read()
+        lines = content.splitlines()
 
-    # Parse function signature to get inputs
-    func_line = lines[0].strip()
-    # Extract parameter names and types
-    # Format: func.func @test(%2 : tensor<16xf32> {secret.secret}, %3 : tensor<16xf32>, ...) -> tensor<16xf32>
+    # Find the main func.func (not private helpers like relu)
+    main_func_line = None
+    main_func_line_idx = None
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if re.match(r"func\.func @\w+\(", stripped) and "private" not in stripped:
+            main_func_line = stripped
+            main_func_line_idx = i
+            break
+
+    if main_func_line is None:
+        raise ValueError("No main func.func found in MLIR file")
+
+    # Find the end of the main function (matching closing brace)
+    # Collect only lines belonging to the main function
+    main_func_lines = []
+    depth = 0
+    in_main_func = False
+    for i, line in enumerate(lines):
+        if i == main_func_line_idx:
+            in_main_func = True
+        if in_main_func:
+            main_func_lines.append(line.strip())
+            depth += line.count("{") - line.count("}")
+            if depth == 0 and i > main_func_line_idx:
+                break
 
     # Read input vectors
     input_vectors = {}
 
-    # Parse function signature to map parameters correctly
-    # Extract parameters: %2 : tensor<16xf32> {secret.secret}, %3 : tensor<16xf32>, ...
-    param_match = re.search(r"\(([^)]+)\)", func_line)
+    # Parse function signature
+    param_match = re.search(r"func\.func @\w+\((.+?)\)\s*->", main_func_line)
     if param_match:
         params_str = param_match.group(1)
-        params = [p.strip() for p in params_str.split(",")]
+        params = re.split(r",\s*(?=%)", params_str)
         for param in params:
-            # Extract variable name (e.g., %2 from "%2 : tensor<16xf32>")
-            var_match = re.match(r"(%\d+)", param)
+            param = param.strip()
+            var_match = re.match(r"(%\w+)", param)
             if var_match:
                 var_name = var_match.group(1)
-                # Try to read input file by SSA variable name first (e.g., %2 -> inputs/2.npz)
                 var_filename = var_name.lstrip("%")
                 input_file = os.path.join(inputs_dir, f"{var_filename}.npz")
                 if os.path.exists(input_file):
                     input_vectors[var_name] = read_input_vector(input_file)
 
-    # Execution environment
     env = {}
     env.update(input_vectors)
 
-    step = 1
-    # Parse and execute operations
-    for line in lines[1:]:  # Skip function signature
+    # Execute operations in the main function body (skip signature and closing brace)
+    for line in main_func_lines[1:]:
         line = line.strip()
         if not line or line.startswith("}") or line.startswith("//"):
             continue
 
-        # Parse operation
-        # Format: %result = op %arg1, %arg2 : type
-        # or: %result = op %arg1, %arg2 : type1, type2
+        print(line)
 
-        # Match: %var = operation args : types
-        # Handle both regular operations and extract_slice with "to" keyword
         match = re.match(r"(%\w+) = (\w+\.\w+) (.+) : (.+)", line)
-        if not match:
-            match = re.match(r"(%\w+) = (\w+\.\w+) (.+) : (.+) to (.+)", line)
         if not match:
             match = re.match(r"(%\w+) = (call) (.+) : (.+)", line)
 
         if match is None:
+            print("no match:", line)
             continue
 
         result_var = match.group(1)
         operation = match.group(2)
         args_str = match.group(3).strip()
-
-        # Parse arguments
         args = [arg.strip() for arg in args_str.split(",")]
 
-        # Execute operation
         if operation == "arith.constant":
-            # Format: %c5 = arith.constant 4 : index
-            const_match = re.match(r"(-?\d+)", args_str)
-            if const_match:
-                value = int(const_match.group(1))
-                env[result_var] = value
-            else:
-                # Dense constant
-                dense_match = re.search(r"dense<([^>]+)>", args_str)
-                if dense_match:
-                    # Parse dense array
-                    values_str = dense_match.group(1)
-                    # Remove brackets if present (e.g., [1.0, 2.0] or 1.0, 2.0)
-                    values_str = values_str.strip("[]")
+            dense_match = re.search(r"dense<([^>]+)>", args_str)
+            if dense_match:
+                inner = dense_match.group(1).strip()
+                if inner.startswith('"'):
+                    hex_str = inner.strip('"')
+                    env[result_var] = from_mlir_hex(hex_str)
+                else:
+                    values_str = inner.strip("[]")
                     values = [
                         float(x.strip()) for x in values_str.split(",") if x.strip()
                     ]
                     env[result_var] = np.array(values, dtype=np.float32)
+            else:
+                const_match = re.match(r"(-?\d+)", args_str)
+                if const_match:
+                    env[result_var] = int(const_match.group(1))
 
         elif operation == "arith.mulf":
-            # Multiplication: %1 = arith.mulf %2, %3 : tensor<16xf32>
             arg1 = env.get(args[0])
             arg2 = env.get(args[1])
             if arg1 is None or arg2 is None:
                 raise ValueError("arg1 or arg2 is None")
-            result = arg1 * arg2
-            env[result_var] = result
+            env[result_var] = arg1 * arg2
 
         elif operation == "arith.addf":
-            # Addition: %8 = arith.addf %1, %6 : tensor<16xf32>
             arg1 = env.get(args[0])
             arg2 = env.get(args[1])
             if arg1 is None or arg2 is None:
                 raise ValueError("arg1 or arg2 is None")
-            result = arg1 + arg2
-            env[result_var] = result
+            env[result_var] = arg1 + arg2
 
         elif operation == "arith.subf":
-            # Subtraction
             arg1 = env.get(args[0])
             arg2 = env.get(args[1])
             if arg1 is None or arg2 is None:
                 raise ValueError("arg1 or arg2 is None")
-            result = arg1 - arg2
-            env[result_var] = result
+            env[result_var] = arg1 - arg2
 
         elif operation == "tensor_ext.rotate":
-            # Rotation: %4 = tensor_ext.rotate %2, %c5 : tensor<16xf32>, index
-            # positive rotation amount means left rotate
             arg1 = env.get(args[0])
             rot_amt = env.get(args[1])
             if arg1 is None or rot_amt is None:
                 raise ValueError("arg1 or rot_amt is None")
             vector = arg1.copy()
             n = len(vector)
-            # Left rotate by rot_amt: element at i goes to (i - rot_amt) % n
             rotated = np.array([vector[(i + rot_amt) % n] for i in range(n)])
             env[result_var] = rotated
 
         elif operation == "tensor.extract_slice":
-            # Format: %3 = tensor.extract_slice %2 [0, 0] [1 4096] [1, 1] : tensor<64x4096xf64> {secret.secret} to tensor<1x4096xf64>
-            # Parse: source [offsets] [sizes] [strides] : source_type to result_type
-            # Extract source argument (first token before brackets)
             source_match = re.match(r"(%\w+)", args_str)
             if not source_match:
                 continue
@@ -179,52 +173,43 @@ def interpret_mlir(mlir_file, inputs_dir=None):
             source_tensor = env.get(source_arg)
 
             if source_tensor is not None:
-                # Parse offsets: [0, 0]
                 offsets_match = re.search(r"\[([^\]]+)\]", args_str)
                 if offsets_match:
                     offsets_str = offsets_match.group(1)
                     offsets = [int(x.strip()) for x in offsets_str.split(",")]
 
-                    # Find sizes: [1, 4096] or [1 4096] (can have commas or spaces)
                     sizes_match = re.search(
                         r"\[([^\]]+)\]", args_str[args_str.find("]") + 1 :]
                     )
                     if sizes_match:
                         sizes_str = sizes_match.group(1)
-                        # Handle both comma and space separated values
                         sizes = [
                             int(x.strip())
                             for x in re.split(r"[,\s]+", sizes_str)
                             if x.strip()
                         ]
 
-                        # Extract slice from tensor
                         if source_tensor.ndim == 2:
                             row_start, col_start = offsets[0], offsets[1]
                             row_size, col_size = sizes[0], sizes[1]
-                            row_end = row_start + row_size
-                            col_end = col_start + col_size
-
-                            # Extract the slice
                             slice_result = source_tensor[
-                                row_start:row_end, col_start:col_end
+                                row_start : row_start + row_size,
+                                col_start : col_start + col_size,
                             ]
-
-                            # If result should be 1D (row_size == 1), flatten it
-                            if row_size == 1:
-                                env[result_var] = slice_result.flatten()
-                            else:
-                                env[result_var] = slice_result
+                            env[result_var] = (
+                                slice_result.flatten()
+                                if row_size == 1
+                                else slice_result
+                            )
                         elif source_tensor.ndim == 1:
-                            # 1D tensor slice
                             start = offsets[0]
                             size = sizes[0]
-                            end = start + size
-                            env[result_var] = source_tensor[start:end]
+                            env[result_var] = source_tensor[start : start + size]
                         else:
                             raise ValueError(
                                 f"Unsupported tensor dimension for extract_slice: {source_tensor.ndim}"
                             )
+
         elif operation == "call":
             call_match = re.match(r"@(\w+)\((%\w+)\)", args_str)
             if call_match:
@@ -236,24 +221,15 @@ def interpret_mlir(mlir_file, inputs_dir=None):
                         env[result_var] = np.maximum(arg, 0)
                     else:
                         raise ValueError(f"Unknown called function: @{func_name}")
-        step += 1
 
-    # Get return value - look for return statement
-    for line in lines:
+    # Get return value
+    for line in reversed(main_func_lines):
         line = line.strip()
         if line.startswith("return"):
-            # Match: return %16 : tensor<16xf32>
             return_match = re.search(r"return (%\w+)", line)
             if return_match:
                 result_var = return_match.group(1)
-                result = env.get(result_var, None)
-                if result is not None:
-                    return result
-            # Also try without % prefix
-            return_match = re.search(r"return (\w+)", line)
-            if return_match:
-                result_var = return_match.group(1)
-                result = env.get(result_var, None)
+                result = env.get(result_var)
                 if result is not None:
                     return result
 

@@ -17,26 +17,7 @@ from tests.mnist.test_mlp_mnist import (
 )
 
 
-def relu(x):
-    x2 = x * x  # x^2,  depth 1
-    x4 = x2 * x2  # x^4,  depth 2
-    x6 = x4 * x2  # x^6,  depth 3
-    x8 = x4 * x4  # x^8,  depth 3
-    x10 = x8 * x2  # x^10, depth 4
-    x12 = x8 * x4  # x^12, depth 4
-    return (
-        TensorTerm.const(4.113641024556607e-01)
-        + TensorTerm.const(5.000000000000002e-01) * x
-        + TensorTerm.const(1.223805757222573e-01) * x2
-        - TensorTerm.const(1.937688573683916e-03) * x4
-        + TensorTerm.const(2.034568933371524e-05) * x6
-        - TensorTerm.const(1.193749792878656e-07) * x8
-        + TensorTerm.const(3.868625851050720e-10) * x10
-        - TensorTerm.const(6.474340232242984e-13) * x12
-    )
-
-
-def mlp_mnist_heir(idx):
+def mnist_poly_call(idx):
     # Load a single MNIST test sample.
     images, labels = _load_mnist_test_set()
     assert images.shape[0] == labels.shape[0] and images.shape[0] > 0
@@ -75,6 +56,6 @@ def mlp_mnist_heir(idx):
     b2 = TensorTerm.Tensor("b2", [1, out_dim], False)
 
     hidden = inp @ fc1 + b1
-    hidden_relu = relu(hidden)
+    hidden_relu = hidden.poly_call("relu", 20, -20)
     tensor_ir = hidden_relu @ fc2 + b2
     return tensor_ir, inputs, y
