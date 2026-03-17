@@ -32,7 +32,7 @@ def _accuracy_for_config(fn: str, backend: str, indices) -> float:
     total = 0
     for idx in indices:
         args = _build_args(fn=fn, backend=backend, label=int(idx))
-        results, true_label = e2e_main(args, return_results=True)
+        results, true_label = e2e_main(args)
         pred = _predicted_label_from_results(results)
         if pred == true_label:
             correct += 1
