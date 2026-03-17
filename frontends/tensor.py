@@ -44,11 +44,23 @@ class PolyCallArgs:
 
     This avoids sprinkling magic indices (cs[1], cs[2], cs[3]) throughout
     the codebase and makes the frontend/backends less brittle.
+
+    For a POLY_CALL term, the input tensor is term.cs[0]; use from_term(term)
+    to get .name, .lower_bound, .upper_bound for the rest.
     """
 
     name: str
     lower_bound: float
     upper_bound: float
+
+    @classmethod
+    def from_term(cls, term: Any) -> "PolyCallArgs":
+        """Build PolyCallArgs from a POLY_CALL TensorTerm (term.cs = [input, name, lower_bound, upper_bound])."""
+        return cls(
+            name=term.cs[1],
+            lower_bound=float(term.cs[2]),
+            upper_bound=float(term.cs[3]),
+        )
 
 
 class TensorOp(Enum):

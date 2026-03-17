@@ -253,7 +253,12 @@ class TensorEvaluator:
                 return env[term.cs[0]] / scale_value
             case "Poly" | "PolyCall":
                 x = env[term.cs[0]]
-                func = term.cs[1] if len(term.cs) > 1 else "identity"
+                if len(term.cs) >= 4:
+                    from .tensor import PolyCallArgs
+
+                    func = PolyCallArgs.from_term(term).name
+                else:
+                    func = term.cs[1] if len(term.cs) > 1 else "identity"
                 return self._eval_poly(x, func, inputs)
             case _:
                 raise NotImplementedError(op_name)
