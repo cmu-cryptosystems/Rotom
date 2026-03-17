@@ -666,8 +666,6 @@ class KernelCost:
                 ops = self.shift_ops(ops)
             case KernelOp.COMPACT:
                 ops = self.compact_ops(ops)
-            case KernelOp.POLY:
-                ops = self.poly_ops(ops)
             case KernelOp.POLY_CALL:
                 ops = self.poly_call_ops(ops)
             case KernelOp.CONVERSION:
@@ -784,10 +782,6 @@ class KernelCost:
                     case KernelOp.MATMUL | KernelOp.CONV2D:
                         # HACK: depth actually varies if masking is required or not
                         d += 2
-                    case KernelOp.POLY:
-                        # TODO: pass for now, but depth should be parameterized on the
-                        # mul depth of poly
-                        pass
                     case _:
                         raise NotImplementedError(term.op)
         return d

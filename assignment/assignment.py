@@ -27,7 +27,6 @@ from assignment.gen.gen_const import gen_const
 from assignment.gen.gen_conv2d import gen_conv2d, gen_conv2d_roll
 from assignment.gen.gen_index import gen_index
 from assignment.gen.gen_permute import gen_permute
-from assignment.gen.gen_poly import gen_poly
 from assignment.gen.gen_poly_call import gen_poly_call
 from assignment.gen.gen_rescale import gen_rescale
 from assignment.gen.gen_reshape import gen_reshape
