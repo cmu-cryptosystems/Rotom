@@ -74,6 +74,7 @@ def get_dim_indices(dims):
 
 
 def layout_to_shape_indices(layout):
+    """Get the shape indices of a layout."""
     dims = layout.ct_dims
     dim_indices = get_dim_indices(dims)
     # Only count non-None dims (replicated/empty dims don't contribute to shape indices)

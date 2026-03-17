@@ -131,6 +131,12 @@ class Toy:
         packing_idx = int(term.metadata.split()[0])
         return self.input_cache[(layout.term, layout)][packing_idx]
 
+    def eval_const(self, term):
+        layout = term.cs[0]
+        vector = np.array([term.cs[1]] * self.n)
+        packed_tensor = apply_layout(vector, layout)
+        return packed_tensor[0]
+
     def eval_indices(self, term):
         tensor = self.inputs[term.cs[0].cs[0]]
         vector = [0] * self.n
@@ -202,8 +208,9 @@ class Toy:
     def eval_poly(self, term):
         """Apply the actual POLY function when term.poly_func is set (from lowering); else identity."""
         vec = self.env[term.cs[0]]
-        poly_func = getattr(term, "poly_func", None)
-        poly_channel = getattr(term, "poly_channel", None)
+        metadata = term.cs[1]
+        poly_func = metadata.get("poly_func", None)
+        poly_channel = metadata.get("poly_channel", None)
         return self._apply_poly_to_vector(vec, poly_func, poly_channel=poly_channel)
 
     def eval_rescale(self, term):
@@ -239,6 +246,8 @@ class Toy:
                 return self.eval_pack_punctured(term)
             case HEOp.CS_PACK:
                 return self.eval_cs_pack(term)
+            case HEOp.CONST:
+                return self.eval_const(term)
             case HEOp.INDICES:
                 return self.eval_indices(term)
             case HEOp.ROT:
@@ -279,6 +288,9 @@ class Toy:
             eval_result = term.layout.term.eval(self.inputs)
             if term.op == KernelOp.PUNCTURED_TENSOR:
                 expected = apply_punctured_layout(eval_result, term.layout)
+            elif term.op == KernelOp.CONST:
+                vector = np.array([eval_result] * self.n)
+                expected = apply_layout(vector, term.layout)
             else:
                 expected = apply_layout(eval_result, term.layout)
 

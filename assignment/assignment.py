@@ -23,10 +23,12 @@ from re import L
 
 from assignment.gen.gen_binop import gen_binop
 from assignment.gen.gen_block_matmul import gen_block_matmul
+from assignment.gen.gen_const import gen_const
 from assignment.gen.gen_conv2d import gen_conv2d, gen_conv2d_roll
 from assignment.gen.gen_index import gen_index
 from assignment.gen.gen_permute import gen_permute
 from assignment.gen.gen_poly import gen_poly
+from assignment.gen.gen_poly_call import gen_poly_call
 from assignment.gen.gen_rescale import gen_rescale
 from assignment.gen.gen_reshape import gen_reshape
 from assignment.gen.gen_strassens import gen_strassens
@@ -127,23 +129,27 @@ class LayoutAssignment:
         match term.op:
             case TensorOp.TENSOR:
                 kernels = gen_tensor(term, secret, shape, self.n)
+            case TensorOp.CONST:
+                kernels = gen_const(term, self.n)
             case TensorOp.ADD | TensorOp.SUB | TensorOp.MUL | TensorOp.MATMUL:
-                if self.strassens and term.op in [
-                    TensorOp.MATMUL,
-                ]:
+                if self.strassens and term.op == TensorOp.MATMUL:
                     kernel_map = gen_strassens(
                         term, cs_kernels, self.roll_flag, self.network
                     )
-                    for term, kernels in kernel_map.items():
-                        self.update_kernels(term, kernels)
+                    for t, kernels in kernel_map.items():
+                        self.update_kernels(t, kernels)
+                    kernels = kernel_map[term]
                 else:
                     cs_shapes = self.get_cs_shapes(term)
-                    kernels = gen_binop(
+                    kernel_map = gen_binop(
                         term,
                         cs_kernels,
                         cs_shapes,
                         self.roll_flag,
                     )
+                    for t, kernels in kernel_map.items():
+                        self.update_kernels(t, kernels)
+                    kernels = kernel_map[term]
             case TensorOp.SUM:
                 kernels = gen_sum(term, cs_kernels[0])
             case TensorOp.TRANSPOSE:
@@ -166,6 +172,8 @@ class LayoutAssignment:
                 kernels = gen_block_matmul(term, cs_kernels)
             case TensorOp.POLY:
                 kernels = gen_poly(term, cs_kernels[0])
+            case TensorOp.POLY_CALL:
+                kernels = gen_poly_call(term, cs_kernels[0])
             case _:
                 raise NotImplementedError(term.op)
         assert kernels
@@ -356,7 +364,7 @@ class LayoutAssignment:
             NotImplementedError: If the operation type is not supported
         """
         match term.op:
-            case TensorOp.TENSOR:
+            case TensorOp.TENSOR | TensorOp.CONST:
                 return []
             case (
                 TensorOp.ADD
@@ -387,6 +395,7 @@ class LayoutAssignment:
             case (
                 TensorOp.TRANSPOSE
                 | TensorOp.POLY
+                | TensorOp.POLY_CALL
                 | TensorOp.SUM
                 | TensorOp.RESHAPE
                 | TensorOp.PERMUTE
@@ -555,6 +564,8 @@ class LayoutAssignment:
                 kernel_shape = [1] * len(shape)
 
             for i, k in enumerate(kernel_shape):
+                if not shape:
+                    continue  # if shape is None, then the kernel is a constant
                 if k != shape[i]:
                     raise ValueError(
                         f"kernel shape {kernel_shape} does not match expected shape {shape}"
@@ -567,7 +578,6 @@ class LayoutAssignment:
         for kernel in kernels:
             # get cs kernels
             cs_kernels = get_cs_op_kernels(kernel)
-
             # get cs costs
             cs_costs = 0
             for cs_kernel in cs_kernels:

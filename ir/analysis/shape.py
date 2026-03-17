@@ -97,9 +97,15 @@ class Shape:
         match term.op:
             case TensorOp.TENSOR:
                 return [round_to_ceiling_power_of_2(s) for s in term.cs[1]]
+            case TensorOp.CONST:
+                return None
             case TensorOp.ADD | TensorOp.SUB | TensorOp.MUL:
                 a_shape = copy(self.padded_shapes[term.cs[0]])
                 b_shape = copy(self.padded_shapes[term.cs[1]])
+                if a_shape is None:
+                    return b_shape
+                if b_shape is None:
+                    return a_shape
                 if len(a_shape) > len(b_shape):
                     return a_shape
                 else:
@@ -210,7 +216,7 @@ class Shape:
                 dim_idx = term.cs[1]
                 result_shape = a_shape[:dim_idx] + a_shape[dim_idx + 1 :]
                 return result_shape
-            case TensorOp.RESCALE | TensorOp.POLY:
+            case TensorOp.RESCALE | TensorOp.POLY | TensorOp.POLY_CALL:
                 # Preserves the shape of the input tensor
                 return copy(self.padded_shapes[term.cs[0]])
             case _:
@@ -220,11 +226,17 @@ class Shape:
         match term.op:
             case TensorOp.TENSOR:
                 return term.cs[1]
+            case TensorOp.CONST:
+                return None
             case TensorOp.ADD | TensorOp.MUL | TensorOp.SUB:
                 a = term.cs[0]
                 b = term.cs[1]
                 a_shape = copy(self.get_shape(a))
                 b_shape = copy(self.get_shape(b))
+                if a_shape is None:
+                    return b_shape
+                if b_shape is None:
+                    return a_shape
                 if len(a_shape) > len(b_shape):
                     return a_shape
                 else:
@@ -339,7 +351,7 @@ class Shape:
                 dim_idx = term.cs[1]
                 result_shape = a_shape[:dim_idx] + a_shape[dim_idx + 1 :]
                 return result_shape
-            case TensorOp.POLY:
+            case TensorOp.POLY | TensorOp.POLY_CALL:
                 return copy(self.get_shape(term.cs[0]))
             case _:
                 raise NotImplementedError(term.op)
