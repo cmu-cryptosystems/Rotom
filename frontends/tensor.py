@@ -32,22 +32,12 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Iterable, List, Optional
 
-import numpy as np
-
-from .poly import APPROX_RELU_CHEBYSHEV_COEFFS
 from .tensor_evaluator import TensorEvaluator
 
 
 @dataclass(frozen=True)
 class PolyCallArgs:
-    """Structured view of a PolyCall TensorTerm.
-
-    This avoids sprinkling magic indices (cs[1], cs[2], cs[3]) throughout
-    the codebase and makes the frontend/backends less brittle.
-
-    For a POLY_CALL term, the input tensor is term.cs[0]; use from_term(term)
-    to get .name, .lower_bound, .upper_bound for the rest.
-    """
+    """Structured view of a PolyCall TensorTerm."""
 
     name: str
     lower_bound: float
@@ -61,6 +51,60 @@ class PolyCallArgs:
             lower_bound=float(term.cs[2]),
             upper_bound=float(term.cs[3]),
         )
+
+
+@dataclass(frozen=True)
+class Conv2dArgs:
+    """Structured view of a CONV2D TensorTerm (term.cs = [input, filter, stride, padding]).
+    After assignment, term.cs may have computed padding at index 4; use get_computed_padding(term).
+    """
+
+    input: Any
+    filter: Any  # noqa: A003
+    stride: int
+    padding: str
+
+    @classmethod
+    def from_term(cls, term: Any) -> "Conv2dArgs":
+        return cls(
+            input=term.cs[0],
+            filter=term.cs[1],
+            stride=term.cs[2],
+            padding=term.cs[3],
+        )
+
+    @staticmethod
+    def get_computed_padding(term: Any) -> Optional[List[int]]:
+        """Return [pad_top, pad_bottom, pad_left, pad_right] if set by assignment (term.cs[4])."""
+        if len(term.cs) > 4:
+            return term.cs[4]
+        return None
+
+
+@dataclass(frozen=True)
+class ReshapeArgs:
+    """Structured view of a RESHAPE TensorTerm (term.cs = [input, dim, shape])."""
+
+    input: Any
+    dim: int
+    shape: Dict[int, int]
+
+    @classmethod
+    def from_term(cls, term: Any) -> "ReshapeArgs":
+        return cls(input=term.cs[0], dim=term.cs[1], shape=term.cs[2])
+
+
+@dataclass(frozen=True)
+class TensorPlaceholderArgs:
+    """Structured view of a TENSOR placeholder TensorTerm (term.cs = [name, shape, secret])."""
+
+    name: str
+    shape: List[int]
+    secret: bool
+
+    @classmethod
+    def from_term(cls, term: Any) -> "TensorPlaceholderArgs":
+        return cls(name=term.cs[0], shape=term.cs[1], secret=term.cs[2])
 
 
 class TensorOp(Enum):
@@ -197,7 +241,8 @@ class TensorTerm:
                 case TensorOp.INDEX:
                     self._str_cache = f"({self.cs[0]}[{self.cs[1]}])"
                 case TensorOp.CONV2D:
-                    self._str_cache = f"(conv2d {str(self.cs[0])} {str(self.cs[1])})"
+                    args = Conv2dArgs.from_term(self)
+                    self._str_cache = f"(conv2d {str(args.input)} {str(args.filter)})"
                 case _:
                     self._str_cache = f"({self.op} {cs})"
         return self._str_cache

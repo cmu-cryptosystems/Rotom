@@ -15,7 +15,7 @@ Key Concepts:
 
 from copy import deepcopy as copy
 
-from frontends.tensor import TensorOp
+from frontends.tensor import Conv2dArgs, ReshapeArgs, TensorOp, TensorPlaceholderArgs
 from util.util import round_to_ceiling_power_of_2
 
 
@@ -96,7 +96,8 @@ class Shape:
     def get_padded_shape(self, term):
         match term.op:
             case TensorOp.TENSOR:
-                return [round_to_ceiling_power_of_2(s) for s in term.cs[1]]
+                args = TensorPlaceholderArgs.from_term(term)
+                return [round_to_ceiling_power_of_2(s) for s in args.shape]
             case TensorOp.CONST:
                 return None
             case TensorOp.ADD | TensorOp.SUB | TensorOp.MUL:
@@ -159,15 +160,17 @@ class Shape:
                 a_shape[0], a_shape[1] = a_shape[1], a_shape[0]
                 return a_shape
             case TensorOp.RESHAPE:
-                a_shape = copy(self.padded_shapes[term.cs[0]])
-                dim_to_del = term.cs[1]
+                args = ReshapeArgs.from_term(term)
+                a_shape = copy(self.padded_shapes[args.input])
+                dim_to_del = args.dim
                 del a_shape[dim_to_del]
                 return a_shape + [
-                    round_to_ceiling_power_of_2(s) for s in term.cs[2].values()
+                    round_to_ceiling_power_of_2(s) for s in args.shape.values()
                 ]
             case TensorOp.CONV2D:
-                a_shape = copy(self.padded_shapes[term.cs[0]])
-                b_shape = copy(self.padded_shapes[term.cs[1]])
+                args = Conv2dArgs.from_term(term)
+                a_shape = copy(self.padded_shapes[args.input])
+                b_shape = copy(self.padded_shapes[args.filter])
 
                 c_i = a_shape[0]
                 h_i = a_shape[1]
@@ -180,8 +183,8 @@ class Shape:
                 else:
                     f_h, f_w = b_shape[1], b_shape[2]  # 3D: assume c_in=1
 
-                stride = term.cs[2]
-                padding = term.cs[3]
+                stride = args.stride
+                padding = args.padding
 
                 if padding == "valid":
                     h_o = (h_i - f_h) // stride + 1
@@ -225,7 +228,7 @@ class Shape:
     def get_shape(self, term):
         match term.op:
             case TensorOp.TENSOR:
-                return term.cs[1]
+                return TensorPlaceholderArgs.from_term(term).shape
             case TensorOp.CONST:
                 return None
             case TensorOp.ADD | TensorOp.MUL | TensorOp.SUB:
@@ -279,8 +282,9 @@ class Shape:
                 assert len(a_shape) == 2
                 return [a_shape[1], a_shape[0]]
             case TensorOp.CONV2D:
-                a = term.cs[0]
-                b = term.cs[1]
+                args = Conv2dArgs.from_term(term)
+                a = args.input
+                b = args.filter
                 a_shape = copy(self.get_shape(a))
                 b_shape = copy(self.get_shape(b))
 
@@ -293,8 +297,8 @@ class Shape:
                 h_i = a_shape[1]
                 w_i = a_shape[2]
 
-                stride = term.cs[2]
-                padding = term.cs[3]
+                stride = args.stride
+                padding = args.padding
 
                 if padding == "valid":
                     h_o = (h_i - f_h) // stride + 1
@@ -315,14 +319,15 @@ class Shape:
                 a_shape = copy(self.get_shape(a))
                 return self._index_shape(a_shape, term.cs[1])
             case TensorOp.RESHAPE:
-                a = term.cs[0]
+                args = ReshapeArgs.from_term(term)
+                a = args.input
                 a_shape = copy(self.get_shape(a))
                 shape_map = {}
                 for i, shape in enumerate(a_shape):
                     shape_map[i] = shape
-                dim_to_del = term.cs[1]
+                dim_to_del = args.dim
                 del shape_map[dim_to_del]
-                for k, v in term.cs[2].items():
+                for k, v in args.shape.items():
                     shape_map[k] = v
                 new_shape = [shape_map[k] for k in sorted(shape_map.keys())]
                 return new_shape

@@ -17,6 +17,7 @@ Key functions:
 
 from copy import deepcopy as copy
 
+from frontends.tensor import Conv2dArgs
 from ir.dim import Dim, DimType
 from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
@@ -152,8 +153,9 @@ def gen_conv2d_roll(term, cs_kernels, shapes):
     a_shape = shapes[0]
     b_shape = shapes[1]
 
+    args = Conv2dArgs.from_term(term)
     # find padding
-    padding = calculate_padding(a_shape, b_shape, term.cs[2], term.cs[3])
+    padding = calculate_padding(a_shape, b_shape, args.stride, args.padding)
     term.cs.append(padding)
 
     output_kernels = set()
@@ -187,23 +189,23 @@ def gen_conv2d_roll(term, cs_kernels, shapes):
 
         # apply replication and roll for width
         if 3 in replicated_dims:
-            a_kernel = apply_replication(term.cs[0], a_kernel, replicated_dims[3])
+            a_kernel = apply_replication(args.input, a_kernel, replicated_dims[3])
             a_roll = Roll(a_dim_map[2], replicated_dims[3])
-            a_kernel = apply_roll(term.cs[0], a_kernel, a_roll)
+            a_kernel = apply_roll(args.input, a_kernel, a_roll)
 
         # apply replication and roll for height
         if 2 in replicated_dims:
-            a_kernel = apply_replication(term.cs[0], a_kernel, replicated_dims[2])
+            a_kernel = apply_replication(args.input, a_kernel, replicated_dims[2])
             a_roll = Roll(a_dim_map[1], replicated_dims[2])
-            a_kernel = apply_roll(term.cs[0], a_kernel, a_roll)
+            a_kernel = apply_roll(args.input, a_kernel, a_roll)
 
         # apply final replication
         if 1 in replicated_dims:
-            a_kernel = apply_replication(term.cs[0], a_kernel, replicated_dims[1])
+            a_kernel = apply_replication(args.input, a_kernel, replicated_dims[1])
 
         # apply final replication
         if 0 in replicated_dims:
-            a_kernel = apply_replication(term.cs[0], a_kernel, replicated_dims[0])
+            a_kernel = apply_replication(args.input, a_kernel, replicated_dims[0])
 
         # match b_dims to a_dims
         # ideally this should match based on the length of the dimension traversal
@@ -246,7 +248,7 @@ def gen_conv2d_roll(term, cs_kernels, shapes):
             b_rolls.append(Roll(b_dims[a_roll_idx[0]], b_dims[a_roll_idx[1]]))
 
         # create layout and kernel
-        b_layout = Layout(term.cs[1], b_rolls, b_dims, a_kernel.layout.n, False)
+        b_layout = Layout(args.filter, b_rolls, b_dims, a_kernel.layout.n, False)
         b_kernel = Kernel(KernelOp.TENSOR, [], b_layout)
 
         # find output layout after convolution
@@ -349,11 +351,12 @@ def gen_conv2d(term, cs_kernels, shapes):
     a_shape = shapes[0]
     b_shape = shapes[1]
 
+    args = Conv2dArgs.from_term(term)
     # find padding
-    padding = calculate_padding(a_shape, b_shape, term.cs[2], term.cs[3])
+    padding = calculate_padding(a_shape, b_shape, args.stride, args.padding)
     term.cs.append(padding)
 
-    b_term = term.cs[1]
+    b_term = args.filter
     b_term.cs.append(padding)
 
     output_kernels = set()
@@ -375,7 +378,7 @@ def gen_conv2d(term, cs_kernels, shapes):
         # Add replication dimensions to the a_kernel
         replicated_dims, b_dims = add_replicated_dimensions(a_shape, b_shape)
         for dim in replicated_dims[::-1]:
-            a_kernel = apply_replication(term.cs[0], a_kernel, dim)
+            a_kernel = apply_replication(args.input, a_kernel, dim)
 
         # Since b is public, we can create a cs_kernel for b
         # and add metada information to help with packing the weights
@@ -393,8 +396,8 @@ def gen_conv2d(term, cs_kernels, shapes):
         b_kernel = Kernel(KernelOp.PUNCTURED_TENSOR, [], b_layout)
 
         # Output spatial size (depends on stride and padding)
-        stride = term.cs[2]
-        padding = term.cs[3]
+        stride = args.stride
+        padding = args.padding
         h_i, w_i = a_shape[1], a_shape[2]
         f_h, f_w = b_shape[2], b_shape[3]
         if padding == "valid":

@@ -2,6 +2,7 @@ import math
 
 import numpy as np
 
+from frontends.tensor import Conv2dArgs
 from ir.analysis.shape import Shape
 from ir.dim import DimType
 from ir.he import HEOp, HETerm
@@ -38,11 +39,18 @@ def lower_conv2d(env, kernel):
     a_shape = get_term_shape(kernel.cs[0].layout.term)
     b_shape = get_term_shape(kernel.cs[1].layout.term)
 
-    pad_top = kernel.layout.term.cs[4][0]
-    pad_bottom = kernel.layout.term.cs[4][1]
-    pad_left = kernel.layout.term.cs[4][2]
-    pad_right = kernel.layout.term.cs[4][3]
-    stride = kernel.layout.term.cs[2]
+    conv_args = Conv2dArgs.from_term(kernel.layout.term)
+    computed = Conv2dArgs.get_computed_padding(kernel.layout.term)
+    assert (
+        computed is not None
+    ), "CONV2D term should have computed padding from assignment"
+    pad_top, pad_bottom, pad_left, pad_right = (
+        computed[0],
+        computed[1],
+        computed[2],
+        computed[3],
+    )
+    stride = conv_args.stride
 
     # calculate rotation amounts for input ciphertexts
     # assumes dim 1 and 2 are continuous and in the slot dimensions

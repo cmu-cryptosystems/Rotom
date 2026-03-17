@@ -12,6 +12,7 @@ Key functions:
 
 from copy import deepcopy as copy
 
+from frontends.tensor import ReshapeArgs
 from ir.dim import DimType
 from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
@@ -35,8 +36,9 @@ def gen_reshape(term, cs_kernels):
     Returns:
         Set of Kernel objects representing reshape operation layouts
     """
+    args = ReshapeArgs.from_term(term)
     rounded_shapes_map = {}
-    for k, v in term.cs[2].items():
+    for k, v in args.shape.items():
         rounded_shapes_map[k] = round_to_ceiling_power_of_2(v)
     strides = []
     for k, v in rounded_shapes_map.items():
@@ -55,7 +57,7 @@ def gen_reshape(term, cs_kernels):
         extent_dims = get_extent_dims(cs_kernel.layout.get_dims())
         for dim in extent_dims:
             dim = copy(dim)
-            if dim.dim == term.cs[1]:
+            if dim.dim == args.dim:
                 for s in stride_map:
                     if dim.stride >= s[1]:
                         dim.dim = s[0]
@@ -65,10 +67,10 @@ def gen_reshape(term, cs_kernels):
                 new_dims.append(dim)
 
         for k, v in rounded_shapes_map.items():
-            if k != term.cs[1]:
+            if k != args.dim:
                 reshape_amt = v
         for new_dim in new_dims:
-            if new_dim.dim == term.cs[1]:
+            if new_dim.dim == args.dim:
                 new_dim.stride //= reshape_amt
 
         cs_placeholder = Kernel(KernelOp.CS, [0], cs_kernel.layout)
