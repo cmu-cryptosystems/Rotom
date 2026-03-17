@@ -5,8 +5,9 @@ This module provides shared fixtures and utilities for running tests
 with different backends (Toy and CKKS).
 """
 
-import pytest
 import os
+
+import pytest
 
 from backends.openfhe_backend import CKKS
 from backends.toy import Toy
