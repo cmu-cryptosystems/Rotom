@@ -79,7 +79,7 @@ class TestMLIRInterpreter:
 """
         mlir_file = self._write_mlir_file(mlir_content)
 
-        result = interpret_mlir(mlir_file, self.inputs_dir)
+        result = interpret_mlir(mlir_file, n=4, inputs_dir=self.inputs_dir)
 
         assert result is not None
         expected = np.array([6.0, 8.0, 10.0, 12.0], dtype=np.float32)
@@ -97,7 +97,7 @@ class TestMLIRInterpreter:
 """
         mlir_file = self._write_mlir_file(mlir_content)
 
-        result = interpret_mlir(mlir_file, self.inputs_dir)
+        result = interpret_mlir(mlir_file, n=4, inputs_dir=self.inputs_dir)
 
         assert result is not None
         expected = np.array([2.0, 6.0, 12.0, 20.0], dtype=np.float32)
@@ -115,7 +115,7 @@ class TestMLIRInterpreter:
 """
         mlir_file = self._write_mlir_file(mlir_content)
 
-        result = interpret_mlir(mlir_file, self.inputs_dir)
+        result = interpret_mlir(mlir_file, n=4, inputs_dir=self.inputs_dir)
 
         assert result is not None
         expected = np.array([9.0, 6.0, 3.0, 0.0], dtype=np.float32)
@@ -134,7 +134,7 @@ class TestMLIRInterpreter:
 """
         mlir_file = self._write_mlir_file(mlir_content)
 
-        result = interpret_mlir(mlir_file, self.inputs_dir)
+        result = interpret_mlir(mlir_file, n=4, inputs_dir=self.inputs_dir)
 
         assert result is not None
         expected = np.array([11.0, 22.0, 33.0, 44.0], dtype=np.float32)
@@ -152,7 +152,7 @@ class TestMLIRInterpreter:
 """
         mlir_file = self._write_mlir_file(mlir_content)
 
-        result = interpret_mlir(mlir_file, self.inputs_dir)
+        result = interpret_mlir(mlir_file, n=4, inputs_dir=self.inputs_dir)
 
         assert result is not None
         # Rotate left by 1: [1,2,3,4] -> [2,3,4,1]
@@ -171,7 +171,7 @@ class TestMLIRInterpreter:
 """
         mlir_file = self._write_mlir_file(mlir_content)
 
-        result = interpret_mlir(mlir_file, self.inputs_dir)
+        result = interpret_mlir(mlir_file, n=4, inputs_dir=self.inputs_dir)
 
         assert result is not None
         # Rotate left by 3: [1,2,3,4] -> [4,1,2,3]
@@ -192,7 +192,7 @@ class TestMLIRInterpreter:
 """
         mlir_file = self._write_mlir_file(mlir_content)
 
-        result = interpret_mlir(mlir_file, self.inputs_dir)
+        result = interpret_mlir(mlir_file, n=4, inputs_dir=self.inputs_dir)
 
         assert result is not None
         # %1 = %2 * %3 = [2, 6, 12, 20]
@@ -241,7 +241,7 @@ class TestMLIRInterpreter:
 """
         mlir_file = self._write_mlir_file(mlir_content)
 
-        result = interpret_mlir(mlir_file, self.inputs_dir)
+        result = interpret_mlir(mlir_file, n=4, inputs_dir=self.inputs_dir)
 
         # Should return None when no return statement is found
         assert result is None
@@ -257,7 +257,7 @@ class TestMLIRInterpreter:
 """
         mlir_file = self._write_mlir_file(mlir_content)
 
-        result = interpret_mlir(mlir_file)
+        result = interpret_mlir(mlir_file, n=4, inputs_dir=self.inputs_dir)
 
         assert result is not None
         expected = np.array([2.0, 4.0, 6.0, 8.0], dtype=np.float32)
@@ -277,7 +277,7 @@ class TestMLIRInterpreter:
 """
         mlir_file = self._write_mlir_file(mlir_content)
 
-        result = interpret_mlir(mlir_file, self.inputs_dir)
+        result = interpret_mlir(mlir_file, n=2, inputs_dir=self.inputs_dir)
 
         assert result is not None
         # %1 = %2 + %5 = [4, 6]
@@ -301,4 +301,4 @@ class TestMLIRInterpreter:
             RuntimeError,
             match="MLIR interpretation failed.*MLIR interpretation returned None",
         ):
-            run_mlir_interpreter(mlir_file, self.inputs_dir)
+            run_mlir_interpreter(mlir_file, inputs_dir=self.inputs_dir)
