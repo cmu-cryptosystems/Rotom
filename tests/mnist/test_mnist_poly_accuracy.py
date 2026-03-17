@@ -42,7 +42,7 @@ def _accuracy_for_config(fn: str, backend: str, indices) -> float:
 
 def _sample_indices():
     rng = np.random.RandomState(0)
-    return rng.choice(10000, size=2, replace=False)
+    return rng.choice(10000, size=4, replace=False)
 
 
 def test_mnist_poly_toy_accuracy():

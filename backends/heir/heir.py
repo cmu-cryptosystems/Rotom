@@ -25,10 +25,10 @@ class HEIR:
 
         if os.path.exists(f"heir/{self.fn}"):
             shutil.rmtree(f"heir/{self.fn}")
-        os.mkdir(f"heir/{self.fn}", exist_ok=True)
-        os.mkdir(f"heir/{self.fn}/base", exist_ok=True)
-        os.mkdir(f"heir/{self.fn}/inputs", exist_ok=True)
-        os.mkdir(f"heir/{self.fn}/results", exist_ok=True)
+        os.makedirs(f"heir/{self.fn}", exist_ok=True)
+        os.makedirs(f"heir/{self.fn}/base", exist_ok=True)
+        os.makedirs(f"heir/{self.fn}/inputs", exist_ok=True)
+        os.makedirs(f"heir/{self.fn}/results", exist_ok=True)
 
         self.input_cache = {}
         self.lines = []
