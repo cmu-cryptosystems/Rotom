@@ -216,7 +216,7 @@ class Shape:
                 dim_idx = term.cs[1]
                 result_shape = a_shape[:dim_idx] + a_shape[dim_idx + 1 :]
                 return result_shape
-            case TensorOp.RESCALE | TensorOp.POLY | TensorOp.POLY_CALL:
+            case TensorOp.RESCALE | TensorOp.POLY_CALL:
                 # Preserves the shape of the input tensor
                 return copy(self.padded_shapes[term.cs[0]])
             case _:
@@ -351,7 +351,7 @@ class Shape:
                 dim_idx = term.cs[1]
                 result_shape = a_shape[:dim_idx] + a_shape[dim_idx + 1 :]
                 return result_shape
-            case TensorOp.POLY | TensorOp.POLY_CALL:
+            case TensorOp.POLY_CALL:
                 return copy(self.get_shape(term.cs[0]))
             case _:
                 raise NotImplementedError(term.op)

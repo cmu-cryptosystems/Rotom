@@ -293,8 +293,6 @@ class CKKS:
                 return self.eval_sub(term)
             case HEOp.MUL:
                 return self.eval_mul(term)
-            case HEOp.POLY:
-                raise NotImplementedError(term.op)
             case HEOp.RESCALE:
                 return self.env[term.cs[0]]
             case _:
@@ -315,7 +313,7 @@ class CKKS:
         match term.op:
             case HEOp.PACK | HEOp.MASK:
                 pass
-            case HEOp.ROT | HEOp.RESCALE | HEOp.POLY:
+            case HEOp.ROT | HEOp.RESCALE:
                 self.dependencies[term.cs[0]].remove(term)
                 if not self.dependencies[term.cs[0]]:
                     del self.dependencies[term.cs[0]]
@@ -359,7 +357,7 @@ class CKKS:
                     continue
 
                 match ct_term.op:
-                    case HEOp.PACK | HEOp.PUNCTURED_PACK | HEOp.POLY:
+                    case HEOp.PACK | HEOp.PUNCTURED_PACK:
                         continue
                     case HEOp.MASK:
                         self.pt_env[ct_term] = ct_term.cs[0]
@@ -429,7 +427,6 @@ class CKKS:
                         | HEOp.ZERO_MASK
                         | HEOp.RESCALE
                         | HEOp.PUNCTURED_PACK
-                        | HEOp.POLY
                     ):
                         continue
                     case HEOp.ADD | HEOp.SUB | HEOp.MUL:
@@ -545,8 +542,6 @@ class CKKS:
                     depth[c] = max(depth[c.cs[0]], depth[c.cs[1]])
                 case HEOp.ROT:
                     depth[c] = depth[c.cs[0]]
-                case HEOp.POLY:
-                    raise NotImplementedError(c.op)
                 case HEOp.RESCALE:
                     depth[c] = depth[c.cs[0]] + 1
                 case _:
@@ -573,8 +568,6 @@ class CKKS:
                     depth[c] = max(depth.get(c.cs[0], 0), depth.get(c.cs[1], 0))
                 case HEOp.ROT:
                     depth[c] = depth.get(c.cs[0], 0)
-                case HEOp.POLY:
-                    raise NotImplementedError(c.op)
                 case _:
                     raise NotImplementedError(
                         f"Unhandled operation in depth calculation: {c.op}"

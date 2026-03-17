@@ -164,7 +164,7 @@ class Toy:
         """Apply polynomial descriptor element-wise to a list of values. Uses self.inputs for batchnorm."""
         if poly_func is None or poly_func == "identity":
             return list(vec)
-        if poly_func == "relu_exact":
+        if poly_func == "relu_exact" or poly_func == "relu":
             return [float(v) if v > 0 else 0.0 for v in vec]
         if poly_func == "silu":
             return [
@@ -258,7 +258,7 @@ class Toy:
                 return self.eval_sub(term)
             case HEOp.MUL:
                 return self.eval_mul(term)
-            case HEOp.POLY:
+            case HEOp.POLY_CALL:
                 return self.eval_poly(term)
             case HEOp.RESCALE:
                 return self.eval_rescale(term)

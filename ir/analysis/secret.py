@@ -49,7 +49,6 @@ class Secret:
                 TensorOp.TRANSPOSE
                 | TensorOp.SUM
                 | TensorOp.PRODUCT
-                | TensorOp.POLY
                 | TensorOp.POLY_CALL
                 | TensorOp.RESHAPE
                 | TensorOp.PERMUTE
@@ -102,7 +101,6 @@ class Secret:
             case (
                 TensorOp.TRANSPOSE
                 | TensorOp.SUM
-                | TensorOp.POLY
                 | TensorOp.POLY_CALL
                 | TensorOp.RESHAPE
                 | TensorOp.PERMUTE
