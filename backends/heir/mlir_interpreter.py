@@ -35,7 +35,7 @@ def from_mlir_hex(hex_str: str) -> np.ndarray:
     return np.array(vals, dtype=np.float32)
 
 
-def interpret_mlir(mlir_file, inputs_dir=None):
+def interpret_mlir(mlir_file, n, inputs_dir=None):
     if not os.path.exists(mlir_file):
         raise FileNotFoundError(f"MLIR file not found: {mlir_file}")
 
@@ -101,14 +101,11 @@ def interpret_mlir(mlir_file, inputs_dir=None):
         if not line or line.startswith("}") or line.startswith("//"):
             continue
 
-        print(line)
-
         match = re.match(r"(%\w+) = (\w+\.\w+) (.+) : (.+)", line)
         if not match:
             match = re.match(r"(%\w+) = (call) (.+) : (.+)", line)
 
         if match is None:
-            print("no match:", line)
             continue
 
         result_var = match.group(1)
@@ -119,6 +116,7 @@ def interpret_mlir(mlir_file, inputs_dir=None):
         if operation == "arith.constant":
             dense_match = re.search(r"dense<([^>]+)>", args_str)
             if dense_match:
+                # constants
                 inner = dense_match.group(1).strip()
                 if inner.startswith('"'):
                     hex_str = inner.strip('"')
@@ -128,8 +126,12 @@ def interpret_mlir(mlir_file, inputs_dir=None):
                     values = [
                         float(x.strip()) for x in values_str.split(",") if x.strip()
                     ]
-                    env[result_var] = np.array(values, dtype=np.float32)
+                    if len(values) == 1:
+                        env[result_var] = [values[0]] * n
+                    else:
+                        env[result_var] = np.array(values, dtype=np.float32)
             else:
+                # rot offset
                 const_match = re.match(r"(-?\d+)", args_str)
                 if const_match:
                     env[result_var] = int(const_match.group(1))
@@ -139,30 +141,33 @@ def interpret_mlir(mlir_file, inputs_dir=None):
             arg2 = env.get(args[1])
             if arg1 is None or arg2 is None:
                 raise ValueError("arg1 or arg2 is None")
-            env[result_var] = arg1 * arg2
+            env[result_var] = np.array([a * b for a, b in zip(arg1, arg2)])
 
         elif operation == "arith.addf":
             arg1 = env.get(args[0])
             arg2 = env.get(args[1])
             if arg1 is None or arg2 is None:
                 raise ValueError("arg1 or arg2 is None")
-            env[result_var] = arg1 + arg2
+            env[result_var] = np.array([a + b for a, b in zip(arg1, arg2)])
 
         elif operation == "arith.subf":
             arg1 = env.get(args[0])
             arg2 = env.get(args[1])
             if arg1 is None or arg2 is None:
                 raise ValueError("arg1 or arg2 is None")
-            env[result_var] = arg1 - arg2
+            env[result_var] = np.array([a - b for a, b in zip(arg1, arg2)])
 
         elif operation == "tensor_ext.rotate":
             arg1 = env.get(args[0])
             rot_amt = env.get(args[1])
             if arg1 is None or rot_amt is None:
                 raise ValueError("arg1 or rot_amt is None")
-            vector = arg1.copy()
-            n = len(vector)
-            rotated = np.array([vector[(i + rot_amt) % n] for i in range(n)])
+            vector = np.asarray(arg1).flatten()
+            vec_len = len(vector)
+            rotated = np.array(
+                [vector[(i + rot_amt) % vec_len] for i in range(vec_len)],
+                dtype=np.float32,
+            )
             env[result_var] = rotated
 
         elif operation == "tensor.extract_slice":

@@ -103,7 +103,10 @@ class HEIR:
     def eval_const(self, term):
         out_id = self.term_to_id[term]
         out_type = self.term_to_type[term]
-        line = f"{out_id} = arith.constant dense<{term.cs[1]}> : {out_type}"
+        layout = term.cs[0]
+        vector = np.array([term.cs[1]] * self.n)
+        packed_tensor = apply_layout(vector, layout)
+        line = f"{out_id} = arith.constant dense<[{packed_tensor}]> : {out_type}"
         self.lines.append(line)
 
     def eval_cs(self, term):

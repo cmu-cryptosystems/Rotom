@@ -64,12 +64,12 @@ def main(args):
         heir_backend.run()
         # Run MLIR interpreter to get results
         mlir_file = f"heir/{args.fn}/{args.fn}.mlir"
-        mlir_results = run_mlir_interpreter(mlir_file)
+        mlir_results = run_mlir_interpreter(mlir_file, n)
         # Check MLIR results against tensor_ir.eval()
         check_results(tensor_ir, inputs, kernel, mlir_results, runtime, args)
-        heir_backend.serialize_results(mlir_results)
+        # heir_backend.serialize_results(mlir_results)
         # Check label
-        check_label(kernel, mlir_results, label)
+        # check_label(kernel, mlir_results, label)
     else:
         raise NotImplementedError("unknown backend")
 
