@@ -3,6 +3,7 @@ from argparse import ArgumentParser, BooleanOptionalAction
 from assignment.assignment import LayoutAssignment
 from backends.heir.heir import HEIR
 from backends.heir.mlir_interpreter import run_mlir_interpreter
+from backends.openfhe_backend import CKKS
 from backends.toy import Toy
 
 # heir benchmarks
@@ -67,9 +68,7 @@ def main(args):
         mlir_results = run_mlir_interpreter(mlir_file, n)
         # Check MLIR results against tensor_ir.eval()
         check_results(tensor_ir, inputs, kernel, mlir_results, runtime, args)
-        check_label(kernel, backend_results, label)
-
-        # Serialize results
+        check_label(kernel, mlir_results, label)
         heir_backend.serialize_results(mlir_results)
         backend_results = mlir_results
     else:
