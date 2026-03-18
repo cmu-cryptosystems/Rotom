@@ -91,7 +91,7 @@ def run_benchmark_or_microbenchmark(args):
             heir_backend.run()
             # Run MLIR interpreter to get results
             mlir_file = f"heir/{args.fn}/{args.fn}.mlir"
-            mlir_results = run_mlir_interpreter(mlir_file)
+            mlir_results = run_mlir_interpreter(mlir_file, n)
             # Check MLIR results against kernel.term.eval()
             check_results(kernel.term, inputs, kernel, mlir_results, runtime, args)
             heir_backend.serialize_results(mlir_results)
@@ -181,7 +181,7 @@ def run_benchmark_or_microbenchmark(args):
             heir_backend.run()
             # Run MLIR interpreter to get results
             mlir_file = f"heir/{args.fn}/{args.fn}.mlir"
-            mlir_results = run_mlir_interpreter(mlir_file)
+            mlir_results = run_mlir_interpreter(mlir_file, n)
             # Check MLIR results against tensor_ir.eval()
             check_results(tensor_ir, inputs, kernel, mlir_results, runtime, args)
             heir_backend.serialize_results(mlir_results)
@@ -263,7 +263,7 @@ def main(args):
         heir_backend.run()
         # Run MLIR interpreter to get results
         mlir_file = f"heir/{args.fn}/{args.fn}.mlir"
-        mlir_results = run_mlir_interpreter(mlir_file)
+        mlir_results = run_mlir_interpreter(mlir_file, args.n)
         # Check MLIR results against tensor_ir.eval()
         check_results(tensor_ir, inputs, kernel, mlir_results, runtime, args)
         heir_backend.serialize_results(mlir_results)

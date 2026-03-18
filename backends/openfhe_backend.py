@@ -63,6 +63,10 @@ class CKKS:
         # Create parent directories as needed (e.g. ./modules/<benchmark>).
         os.makedirs(self.modules_dir, exist_ok=True)
 
+    # ------------------------------------------------------------------
+    # I/O and size / communication helpers
+    # ------------------------------------------------------------------
+
     def get_directory_size(self):
         path = self.modules_dir
         total_size = 0
@@ -90,6 +94,10 @@ class CKKS:
             # wan case, 100Mbps
             return data_size / (10**8)
 
+    # ------------------------------------------------------------------
+    # Rotation helpers
+    # ------------------------------------------------------------------
+
     def find_unique_rots(self, cts):
         unique_rots = set()
         for ct in cts:
@@ -112,6 +120,10 @@ class CKKS:
         if amt < 0:
             powers = [-p for p in powers]
         return powers
+
+    # ------------------------------------------------------------------
+    # Context / key management
+    # ------------------------------------------------------------------
 
     def create_context(self, depth, rots):
         print("creating context...")
@@ -172,6 +184,10 @@ class CKKS:
                 'Error writing serialization of the eval rotate keys to "key-eval-rot.txt"'
             )
 
+    # ------------------------------------------------------------------
+    # Encoding / basic crypto ops
+    # ------------------------------------------------------------------
+
     def encode(self, vector):
         return self.cc.MakeCKKSPackedPlaintext(vector)
 
@@ -184,6 +200,10 @@ class CKKS:
     def eval_mask(self, term):
         return term.cs[0]
 
+    # ------------------------------------------------------------------
+    # Serialization helpers for ciphertexts/results
+    # ------------------------------------------------------------------
+
     def serialize_ct(self, term, ct):
         if not SerializeToFile(
             os.path.join(self.modules_dir, f"{term}.txt"), ct, BINARY
@@ -195,6 +215,10 @@ class CKKS:
             os.path.join(self.modules_dir, f"result_{i}.txt"), ct, BINARY
         ):
             raise Exception(f"Error writing serialization of {i}")
+
+    # ------------------------------------------------------------------
+    # Packing / plaintext preprocessing
+    # ------------------------------------------------------------------
 
     def eval_pack(self, term, encrypt=False, cache=False):
         layout = term.cs[0]
@@ -449,6 +473,10 @@ class CKKS:
                     case _:
                         raise NotImplementedError(ct_term.op)
 
+    # ------------------------------------------------------------------
+    # Circuit DAG creation
+    # ------------------------------------------------------------------
+
     def dagify_fhe_circuit(self):
         ct_env = {}
         results = []
@@ -484,6 +512,10 @@ class CKKS:
                             ct_env[ct_term] = ct_term
                 results.append(ct_term)
         return results
+
+    # ------------------------------------------------------------------
+    # Encrypted evaluation helpers
+    # ------------------------------------------------------------------
 
     def run_fhe_circuit(self):
         print()
@@ -527,10 +559,18 @@ class CKKS:
         print(ops)
         return runtime, results
 
+    # ------------------------------------------------------------------
+    # Utility: decrypt to plaintext for inspection
+    # ------------------------------------------------------------------
+
     def decrypt_to_plaintext(self, ct):
         pt = self.decrypt(ct)
         decrypted = [d.real for d in pt.GetCKKSPackedValue()]
         return decrypted
+
+    # ------------------------------------------------------------------
+    # Depth estimation helpers (context configuration)
+    # ------------------------------------------------------------------
 
     def find_depth_rescale(self, ct):
         depth = {}
@@ -574,6 +614,10 @@ class CKKS:
                     )
         max_depth = max(depth.values()) if depth else 0
         return max_depth + self.margin_depth
+
+    # ------------------------------------------------------------------
+    # High-level run / debugging helpers
+    # ------------------------------------------------------------------
 
     def run_and_check(self, term, cts):
         self.preprocess_packing(cts)

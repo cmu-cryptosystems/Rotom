@@ -245,24 +245,30 @@ def interpret_mlir(mlir_file, n, inputs_dir=None):
     return None
 
 
-def run_mlir_interpreter(mlir_file, inputs_dir=None):
+def run_mlir_interpreter(mlir_file, n, inputs_dir=None):
     """
     Run the MLIR interpreter on the generated MLIR file.
     Returns the computed results as a list of vectors, compatible with check_results.
 
     Args:
-        mlir_file: Path to the MLIR file to interpret
-        inputs_dir: Directory containing input files (defaults to inputs/ relative to MLIR file)
+        mlir_file: Path to the MLIR file to interpret.
+        n: Vector length used for broadcasting scalar constants.
+        inputs_dir: Directory containing input files. If not provided, it
+            defaults to ``inputs/`` relative to ``mlir_file``.
 
     Returns:
         list: List of result vectors from MLIR execution
 
     Raises:
-        RuntimeError: If MLIR interpretation fails
-        ValueError: If MLIR interpretation returns None
+        RuntimeError: If MLIR interpretation fails.
+        ValueError: If MLIR interpretation returns None.
     """
+    if inputs_dir is None:
+        mlir_dir = os.path.dirname(mlir_file)
+        inputs_dir = os.path.join(mlir_dir, "inputs")
+
     try:
-        mlir_result = interpret_mlir(mlir_file, inputs_dir)
+        mlir_result = interpret_mlir(mlir_file, n=n, inputs_dir=inputs_dir)
         if mlir_result is None:
             raise ValueError("MLIR interpretation returned None")
         return [mlir_result.tolist()]

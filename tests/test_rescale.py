@@ -24,7 +24,6 @@ class TestRescale:
 
     def _run_test_case(self, inputs, scale_exp, args, backend):
         """Helper method to run a test case."""
-        # Generate test case
         tensor_ir, expected = self._create_rescale_computation(inputs, scale_exp)
 
         # Run compiler + backend

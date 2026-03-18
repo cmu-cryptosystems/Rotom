@@ -21,16 +21,10 @@ class TestCompaction:
 
     def _run_test_case(self, kernel, inputs, args, backend):
         """Helper method to run a test case."""
-        # Run compiler
+        # Lower the manually constructed compact kernel directly.
         circuit_ir = Lower(kernel).run()
         results = run_backend(backend, circuit_ir, inputs, args)
-
-        # Generate expected result from the tensor term
-        tensor_term = kernel.cs[0].layout.term
-        expected = tensor_term.eval(inputs)
-
-        # Check result
-        expected_cts = apply_layout(expected, kernel.layout)
+        expected_cts = apply_layout(inputs["a"], kernel.layout)
         assert_results_equal(expected_cts, results, backend)
 
     def test_compact(self, backend):
