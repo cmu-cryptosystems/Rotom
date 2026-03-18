@@ -8,11 +8,9 @@ including various filter sizes and input dimensions.
 import numpy as np
 import pytest
 
-from assignment.assignment import LayoutAssignment
 from frontends.tensor import TensorTerm
 from ir.dim import *
-from lower.lower import Lower
-from tests.conftest import assert_results_equal, run_backend
+from tests.conftest import assert_results_equal, run_compiler_and_backend
 from tests.test_util import get_default_args
 from util.layout_util import apply_layout
 
@@ -40,10 +38,8 @@ class TestConvolution2D:
         # Generate expected result
         expected = tensor_ir.eval(inputs)
 
-        # Run compiler
-        kernel = LayoutAssignment(tensor_ir, args).run()
-        circuit_ir = Lower(kernel).run()
-        results = run_backend(backend, circuit_ir, inputs, args)
+        # Run compiler + backend
+        results, kernel = run_compiler_and_backend(tensor_ir, inputs, args, backend)
 
         # Check result
         expected_cts = apply_layout(expected, kernel.layout)
