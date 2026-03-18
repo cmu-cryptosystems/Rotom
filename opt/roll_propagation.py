@@ -246,7 +246,7 @@ def run_roll_propogation(candidate):
                 ):
                     try:
                         update_map[kernel] = roll_propogation(kernel)
-                    except:
+                    except Exception:
                         update_map[kernel] = kernel
             case _:
                 update_map[kernel] = kernel

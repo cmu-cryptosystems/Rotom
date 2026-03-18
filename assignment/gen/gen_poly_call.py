@@ -18,7 +18,8 @@ def gen_poly_call(term, kernels):
     Creates kernels that preserve the input layout (element-wise operation).
 
     Args:
-        term: TensorTerm representing the Poly operation (term.cs[0] is input, term.cs[1] is func)
+        term: TensorTerm representing the Poly operation (input = term.cs[0];
+              use PolyCallArgs.from_term(term) for .name, .lower_bound, .upper_bound)
         kernels: List of input kernels to generate Poly kernels for
 
     Returns:

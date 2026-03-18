@@ -19,7 +19,6 @@ while maintaining correctness of the computation graph semantics.
 from copy import deepcopy as copy
 
 # import frontend terms
-from re import L
 
 from assignment.gen.gen_binop import gen_binop
 from assignment.gen.gen_block_matmul import gen_block_matmul
@@ -585,9 +584,9 @@ class LayoutAssignment:
                     ]
                 else:
                     cost = KernelCost(cs_kernel, self.network).total_cost()
-                    self.kernel_costs[cs_term][
-                        dimension_merging(cs_kernel.layout)
-                    ] = cost
+                    self.kernel_costs[cs_term][dimension_merging(cs_kernel.layout)] = (
+                        cost
+                    )
                     cs_costs += cost
 
             cs_kernel_list = []

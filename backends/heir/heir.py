@@ -304,7 +304,7 @@ class HEIR:
                 case "relu":
                     relu_lines = [
                         f"\n  func.func private @relu(%arg0: tensor<1x{self.n}xf32>) -> tensor<1x{self.n}xf32> {{\n",
-                        f"    %cst = arith.constant dense<0.000000e+00> : tensor<f32>\n",
+                        "    %cst = arith.constant dense<0.000000e+00> : tensor<f32>\n",
                         f"    %0 = tensor.empty() : tensor<1x{self.n}xf32>\n",
                         f"    %broadcasted = linalg.broadcast ins(%cst : tensor<f32>) outs(%0 : tensor<1x{self.n}xf32>) dimensions = [0, 1]\n",
                         f"    %1 = tensor.empty() : tensor<1x{self.n}xf32>\n",

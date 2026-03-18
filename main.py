@@ -1,4 +1,3 @@
-import random
 from argparse import ArgumentParser, BooleanOptionalAction
 
 import numpy as np

@@ -16,7 +16,6 @@ import shutil
 import subprocess
 import sys
 import time
-from pathlib import Path
 
 from tqdm import tqdm
 
@@ -46,7 +45,7 @@ def run_sphinx_command(command, source_dir, output_dir=None):
             return True
         else:
             return False
-    except Exception as e:
+    except Exception:
         return False
 
 
@@ -93,7 +92,7 @@ def create_module_doc(source_dir, module_name, title):
     filepath = os.path.join(source_dir, "api_reference", filename)
 
     content = f"""{title}
-{'=' * len(title)}
+{"=" * len(title)}
 
 Module Contents
 ---------------

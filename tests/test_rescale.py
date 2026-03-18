@@ -11,7 +11,7 @@ from assignment.assignment import LayoutAssignment
 from frontends.tensor import TensorTerm
 from ir.dim import *
 from lower.lower import Lower
-from tests.conftest import assert_results_equal, run_backend
+from tests.conftest import run_backend
 from tests.test_util import get_default_args
 from util.layout_util import apply_layout
 

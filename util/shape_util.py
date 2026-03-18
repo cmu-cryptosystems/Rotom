@@ -1,4 +1,5 @@
 from frontends.tensor import TensorOp
+from frontends.tensor_args import TensorPlaceholderArgs
 from util.util import prod
 
 
@@ -12,11 +13,11 @@ def get_term_shape(term):
         list: Shape of the tensor
 
     Note:
-        For TENSOR ops, this is a quick lookup of term.cs[1].
+        For TENSOR ops, this is a quick lookup via TensorPlaceholderArgs.from_term(term).shape.
         For other operations, this falls back to the full Shape analyzer.
     """
     if term.op == TensorOp.TENSOR:
-        return term.cs[1]
+        return TensorPlaceholderArgs.from_term(term).shape
     else:
         # For other ops, use full shape analysis
         from ir.analysis.shape import Shape

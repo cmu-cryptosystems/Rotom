@@ -22,7 +22,6 @@ from ir.kernel_cost import KernelCost
 from ir.layout import Layout
 from ir.roll import Roll
 from opt.opt import Optimizer
-from util.layout_util import dimension_merging
 
 
 def layout_to_str(layout):

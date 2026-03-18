@@ -14,8 +14,8 @@ def logreg():
     )
 
     v = TensorTerm.Tensor("v", [256, 1], True)
-    m = TensorTerm.Tensor(f"m_0", [1024, 256], False)
-    m1 = TensorTerm.Tensor(f"m_1", [256, 1024], False)
+    m = TensorTerm.Tensor("m_0", [1024, 256], False)
+    m1 = TensorTerm.Tensor("m_1", [256, 1024], False)
     v2 = m @ v
     tensor_ir = m1 @ v2
     return tensor_ir, inputs

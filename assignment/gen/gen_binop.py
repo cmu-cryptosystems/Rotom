@@ -13,8 +13,6 @@ Key functions:
 """
 
 from copy import deepcopy as copy
-from traceback import print_tb
-from typing import Any
 
 from assignment.alignment import get_dim_alignment
 from assignment.gen.gen_compaction import find_compaction
@@ -923,12 +921,12 @@ def roll_dimensions(term, alignment, kernels):
                     if skip:
                         continue
                     aligned_kernels += apply_roll_conversion(term, alignment, kernels)
-            except:
+            except Exception:
                 aligned_kernels += apply_roll_conversion(term, alignment, kernels)
         else:
             try:
                 aligned_kernels += apply_roll_conversion(term, alignment, kernels)
-            except:
+            except Exception:
                 aligned_kernels += []
     return aligned_kernels
 

@@ -30,9 +30,7 @@ dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
     "pytest-timeout>=2.1.0",
-    "flake8>=6.0.0",
-    "black>=23.0.0",
-    "isort>=5.12.0",
+    "ruff==0.8.4",
     "mypy>=1.5.0",
     "bandit>=1.7.5",
     "safety>=2.3.0",
@@ -45,30 +43,17 @@ docs = [
     "sphinx-rtd-theme>=1.3.0",
 ]
 
-[tool.black]
+[tool.ruff]
 line-length = 88
-target-version = ['py312']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-)/
-'''
+target-version = "py312"
+exclude = [".eggs", ".git", ".hg", ".mypy_cache", ".tox", ".venv", "build", "dist"]
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-line_length = 88
-known_first_party = ["rotom"]
-known_third_party = ["numpy", "matplotlib", "tqdm", "openfhe"]
+[tool.ruff.lint]
+# Star imports used intentionally; E402 = import not at top
+ignore = ["F403", "F405", "E402"]
+
+[tool.ruff.format]
+quote-style = "double"
 
 [tool.mypy]
 python_version = "3.12"

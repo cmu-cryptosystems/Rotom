@@ -310,7 +310,7 @@ def test_layout_from_string_simple():
     layout = Layout.from_string("[0:4:1]", 16)
     assert layout.layout_str() == "[G:4][0:4:1]"
     assert layout.n == 16
-    assert layout.secret == False
+    assert not layout.secret
     assert len(layout.rolls) == 0
     assert len(layout.dims) == 1
 
@@ -320,7 +320,7 @@ def test_layout_from_string_multiple_dimensions():
     layout = Layout.from_string("[0:4:1][1:4:1]", 16)
     assert layout.layout_str() == "[0:4:1][1:4:1]"
     assert layout.n == 16
-    assert layout.secret == False
+    assert not layout.secret
     assert len(layout.rolls) == 0
     assert len(layout.dims) == 2
 
@@ -330,7 +330,7 @@ def test_layout_from_string_with_roll():
     layout = Layout.from_string("roll(0,1) [1:4:1][0:4:1]", 16)
     assert layout.layout_str() == "roll(0,1) [1:4:1][0:4:1]"
     assert layout.n == 16
-    assert layout.secret == False
+    assert not layout.secret
     assert len(layout.rolls) == 1
     assert len(layout.dims) == 2
 
@@ -340,7 +340,7 @@ def test_layout_from_string_with_ciphertext_dimensions():
     layout = Layout.from_string("[R:4:1];[0:4:1][1:4:1]", 16)
     assert layout.layout_str() == "[R:4:1];[0:4:1][1:4:1]"
     assert layout.n == 16
-    assert layout.secret == False
+    assert not layout.secret
     assert len(layout.rolls) == 0
     assert len(layout.dims) == 3
 
@@ -350,7 +350,7 @@ def test_layout_from_string_with_roll_and_ciphertext():
     layout = Layout.from_string("roll(0,1) [R:4:1];[1:4:1][0:4:1]", 16)
     assert layout.layout_str() == "roll(0,1) [R:4:1];[1:4:1][0:4:1]"
     assert layout.n == 16
-    assert layout.secret == False
+    assert not layout.secret
     assert len(layout.rolls) == 1
     assert len(layout.dims) == 3
 
@@ -360,7 +360,7 @@ def test_layout_from_string_secret_true():
     layout = Layout.from_string("[0:4:1]", 16, secret=True)
     assert layout.layout_str() == "[G:4][0:4:1]"
     assert layout.n == 16
-    assert layout.secret == True
+    assert layout.secret
 
 
 def test_layout_from_string_complex_rolls():
@@ -368,7 +368,7 @@ def test_layout_from_string_complex_rolls():
     layout = Layout.from_string("roll(0,1) roll(2,3) [0:4:1][1:4:1][2:4:1][3:4:1]", 16)
     assert layout.layout_str() == "roll(0,1) roll(2,3) [0:4:1][1:4:1];[2:4:1][3:4:1]"
     assert layout.n == 16
-    assert layout.secret == False
+    assert not layout.secret
     assert len(layout.rolls) == 2
     assert len(layout.dims) == 4
 

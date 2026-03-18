@@ -2,14 +2,11 @@ import argparse
 import os.path
 from types import SimpleNamespace
 
-import numpy as np
-
 from backends.openfhe_backend import CKKS
 from frontends.tensor import TensorOp, TensorTerm
 from ir.dim import Dim
 from ir.he import HEOp, HETerm
 from ir.layout import Layout
-from util.layout_util import convert_layout_to_mask
 
 
 class FhelipeWrapper:
@@ -115,21 +112,21 @@ class FhelipeWrapper:
     def parse_add_cc(self, line):
         elems = line.split()
         var = elems[0]
-        l = elems[7]
+        left = elems[7]
         r = elems[8]
         if var in self.env:
             raise KeyError
-        self.env[var] = self.env[l] + self.env[r]
+        self.env[var] = self.env[left] + self.env[r]
         return self.env[var]
 
     def parse_mul_cc(self, line):
         elems = line.split()
         var = elems[0]
-        l = elems[7]
+        left = elems[7]
         r = elems[8]
         if var in self.env:
             raise KeyError
-        self.env[var] = self.env[l] * self.env[r]
+        self.env[var] = self.env[left] * self.env[r]
         return self.env[var]
 
     def parse_add_cp(self, line):
@@ -190,21 +187,21 @@ class FhelipeWrapper:
                 op = line.split()[3]
                 match op:
                     case "InputC":
-                        term = self.parse_input_c(line)
+                        _term = self.parse_input_c(line)
                     case "ZeroC":
-                        term = self.parse_zero_c(line)
+                        _term = self.parse_zero_c(line)
                     case "RotateC":
-                        term = self.parse_rotate_c(line)
+                        _term = self.parse_rotate_c(line)
                     case "AddCC":
-                        term = self.parse_add_cc(line)
+                        _term = self.parse_add_cc(line)
                     case "MulCC":
-                        term = self.parse_mul_cc(line)
+                        _term = self.parse_mul_cc(line)
                     case "AddCP":
-                        term = self.parse_add_cp(line)
+                        _term = self.parse_add_cp(line)
                     case "MulCP":
-                        term = self.parse_mul_cp(line)
+                        _term = self.parse_mul_cp(line)
                     case "RescaleC":
-                        term = self.parse_rescale_c(line)
+                        _term = self.parse_rescale_c(line)
                     case "OutputC":
                         output.append(self.parse_output(line))
                     case _:
@@ -243,7 +240,7 @@ def main():
 
     w = FhelipeWrapper(args)
     comp = w.create_comp()
-    results = w.run(comp, {}, args.path)
+    _results = w.run(comp, {}, args.path)
 
 
 if __name__ == "__main__":

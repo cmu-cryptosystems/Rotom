@@ -3,7 +3,6 @@ from argparse import ArgumentParser, BooleanOptionalAction
 from assignment.assignment import LayoutAssignment
 from backends.heir.heir import HEIR
 from backends.heir.mlir_interpreter import run_mlir_interpreter
-from backends.openfhe_backend import CKKS
 from backends.toy import Toy
 
 # heir benchmarks
@@ -32,7 +31,7 @@ def main(args):
             tensor_ir, inputs, label = mnist_poly(args.label)
             args.n = n
         case "":
-            raise NotImplementedError(f"benchmark not set")
+            raise NotImplementedError("benchmark not set")
         case _:
             raise NotImplementedError(f"unknown benchmark: {args.fn}")
 
