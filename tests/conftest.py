@@ -93,9 +93,9 @@ def assert_results_equal(expected_cts, results, backend_name):
     if backend_name == "ckks":
         # CKKS uses floating point, so use np.allclose
         for expected_vec, result_vec in zip(expected_cts, results):
-            assert np.allclose(expected_vec, result_vec, rtol=1e-2, atol=1e-2), (
-                f"Results not close enough. Expected: {expected_vec}, Got: {result_vec}"
-            )
+            assert np.allclose(
+                expected_vec, result_vec, rtol=1e-2, atol=1e-2
+            ), f"Results not close enough. Expected: {expected_vec}, Got: {result_vec}"
     else:
         # Toy backend should have exact equality
         assert expected_cts == results

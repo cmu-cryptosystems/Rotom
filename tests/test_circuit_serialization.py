@@ -161,9 +161,7 @@ class TestCircuitSerialization:
         print("=" * 70)
 
         # Use assert instead of return for pytest compliance
-        assert match, (
-            f"Results do not match. Max difference: {np.max(np.abs(np.array(orig_result) - np.array(reexec_result)))}"
-        )
+        assert match, f"Results do not match. Max difference: {np.max(np.abs(np.array(orig_result) - np.array(reexec_result)))}"
 
     def test_multiple_operations(self, backend):
         """Test serialization with multiple tensor operations."""
