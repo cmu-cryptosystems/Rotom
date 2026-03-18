@@ -217,7 +217,7 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
             "b": np.random.randn(784, 512).astype(np.float64) * 0.1,
         }
         tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
-        results, kernel = run_compiler_and_backend(expected, inputs, args, backend)
+        results, kernel = run_compiler_and_backend(tensor_ir, inputs, args, backend)
         self._assert_allclose(apply_layout(expected, kernel.layout), results)
 
     def test_matvecmul_ct_pt_1x784_784x512(self, backend):
