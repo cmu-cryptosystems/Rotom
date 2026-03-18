@@ -3,6 +3,7 @@ from lower.layout_cts import LayoutCiphertexts
 
 
 def lower_sub(env, kernel):
+    """Lower an elementwise SUB kernel to ciphertext subtractions."""
     a_cts = env[kernel.cs[0]]
     b_cts = env[kernel.cs[1]]
     assert len(a_cts.keys()) == len(b_cts.keys())

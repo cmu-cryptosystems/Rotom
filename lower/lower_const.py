@@ -3,6 +3,7 @@ from lower.layout_cts import LayoutCiphertexts
 
 
 def lower_const(kernel):
+    """Lower a CONST kernel into layout-aligned constant ciphertexts."""
     layout = kernel.layout
     cts = {}
     for i in range(layout.num_ct()):

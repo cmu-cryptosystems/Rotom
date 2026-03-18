@@ -6,6 +6,7 @@ from util.util import split_lists
 
 
 def lower_roll(env, kernel):
+    """Lower a ROLL kernel by constructing rotated ciphertexts for rolled dims."""
     n = kernel.layout.n
     roll = kernel.cs[0]
     ct_dims = kernel.layout.ct_dims

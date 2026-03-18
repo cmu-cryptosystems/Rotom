@@ -5,6 +5,7 @@ from util.shape_util import get_term_shape
 
 
 def lower_cs_pack(kernel):
+    """Lower a CS_PACK kernel to pack ciphertext slices according to layout."""
     layout = kernel.layout
     shape = get_term_shape(layout.term)
 
