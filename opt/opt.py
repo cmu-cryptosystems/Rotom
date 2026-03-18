@@ -11,7 +11,7 @@ from copy import deepcopy as copy
 
 from opt.bsgs_matmul import run_bsgs_matmul
 from opt.ct_roll_bsgs import run_ct_roll_bsgs
-from opt.roll_propagation import run_roll_propogation
+from opt.roll_propagation import run_roll_propagation
 from opt.roll_reordering import run_roll_reordering
 from opt.rot_roll import run_rot_roll
 
@@ -61,7 +61,7 @@ class Optimizer:
         if self.roll_flag:
             for kernel in kernels:
                 opt_kernel = copy(kernel)
-                opt_kernel = run_roll_propogation(opt_kernel)
+                opt_kernel = run_roll_propagation(opt_kernel)
                 opt_kernels = run_roll_reordering(opt_kernel)
                 for opt_kernel in opt_kernels:
                     opt_kernel = run_rot_roll(opt_kernel)
