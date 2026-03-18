@@ -8,6 +8,7 @@ from util.layout_util import convert_layout_to_mask, get_cts_by_dim, get_segment
 
 
 def lower_sum(env, kernel):
+    """Lower a SUM kernel by reducing over ciphertext and slot dimensions."""
     kernel = copy(kernel)
     input_cts = env[kernel.cs[0]]  # LayoutCiphertexts
     layout_cts = input_cts

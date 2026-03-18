@@ -1,5 +1,3 @@
-# Use local ruff so the hook uses the same ruff as your venv (no version mismatch).
-# pass_filenames: false so ruff only runs on . (Python files); otherwise staged YAML/txt get parsed as Python.
 repos:
   - repo: local
     hooks:
@@ -10,6 +8,6 @@ repos:
         pass_filenames: false
       - id: ruff-format
         name: ruff-format
-        entry: ruff format .
+        entry: ruff format . 
         language: system
         pass_filenames: false

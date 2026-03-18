@@ -3,6 +3,7 @@ from lower.layout_cts import LayoutCiphertexts
 
 
 def lower_add(env, kernel):
+    """Lower an elementwise ADD kernel to ciphertext additions."""
     a_cts = env[kernel.cs[0]]
     b_cts = env[kernel.cs[1]]
     assert len(a_cts.keys()) == len(b_cts.keys())

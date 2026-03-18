@@ -34,7 +34,7 @@ def sum_slot_dim(kernel, ct, slot_sum_dims):
 
 
 def lower_conv2d_roll(env, kernel):
-    """same as a normal mul, but with filtering rules"""
+    """Lower a CONV2D_ROLL kernel: convolution via rotated-and-masked ciphertexts."""
     a_cts = env[kernel.cs[0]]
     b_cts = env[kernel.cs[1]]
     assert a_cts.keys() == b_cts.keys()

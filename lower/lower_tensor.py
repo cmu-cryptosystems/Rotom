@@ -4,6 +4,7 @@ from util.shape_util import get_term_shape, layout_to_shape_indices
 
 
 def lower_tensor(kernel):
+    """Lower a TENSOR kernel into initial ciphertext packs for its layout."""
     layout = kernel.layout
 
     # get shape of term
