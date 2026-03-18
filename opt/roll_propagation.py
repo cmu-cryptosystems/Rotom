@@ -70,7 +70,7 @@ def check_no_shared_rolls(kernel):
     return True
 
 
-def roll_propogation(kernel):
+def roll_propagation(kernel):
     """
     Apply roll propagation optimization to move cheaper rolls above replication.
 
@@ -229,7 +229,7 @@ def roll_propogation(kernel):
     return tmp_kernel
 
 
-def run_roll_propogation(candidate):
+def run_roll_propagation(candidate):
     update_map = {}
     for kernel in candidate.post_order():
         for i, cs in enumerate(kernel.cs):
@@ -245,7 +245,7 @@ def run_roll_propogation(candidate):
                     and check_replication_on_child_path(kernel)
                 ):
                     try:
-                        update_map[kernel] = roll_propogation(kernel)
+                        update_map[kernel] = roll_propagation(kernel)
                     except Exception:
                         update_map[kernel] = kernel
             case _:

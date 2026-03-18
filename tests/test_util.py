@@ -1,20 +1,21 @@
-from argparse import ArgumentParser
+from argparse import Namespace
 
 
-def get_default_args():
-    parser = ArgumentParser()
-    parser.backend = "ckks"
-    parser.n = 4096
-    parser.rolls = False
-    parser.strassens = False
-    parser.net = "lan"
-    parser.cache = False
-    parser.serialize = False
-    parser.mock = False
-    parser.fuzz = False
-    parser.fuzz_result = False
-    parser.not_secure = False
-    parser.conv_roll = False
-    parser.fn = ""
-    parser.benchmark = ""
-    return parser
+def get_default_args() -> Namespace:
+    """Return a default args namespace used by tests."""
+    return Namespace(
+        backend="ckks",
+        n=4096,
+        rolls=False,
+        strassens=False,
+        net="lan",
+        cache=False,
+        serialize=False,
+        mock=False,
+        fuzz=False,
+        fuzz_result=False,
+        not_secure=False,
+        conv_roll=False,
+        fn="",
+        benchmark="",
+    )
