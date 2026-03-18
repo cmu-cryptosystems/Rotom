@@ -1,6 +1,5 @@
 """Shared CIFAR-10 utilities for ResNet e2e benchmark.
 
-This is intentionally minimal:
 - load CIFAR-10 test set via TorchVision's downloader
 - load DaCapo's `resnet20.silu.model` checkpoint
 """
