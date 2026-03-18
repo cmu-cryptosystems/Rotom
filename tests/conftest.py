@@ -81,6 +81,32 @@ def run_backend(backend_name, circuit_ir, inputs, args):
         raise ValueError(f"Unknown backend: {backend_name}")
 
 
+def _compile_key(tensor_ir, args):
+    """
+    Build a hashable key for compilation caching based on tensor_ir identity
+    and layout-affecting args fields.
+    """
+    key_fields = ("n", "benchmark", "rolls", "not_secure")
+    args_tuple = tuple((field, getattr(args, field, None)) for field in key_fields)
+    return (id(tensor_ir), args_tuple)
+
+
+_compile_cache = {}
+
+
+def _compile_tensor_ir(tensor_ir, args):
+    """
+    Compile tensor_ir to (kernel, circuit_ir), with a simple in-memory cache
+    keyed by tensor_ir identity and relevant args.
+    """
+    key = _compile_key(tensor_ir, args)
+    if key not in _compile_cache:
+        kernel = LayoutAssignment(tensor_ir, args).run()
+        circuit_ir = Lower(kernel).run()
+        _compile_cache[key] = (kernel, circuit_ir)
+    return _compile_cache[key]
+
+
 def assert_results_equal(expected_cts, results, backend_name):
     """
     Assert that expected and actual results are equal, using appropriate comparison.
@@ -113,7 +139,6 @@ def run_compiler_and_backend(tensor_ir, inputs, args, backend_name):
     Returns:
         (results, kernel): backend outputs and the compiled kernel (for layout).
     """
-    kernel = LayoutAssignment(tensor_ir, args).run()
-    circuit_ir = Lower(kernel).run()
+    kernel, circuit_ir = _compile_tensor_ir(tensor_ir, args)
     results = run_backend(backend_name, circuit_ir, inputs, args)
     return results, kernel
