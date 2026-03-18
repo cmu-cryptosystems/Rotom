@@ -1,7 +1,15 @@
+# Use local ruff so the hook uses the same ruff as your venv (no version mismatch).
+# pass_filenames: false so ruff only runs on . (Python files); otherwise staged YAML/txt get parsed as Python.
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
+  - repo: local
     hooks:
       - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
+        name: ruff
+        entry: ruff check . --fix --exit-non-zero-on-fix
+        language: system
+        pass_filenames: false
       - id: ruff-format
+        name: ruff-format
+        entry: ruff format .
+        language: system
+        pass_filenames: false
