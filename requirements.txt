@@ -23,8 +23,6 @@ typing_extensions==4.15.0
 
 # CI/CD and Development Tools
 ruff>=0.8.0
-flake8>=7.3.0
-isort>=6.0.1
 mypy>=1.18.2
 bandit>=1.8.6
 safety>=3.6.2
