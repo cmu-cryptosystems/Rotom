@@ -591,9 +591,9 @@ class CKKS:
                 print(f"Expected: {a}")
                 print(f"Actual: {b}")
                 print(f"Max absolute difference: {np.max(np.abs(diff))}")
-            assert np.allclose(
-                a, b, rtol=1e-2, atol=1e-2
-            ), f"Values not close enough. Max diff: {np.max(np.abs(diff))}"
+            assert np.allclose(a, b, rtol=1e-2, atol=1e-2), (
+                f"Values not close enough. Max diff: {np.max(np.abs(diff))}"
+            )
         print("pass!")
         print()
 
