@@ -28,27 +28,11 @@ Layout Example:
     >>> d = a.sum(0, layout="[0:1:1]")  # Sum with specific layout
 """
 
-from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Iterable, List, Optional
 
-import numpy as np
-
-from .poly import APPROX_RELU_CHEBYSHEV_COEFFS
+from .tensor_args import Conv2dArgs
 from .tensor_evaluator import TensorEvaluator
-
-
-@dataclass(frozen=True)
-class PolyCallArgs:
-    """Structured view of a PolyCall TensorTerm.
-
-    This avoids sprinkling magic indices (cs[1], cs[2], cs[3]) throughout
-    the codebase and makes the frontend/backends less brittle.
-    """
-
-    name: str
-    lower_bound: float
-    upper_bound: float
 
 
 class TensorOp(Enum):
@@ -185,7 +169,8 @@ class TensorTerm:
                 case TensorOp.INDEX:
                     self._str_cache = f"({self.cs[0]}[{self.cs[1]}])"
                 case TensorOp.CONV2D:
-                    self._str_cache = f"(conv2d {str(self.cs[0])} {str(self.cs[1])})"
+                    args = Conv2dArgs.from_term(self)
+                    self._str_cache = f"(conv2d {str(args.input)} {str(args.filter)})"
                 case _:
                     self._str_cache = f"({self.op} {cs})"
         return self._str_cache

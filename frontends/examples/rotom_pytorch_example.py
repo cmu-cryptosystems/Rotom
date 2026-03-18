@@ -167,7 +167,7 @@ def evaluation_example():
     c = (a + b) * a
     d = torch.sum(c)
 
-    print(f"Computation: sum((a + b) * a)")
+    print("Computation: sum((a + b) * a)")
     print(f"Where a = {a.data}")
     print(f"  and b = {b.data}")
 

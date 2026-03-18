@@ -1,6 +1,7 @@
 import numpy as np
 from tqdm import tqdm
 
+from frontends.tensor_args import TensorPlaceholderArgs
 from ir.kernel import KernelOp
 from util.layout_util import apply_layout
 
@@ -10,8 +11,12 @@ def serialize_mlp_mnist_inputs(kernel):
         _load_mnist_test_set,
     )
 
+    input_layout = None
     for k in kernel.post_order():
-        if k.op == KernelOp.TENSOR and k.layout.term.cs[0] == "input":
+        if (
+            k.op == KernelOp.TENSOR
+            and TensorPlaceholderArgs.from_term(k.layout.term).name == "input"
+        ):
             input_layout = k.layout
             break
 

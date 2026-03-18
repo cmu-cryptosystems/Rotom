@@ -5,7 +5,7 @@ Key functions:
 - gen_constant: Main function for generating plaintext constants
 """
 
-from ir.dim import Dim, DimType
+from ir.dim import Dim
 from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
 

@@ -17,7 +17,6 @@ Key Components:
 from .dim import Dim, DimType
 from .he import HEOp, HETerm
 from .kernel import Kernel, KernelOp
-from .kernel_cost import KernelCost
 from .layout import Layout
 from .roll import Roll
 

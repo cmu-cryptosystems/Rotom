@@ -1,5 +1,5 @@
 from ir.he import HEOp, HETerm
-from util.shape_util import get_term_shape, layout_to_shape_indices
+from util.shape_util import layout_to_shape_indices
 
 
 def lower_punctured_tensor(kernel):

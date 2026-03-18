@@ -212,8 +212,11 @@ class TensorEvaluator:
             case "Transpose":
                 return env[term.cs[0]].T
             case "Conv":
+                from .tensor_args import Conv2dArgs
+
+                args = Conv2dArgs.from_term(term)
                 return self._eval_conv2d(
-                    env[term.cs[0]], env[term.cs[1]], term.cs[2], term.cs[3]
+                    env[args.input], env[args.filter], args.stride, args.padding
                 )
             case "Const":
                 return term.cs[0]
@@ -236,12 +239,15 @@ class TensorEvaluator:
 
                 return env[term.cs[0]][item]
             case "Reshape":
-                tensor = env[term.cs[0]]
+                from .tensor_args import ReshapeArgs
+
+                args = ReshapeArgs.from_term(term)
+                tensor = env[args.input]
                 shape = {}
                 for i, s in enumerate(tensor.shape):
                     shape[i] = s
-                del shape[term.cs[1]]
-                for k, v in term.cs[2].items():
+                del shape[args.dim]
+                for k, v in args.shape.items():
                     shape[k] = self._round_to_ceiling_power_of_2(v)
                 shape_list = [shape[k] for k in sorted(shape.keys())]
                 return tensor.reshape(shape_list)
@@ -251,9 +257,14 @@ class TensorEvaluator:
             case "Rescale":
                 scale_value = 2 ** term.cs[1]
                 return env[term.cs[0]] / scale_value
-            case "Poly" | "PolyCall":
+            case "PolyCall":
                 x = env[term.cs[0]]
-                func = term.cs[1] if len(term.cs) > 1 else "identity"
+                if len(term.cs) >= 4:
+                    from .tensor_args import PolyCallArgs
+
+                    func = PolyCallArgs.from_term(term).name
+                else:
+                    func = term.cs[1] if len(term.cs) > 1 else "identity"
                 return self._eval_poly(x, func, inputs)
             case _:
                 raise NotImplementedError(op_name)

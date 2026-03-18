@@ -29,9 +29,9 @@ def find_test_scripts(scripts_dir: str = "./scripts") -> List[Path]:
 
 def run_script(script_path: Path) -> Tuple[bool, str]:
     """Run a single shell script and return success status and output."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Running: ./{script_path}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     try:
         # Run the script and capture output
@@ -86,9 +86,9 @@ def main():
         print(f"  - {script}")
 
     # Run all tests
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("EXECUTING TESTS")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     successful_tests = 0
     failed_tests = 0
@@ -108,9 +108,9 @@ def main():
     total_time = time.time() - start_time
 
     # Print summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("TEST SUMMARY")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"Total tests run: {len(test_scripts)}")
     print(f"Successful: {successful_tests}")
     print(f"Failed: {failed_tests}")
@@ -123,7 +123,7 @@ def main():
                 print(f"  - {script}")
         sys.exit(1)
     else:
-        print(f"\n🎉 All tests passed successfully!")
+        print("\n🎉 All tests passed successfully!")
         sys.exit(0)
 
 

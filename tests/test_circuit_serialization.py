@@ -152,7 +152,7 @@ class TestCircuitSerialization:
         for idx, (is_secret, op, operands) in loaded_data["instructions"].items():
             op_counts[op] = op_counts.get(op, 0) + 1
 
-        print(f"   Operation counts:")
+        print("   Operation counts:")
         for op, count in sorted(op_counts.items()):
             print(f"     - {op}: {count}")
 
@@ -161,9 +161,7 @@ class TestCircuitSerialization:
         print("=" * 70)
 
         # Use assert instead of return for pytest compliance
-        assert (
-            match
-        ), f"Results do not match. Max difference: {np.max(np.abs(np.array(orig_result) - np.array(reexec_result)))}"
+        assert match, f"Results do not match. Max difference: {np.max(np.abs(np.array(orig_result) - np.array(reexec_result)))}"
 
     def test_multiple_operations(self, backend):
         """Test serialization with multiple tensor operations."""

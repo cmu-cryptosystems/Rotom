@@ -5,8 +5,6 @@ This module tests 2D convolution operations in the Rotom homomorphic encryption 
 including various filter sizes and input dimensions.
 """
 
-import math
-
 import numpy as np
 import pytest
 

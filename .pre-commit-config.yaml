@@ -1,15 +1,15 @@
+# Use local ruff so the hook uses the same ruff as your venv (no version mismatch).
+# pass_filenames: false so ruff only runs on . (Python files); otherwise staged YAML/txt get parsed as Python.
 repos:
-  - repo: https://github.com/psf/black
-    rev: 24.3.0
+  - repo: local
     hooks:
-      - id: black
-
-  - repo: https://github.com/PyCQA/isort
-    rev: 8.0.1
-    hooks:
-      - id: isort
-
-  - repo: https://github.com/PyCQA/flake8
-    rev: 7.1.0
-    hooks:
-      - id: flake8
+      - id: ruff
+        name: ruff
+        entry: ruff check . --fix --exit-non-zero-on-fix
+        language: system
+        pass_filenames: false
+      - id: ruff-format
+        name: ruff-format
+        entry: ruff format .
+        language: system
+        pass_filenames: false

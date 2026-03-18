@@ -1,5 +1,3 @@
-from copy import deepcopy as copy
-
 from ir.dim import DimType
 from ir.he import HEOp, HETerm
 from ir.kernel import Kernel, KernelOp
@@ -8,7 +6,6 @@ from lower.layout_cts import LayoutCiphertexts, create_layout_without_dims
 from lower.lower_util import bsgs, find_sum_dim, rotate_and_sum
 from util.layout_util import (
     convert_layout_to_mask,
-    get_ct_idxs_by_dim,
     get_cts_by_dim,
     get_dim_indices,
     get_segment,

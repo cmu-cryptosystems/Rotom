@@ -84,7 +84,7 @@ def bsgs(ct, pts, dim_size, stride, left):  # 3. find bsgs interval
                 ],
                 ct_baby_steps[bs + baby_step * gs].secret
                 or pt_giant_steps[bs + baby_step * gs].secret,
-                f"bsgs mul",
+                "bsgs mul",
             )
 
     # 4.4 summation
@@ -96,7 +96,7 @@ def bsgs(ct, pts, dim_size, stride, left):  # 3. find bsgs interval
                 HEOp.ADD,
                 [sum_terms[gs], mul_terms[bs + baby_step * gs]],
                 sum_terms[gs].secret or mul_terms[bs + baby_step * gs].secret,
-                f"bsgs sum",
+                "bsgs sum",
             )
 
     # 4.5 apply giant steps
@@ -117,7 +117,7 @@ def bsgs(ct, pts, dim_size, stride, left):  # 3. find bsgs interval
             HEOp.ADD,
             [base_term, giant_cts[gs]],
             base_term.secret or giant_cts[gs].secret,
-            f"sum giant steps",
+            "sum giant steps",
         )
     return base_term
 

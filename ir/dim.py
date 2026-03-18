@@ -11,7 +11,6 @@ Key Concepts:
 - Dimension type: Whether a dimension is filled with data or empty (zeroed)
 """
 
-import math
 from enum import Enum
 
 from frontends.tensor import *
