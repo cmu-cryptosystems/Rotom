@@ -1,5 +1,15 @@
 """
-Lowering should account for layout and dimensions at each step
+Lowering from layout-assigned kernels to HE circuit terms.
+
+Conventions:
+- Most lower functions have the signature ``lower_foo(env, kernel)`` where
+  ``env`` is a mapping from input kernels to their lowered ``LayoutCiphertexts``.
+- A few leaf lowers that do not depend on prior env entries take just
+  ``(kernel)`` (e.g. ``lower_tensor``, ``lower_const``, ``lower_cs_pack``,
+  ``lower_punctured_tensor``).
+
+The ``Lower`` class is the single entrypoint used by tests and backends; any
+new kernel op should be wired in here with a corresponding ``lower_*`` helper.
 """
 
 from ir.kernel import KernelOp
