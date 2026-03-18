@@ -59,5 +59,5 @@ def test_resnet20_silu_plaintext_checkpoint_accuracy_smoke():
     acc = accuracy_top1(model, loader, device=device)
 
     assert 0.0 <= acc <= 1.0
-    # Very lenient lower bound to catch obvious checkpoint/model mismatches.
-    assert acc >= 0.70
+    min_acc = float(os.environ.get("ROTOM_RESNET_MIN_ACC", "0.70"))
+    assert acc >= min_acc
