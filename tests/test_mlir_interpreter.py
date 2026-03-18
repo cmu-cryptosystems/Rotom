@@ -213,7 +213,7 @@ class TestMLIRInterpreter:
 """
         mlir_file = self._write_mlir_file(mlir_content)
 
-        result = run_mlir_interpreter(mlir_file, self.inputs_dir)
+        result = run_mlir_interpreter(mlir_file, n=4, inputs_dir=self.inputs_dir)
 
         assert isinstance(result, list)
         assert len(result) == 1
@@ -224,7 +224,7 @@ class TestMLIRInterpreter:
     def test_run_mlir_interpreter_file_not_found(self):
         """Test run_mlir_interpreter with non-existent file."""
         with pytest.raises(RuntimeError, match="MLIR interpretation failed"):
-            run_mlir_interpreter("nonexistent.mlir")
+            run_mlir_interpreter("nonexistent.mlir", n=4)
 
     def test_interpret_mlir_file_not_found(self):
         """Test interpret_mlir with non-existent file."""
@@ -301,4 +301,4 @@ class TestMLIRInterpreter:
             RuntimeError,
             match="MLIR interpretation failed.*MLIR interpretation returned None",
         ):
-            run_mlir_interpreter(mlir_file, inputs_dir=self.inputs_dir)
+            run_mlir_interpreter(mlir_file, n=4, inputs_dir=self.inputs_dir)

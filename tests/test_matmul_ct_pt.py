@@ -9,13 +9,10 @@ import random
 
 import numpy as np
 
-from assignment.assignment import LayoutAssignment
 from frontends.tensor import TensorTerm
 from ir.dim import *
-from lower.lower import Lower
-from tests.conftest import assert_results_equal, run_backend
+from tests.conftest import assert_results_equal, run_compiler_and_backend
 from tests.test_util import get_default_args
-from util.layout_util import apply_layout
 
 
 class TestMatrixMultiplicationCiphertextPlaintext:
@@ -30,15 +27,10 @@ class TestMatrixMultiplicationCiphertextPlaintext:
     def _run_test_case(self, inputs, args, backend):
         """Helper method to run a test case."""
         # Generate test case
-        tensor_ir, expected = self._create_matmul_ct_pt_computation(inputs)
-
-        # Run compiler
-        kernel = LayoutAssignment(tensor_ir, args).run()
-        circuit_ir = Lower(kernel).run()
-        results = run_backend(backend, circuit_ir, inputs, args)
-
-        # Check result
-        expected_cts = apply_layout(expected, kernel.layout)
+        tensor_ir, _ = self._create_matmul_ct_pt_computation(inputs)
+        expected_cts, results, _, _ = run_compiler_and_backend(
+            backend, tensor_ir, inputs, args
+        )
         assert_results_equal(expected_cts, results, backend)
 
     def test_matmul_ct_pt_4x4_binary_random(self, backend):

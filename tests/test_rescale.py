@@ -7,13 +7,10 @@ This module tests the exposed rescale operation which divides tensors by powers 
 import numpy as np
 import pytest
 
-from assignment.assignment import LayoutAssignment
 from frontends.tensor import TensorTerm
 from ir.dim import *
-from lower.lower import Lower
-from tests.conftest import run_backend
+from tests.conftest import run_compiler_and_backend
 from tests.test_util import get_default_args
-from util.layout_util import apply_layout
 
 
 class TestRescale:
@@ -26,16 +23,10 @@ class TestRescale:
 
     def _run_test_case(self, inputs, scale_exp, args, backend):
         """Helper method to run a test case."""
-        # Generate test case
         tensor_ir, expected = self._create_rescale_computation(inputs, scale_exp)
-
-        # Run compiler
-        kernel = LayoutAssignment(tensor_ir, args).run()
-        circuit_ir = Lower(kernel).run()
-        results = run_backend(backend, circuit_ir, inputs, args)
-
-        # Check result - using allclose to handle float/int type differences
-        expected_cts = apply_layout(expected, kernel.layout)
+        expected_cts, results, _, _ = run_compiler_and_backend(
+            backend, tensor_ir, inputs, args
+        )
         # Rescale always uses allclose due to float/int differences
         for expected_vec, result_vec in zip(expected_cts, results):
             assert np.allclose(expected_vec, result_vec, rtol=1e-5, atol=1e-5)

@@ -82,6 +82,10 @@ class KernelCost:
             case _:
                 raise NotImplementedError(f"network: {self.network}")
 
+    # -------------------------------------------------------------------------
+    # Layout and tensor transformation costs (no-op or layout-only families)
+    # -------------------------------------------------------------------------
+
     def nops(self, ops):
         """No cost operations (layout transformations).
 
@@ -103,6 +107,10 @@ class KernelCost:
             dict: Unchanged operation counts (no cost for tensor ops)
         """
         return ops
+
+    # -------------------------------------------------------------------------
+    # Replication and broadcasting family
+    # -------------------------------------------------------------------------
 
     def replicate_ops(self, ops):
         """Calculate the operations to replicate and fill a tensor.
@@ -179,6 +187,10 @@ class KernelCost:
         )
         return ops
 
+    # -------------------------------------------------------------------------
+    # Elementwise arithmetic family
+    # -------------------------------------------------------------------------
+
     def basic_arith_ops(self, ops):
         """Calculate basic arithmetic operations based on number of ciphertexts.
 
@@ -202,6 +214,10 @@ class KernelCost:
         """
         ops["mul"] += self.kernel.layout.num_ct()
         return ops
+
+    # -------------------------------------------------------------------------
+    # Reductions (sum / product) family
+    # -------------------------------------------------------------------------
 
     def sum_ops(self, ops):
         """Calculate sum operations along a dimension.
@@ -241,6 +257,10 @@ class KernelCost:
                 ops["mul"] += math.ceil(math.log2(slot_dim.extent)) * num_ct_reals
                 ops["rot"] += math.ceil(math.log2(slot_dim.extent)) * num_ct_reals
         return ops
+
+    # -------------------------------------------------------------------------
+    # Matrix multiplication families (plain, BSGS, Strassen)
+    # -------------------------------------------------------------------------
 
     def matmul_ops(self, ops, layout, sum_dim):
         """Calculate the operations to perform a matrix operation.
@@ -354,6 +374,10 @@ class KernelCost:
         ops["rot"] = -100000
         return ops
 
+    # -------------------------------------------------------------------------
+    # Convolution families
+    # -------------------------------------------------------------------------
+
     def conv2d_roll_ops(self, ops):
         """Calculate 2D convolution operations.
 
@@ -391,6 +415,10 @@ class KernelCost:
         ops["rot"] += num_rots
         ops["mul"] += num_muls
         return ops
+
+    # -------------------------------------------------------------------------
+    # Rolling / shifting families
+    # -------------------------------------------------------------------------
 
     def roll_ops(self, ops):
         """Calculate the ops to perform a roll operation
@@ -515,6 +543,10 @@ class KernelCost:
         ops["rot"] += int(num_ct_real_reduced)
         return ops
 
+    # -------------------------------------------------------------------------
+    # Polynomial evaluation families
+    # -------------------------------------------------------------------------
+
     def poly_ops(self, ops):
         """Calculate polynomial evaluation operations.
 
@@ -544,6 +576,10 @@ class KernelCost:
         ops["rot"] += cts
         ops["mul"] += cts
         return ops
+
+    # -------------------------------------------------------------------------
+    # Layout / scheme conversion family
+    # -------------------------------------------------------------------------
 
     def conversion_ops(self, ops):
         """Calculate conversion operations (assume conversions are very expensive).
@@ -599,6 +635,10 @@ class KernelCost:
         ops["add"] += output_dim_len * int(math.log2(input_dim_len))
         ops["rot"] += int(math.sqrt(output_dim_len * int(math.log2(input_dim_len))))
         return ops
+
+    # -------------------------------------------------------------------------
+    # Aggregated operation counting across families
+    # -------------------------------------------------------------------------
 
     def ops(self):
         """Calculate the number of operations required for a given layout operation.
@@ -678,6 +718,10 @@ class KernelCost:
             case _:
                 raise NotImplementedError(self.kernel.op)
         return ops
+
+    # -------------------------------------------------------------------------
+    # Aggregate cost metrics (communication, op cost, total, depth)
+    # -------------------------------------------------------------------------
 
     def comm_cost(self):
         """Calculate communication cost for the kernel.
