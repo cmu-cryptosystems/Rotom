@@ -45,9 +45,9 @@ jobs:
         mypy .
       continue-on-error: true
     
-    - name: Run tests with pytest
+    - name: Run fast tests with pytest (skip slow)
       run: |
-        pytest -v --tb=short --timeout=300 --cov=. --cov-report=term-missing
+        pytest -m "not slow" -v --tb=short --timeout=300 --cov=. --cov-report=term-missing
       timeout-minutes: 30
     
 

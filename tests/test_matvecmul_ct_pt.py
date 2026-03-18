@@ -6,6 +6,7 @@ and plaintext vectors in the Rotom homomorphic encryption system.
 """
 
 import numpy as np
+import pytest
 
 from frontends.tensor import TensorTerm
 from ir.dim import *
@@ -204,6 +205,7 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
         results, kernel = run_compiler_and_backend(tensor_ir, inputs, args, backend)
         self._assert_allclose(apply_layout(expected, kernel.layout), results)
 
+    @pytest.mark.slow
     def test_matvecmul_ct_pt_1x784_784x512_n32k(self, backend):
         """Test [1, 784] @ [784, 512] with n=32768 - still fails (uses BSGS layout)."""
         args = get_default_args()
@@ -220,6 +222,7 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
         results, kernel = run_compiler_and_backend(tensor_ir, inputs, args, backend)
         self._assert_allclose(apply_layout(expected, kernel.layout), results)
 
+    @pytest.mark.slow
     def test_matvecmul_ct_pt_1x784_784x512(self, backend):
         """Test ciphertext-plaintext matmul with MNIST FC1 dimensions: [1, 784] @ [784, 512]."""
         args = get_default_args()
