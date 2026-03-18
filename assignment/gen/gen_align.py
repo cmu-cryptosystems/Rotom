@@ -1,9 +1,6 @@
 """
 Helpers for binary-op layout alignment, roll-based alignment, and output layout
 construction.
-
-These functions were originally defined in `gen_binop.py` and are factored out
-to keep `gen_binop` focused on orchestration.
 """
 
 from copy import deepcopy as copy
