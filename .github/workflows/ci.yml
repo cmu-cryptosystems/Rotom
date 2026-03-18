@@ -47,7 +47,7 @@ jobs:
     
     - name: Run tests with pytest
       run: |
-        pytest -v --tb=short --timeout=300
+        pytest -v --tb=short --timeout=300 --cov=. --cov-report=term-missing
       timeout-minutes: 30
     
 

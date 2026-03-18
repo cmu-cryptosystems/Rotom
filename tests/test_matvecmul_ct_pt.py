@@ -7,11 +7,9 @@ and plaintext vectors in the Rotom homomorphic encryption system.
 
 import numpy as np
 
-from assignment.assignment import LayoutAssignment
 from frontends.tensor import TensorTerm
 from ir.dim import *
-from lower.lower import Lower
-from tests.conftest import assert_results_equal, run_backend
+from tests.conftest import assert_results_equal, run_compiler_and_backend
 from tests.test_util import get_default_args
 from util.layout_util import apply_layout
 
@@ -30,10 +28,8 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
         # Generate test case
         tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
 
-        # Run compiler
-        kernel = LayoutAssignment(tensor_ir, args).run()
-        circuit_ir = Lower(kernel).run()
-        results = run_backend(backend, circuit_ir, inputs, args)
+        # Run compiler + backend
+        results, kernel = run_compiler_and_backend(tensor_ir, inputs, args, backend)
 
         # Check result
         expected_cts = apply_layout(expected, kernel.layout)
@@ -93,9 +89,7 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
             "b": np.random.randn(64, 32).astype(np.float64) * 0.1,
         }
         tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
-        kernel = LayoutAssignment(tensor_ir, args).run()
-        circuit_ir = Lower(kernel).run()
-        results = run_backend(backend, circuit_ir, inputs, args)
+        results, kernel = run_compiler_and_backend(tensor_ir, inputs, args, backend)
         self._assert_allclose(apply_layout(expected, kernel.layout), results)
 
     def test_matvecmul_ct_pt_1x100_100x50(self, backend):
@@ -111,9 +105,7 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
             "b": np.random.randn(100, 50).astype(np.float64) * 0.1,
         }
         tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
-        kernel = LayoutAssignment(tensor_ir, args).run()
-        circuit_ir = Lower(kernel).run()
-        results = run_backend(backend, circuit_ir, inputs, args)
+        results, kernel = run_compiler_and_backend(tensor_ir, inputs, args, backend)
         self._assert_allclose(apply_layout(expected, kernel.layout), results)
 
     def test_matvecmul_ct_pt_1x80_80x48(self, backend):
@@ -129,9 +121,7 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
             "b": np.random.randn(80, 48).astype(np.float64) * 0.1,
         }
         tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
-        kernel = LayoutAssignment(tensor_ir, args).run()
-        circuit_ir = Lower(kernel).run()
-        results = run_backend(backend, circuit_ir, inputs, args)
+        results, kernel = run_compiler_and_backend(tensor_ir, inputs, args, backend)
         self._assert_allclose(apply_layout(expected, kernel.layout), results)
 
     def test_matvecmul_ct_pt_1x130_130x66(self, backend):
@@ -147,9 +137,7 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
             "b": np.random.randn(130, 66).astype(np.float64) * 0.1,
         }
         tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
-        kernel = LayoutAssignment(tensor_ir, args).run()
-        circuit_ir = Lower(kernel).run()
-        results = run_backend(backend, circuit_ir, inputs, args)
+        results, kernel = run_compiler_and_backend(tensor_ir, inputs, args, backend)
         self._assert_allclose(apply_layout(expected, kernel.layout), results)
 
     def test_matvecmul_ct_pt_1x200_200x100(self, backend):
@@ -165,9 +153,7 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
             "b": np.random.randn(200, 100).astype(np.float64) * 0.1,
         }
         tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
-        kernel = LayoutAssignment(tensor_ir, args).run()
-        circuit_ir = Lower(kernel).run()
-        results = run_backend(backend, circuit_ir, inputs, args)
+        results, kernel = run_compiler_and_backend(tensor_ir, inputs, args, backend)
         self._assert_allclose(apply_layout(expected, kernel.layout), results)
 
     def test_matvecmul_ct_pt_1x8_8x4_n16(self, backend):
@@ -183,9 +169,7 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
             "b": np.random.randn(8, 4).astype(np.float64) * 0.1,
         }
         tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
-        kernel = LayoutAssignment(tensor_ir, args).run()
-        circuit_ir = Lower(kernel).run()
-        results = run_backend(backend, circuit_ir, inputs, args)
+        results, kernel = run_compiler_and_backend(tensor_ir, inputs, args, backend)
         self._assert_allclose(apply_layout(expected, kernel.layout), results)
 
     def test_matvecmul_ct_pt_1x9_9x4_n16(self, backend):
@@ -201,9 +185,7 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
             "b": np.random.randn(9, 4).astype(np.float64) * 0.1,
         }
         tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
-        kernel = LayoutAssignment(tensor_ir, args).run()
-        circuit_ir = Lower(kernel).run()
-        results = run_backend(backend, circuit_ir, inputs, args)
+        results, kernel = run_compiler_and_backend(tensor_ir, inputs, args, backend)
         self._assert_allclose(apply_layout(expected, kernel.layout), results)
 
     def test_matvecmul_ct_pt_1x49_49x16_n2k(self, backend):
@@ -219,9 +201,7 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
             "b": np.random.randn(49, 16).astype(np.float64) * 0.1,
         }
         tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
-        kernel = LayoutAssignment(tensor_ir, args).run()
-        circuit_ir = Lower(kernel).run()
-        results = run_backend(backend, circuit_ir, inputs, args)
+        results, kernel = run_compiler_and_backend(tensor_ir, inputs, args, backend)
         self._assert_allclose(apply_layout(expected, kernel.layout), results)
 
     def test_matvecmul_ct_pt_1x784_784x512_n32k(self, backend):
@@ -237,9 +217,7 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
             "b": np.random.randn(784, 512).astype(np.float64) * 0.1,
         }
         tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
-        kernel = LayoutAssignment(tensor_ir, args).run()
-        circuit_ir = Lower(kernel).run()
-        results = run_backend(backend, circuit_ir, inputs, args)
+        results, kernel = run_compiler_and_backend(expected, inputs, args, backend)
         self._assert_allclose(apply_layout(expected, kernel.layout), results)
 
     def test_matvecmul_ct_pt_1x784_784x512(self, backend):
@@ -255,9 +233,7 @@ class TestMatrixVectorMultiplicationCiphertextPlaintext:
         inputs["b"] = np.random.randn(784, 512).astype(np.float64) * 0.1
 
         tensor_ir, expected = self._create_matvecmul_ct_pt_computation(inputs)
-        kernel = LayoutAssignment(tensor_ir, args).run()
-        circuit_ir = Lower(kernel).run()
-        results = run_backend(backend, circuit_ir, inputs, args)
+        results, kernel = run_compiler_and_backend(tensor_ir, inputs, args, backend)
         expected_cts = apply_layout(expected, kernel.layout)
 
         for exp, res in zip(expected_cts, results):

@@ -9,8 +9,10 @@ import os
 
 import pytest
 
+from assignment.assignment import LayoutAssignment
 from backends.openfhe_backend import CKKS
 from backends.toy import Toy
+from lower.lower import Lower
 
 
 @pytest.fixture(autouse=True)
@@ -93,9 +95,25 @@ def assert_results_equal(expected_cts, results, backend_name):
     if backend_name == "ckks":
         # CKKS uses floating point, so use np.allclose
         for expected_vec, result_vec in zip(expected_cts, results):
-            assert np.allclose(
-                expected_vec, result_vec, rtol=1e-2, atol=1e-2
-            ), f"Results not close enough. Expected: {expected_vec}, Got: {result_vec}"
+            assert np.allclose(expected_vec, result_vec, rtol=1e-2, atol=1e-2), (
+                f"Results not close enough. Expected: {expected_vec}, Got: {result_vec}"
+            )
     else:
         # Toy backend should have exact equality
         assert expected_cts == results
+
+
+def run_compiler_and_backend(tensor_ir, inputs, args, backend_name):
+    """
+    Compile a TensorTerm computation and run it on the selected backend.
+
+    This helper encapsulates the common pipeline:
+    TensorTerm -> LayoutAssignment -> Lower -> backend.
+
+    Returns:
+        (results, kernel): backend outputs and the compiled kernel (for layout).
+    """
+    kernel = LayoutAssignment(tensor_ir, args).run()
+    circuit_ir = Lower(kernel).run()
+    results = run_backend(backend_name, circuit_ir, inputs, args)
+    return results, kernel
