@@ -8,6 +8,8 @@ This is intentionally minimal:
 import os
 import pickle
 import tarfile
+import hashlib
+import urllib.request
 from typing import List, Tuple
 
 import numpy as np
@@ -24,6 +26,14 @@ _CIFAR10_URL = "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"
 _CIFAR10_MD5 = "c58f30108f718f92721af3b95e74349a"
 
 
+def _md5_file(path: str) -> str:
+    h = hashlib.md5()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def ensure_cifar10_extracted() -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
     if os.path.isdir(_EXTRACTED_DIR):
@@ -38,21 +48,13 @@ def ensure_cifar10_extracted() -> None:
                 "Set ROTOM_OFFLINE=0 to allow auto-download, or copy it from "
                 "DaCapo: dacapo/examples/data/CIFAR10/cifar-10-python.tar.gz"
             )
-        try:
-            from torchvision.datasets.utils import download_url
-        except Exception as e:  # pragma: no cover
-            raise FileNotFoundError(
-                f"Missing CIFAR-10 archive at {_ARCHIVE_PATH}. "
-                "Install torchvision to enable auto-download, or copy it from "
-                "DaCapo: dacapo/examples/data/CIFAR10/cifar-10-python.tar.gz"
-            ) from e
-
-        download_url(
-            _CIFAR10_URL,
-            root=DATA_DIR,
-            filename=os.path.basename(_ARCHIVE_PATH),
-            md5=_CIFAR10_MD5,
-        )
+        urllib.request.urlretrieve(_CIFAR10_URL, _ARCHIVE_PATH)  # nosec B310
+        got = _md5_file(_ARCHIVE_PATH)
+        if got != _CIFAR10_MD5:
+            raise ValueError(
+                f"CIFAR-10 archive MD5 mismatch at {_ARCHIVE_PATH}: expected "
+                f"{_CIFAR10_MD5}, got {got}"
+            )
     with tarfile.open(_ARCHIVE_PATH, "r:gz") as tf:
         tf.extractall(path=DATA_DIR)
 
