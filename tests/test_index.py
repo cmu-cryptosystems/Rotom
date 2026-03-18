@@ -11,6 +11,7 @@ from frontends.tensor import TensorTerm
 from ir.dim import *
 from tests.conftest import assert_results_equal, run_compiler_and_backend
 from tests.test_util import get_default_args
+from util.layout_util import apply_layout
 
 
 class TestTensorIndexing:
@@ -23,9 +24,14 @@ class TestTensorIndexing:
 
     def _run_test_case(self, tensor_ir, inputs, args, backend):
         """Helper method to run a test case."""
-        expected_cts, results, _, _ = run_compiler_and_backend(
-            backend, tensor_ir, inputs, args
-        )
+        # Generate expected result
+        expected = tensor_ir.eval(inputs)
+
+        # Run compiler + backend
+        results, kernel = run_compiler_and_backend(tensor_ir, inputs, args, backend)
+
+        # Check result
+        expected_cts = apply_layout(expected, kernel.layout)
         assert_results_equal(expected_cts, results, backend)
 
     def test_index_4x4_matrix_row_0(self, backend):

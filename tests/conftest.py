@@ -13,7 +13,6 @@ from assignment.assignment import LayoutAssignment
 from backends.openfhe_backend import CKKS
 from backends.toy import Toy
 from lower.lower import Lower
-from util.layout_util import apply_layout
 
 
 @pytest.fixture(autouse=True)
@@ -82,35 +81,6 @@ def run_backend(backend_name, circuit_ir, inputs, args):
         raise ValueError(f"Unknown backend: {backend_name}")
 
 
-def run_compiler_and_backend(backend_name, tensor_ir, inputs, args):
-    """
-    Run the full compiler + backend pipeline for a tensor-level computation.
-
-    This helper performs layout assignment, lowering, backend execution,
-    and computes the expected plaintext result with layout applied.
-
-    Returns:
-        expected_cts: Expected ciphertext layout of the result.
-        results: Backend execution results.
-        kernel: Kernel IR after layout assignment.
-        circuit_ir: Lowered circuit IR.
-    """
-    # Compute plaintext baseline
-    expected = tensor_ir.eval(inputs)
-
-    # Compile tensor IR to circuit IR
-    kernel = LayoutAssignment(tensor_ir, args).run()
-    circuit_ir = Lower(kernel).run()
-
-    # Execute backend
-    results = run_backend(backend_name, circuit_ir, inputs, args)
-
-    # Apply layout to expected result for comparison
-    expected_cts = apply_layout(expected, kernel.layout)
-
-    return expected_cts, results, kernel, circuit_ir
-
-
 def assert_results_equal(expected_cts, results, backend_name):
     """
     Assert that expected and actual results are equal, using appropriate comparison.
@@ -131,3 +101,19 @@ def assert_results_equal(expected_cts, results, backend_name):
     else:
         # Toy backend should have exact equality
         assert expected_cts == results
+
+
+def run_compiler_and_backend(tensor_ir, inputs, args, backend_name):
+    """
+    Compile a TensorTerm computation and run it on the selected backend.
+
+    This helper encapsulates the common pipeline:
+    TensorTerm -> LayoutAssignment -> Lower -> backend.
+
+    Returns:
+        (results, kernel): backend outputs and the compiled kernel (for layout).
+    """
+    kernel = LayoutAssignment(tensor_ir, args).run()
+    circuit_ir = Lower(kernel).run()
+    results = run_backend(backend_name, circuit_ir, inputs, args)
+    return results, kernel

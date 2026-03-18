@@ -11,6 +11,7 @@ from frontends.tensor import TensorTerm
 from ir.dim import *
 from tests.conftest import assert_results_equal, run_compiler_and_backend
 from tests.test_util import get_default_args
+from util.layout_util import apply_layout
 
 
 class TestStrassensMatmul:
@@ -28,10 +29,13 @@ class TestStrassensMatmul:
         args.strassens = True
         args.rolls = True
 
-        tensor_ir, _ = self._create_strassens_matmul_computation(inputs)
-        expected_cts, results, _, _ = run_compiler_and_backend(
-            backend, tensor_ir, inputs, args
-        )
+        # Generate test case
+        tensor_ir, expected = self._create_strassens_matmul_computation(inputs)
+        # Run compiler + backend
+        results, kernel = run_compiler_and_backend(tensor_ir, inputs, args, backend)
+
+        # Check result
+        expected_cts = apply_layout(expected, kernel.layout)
         assert_results_equal(expected_cts, results, backend)
 
     def test_strassens_matmul_8x8(self, backend):

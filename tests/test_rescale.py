@@ -11,6 +11,7 @@ from frontends.tensor import TensorTerm
 from ir.dim import *
 from tests.conftest import run_compiler_and_backend
 from tests.test_util import get_default_args
+from util.layout_util import apply_layout
 
 
 class TestRescale:
@@ -24,9 +25,12 @@ class TestRescale:
     def _run_test_case(self, inputs, scale_exp, args, backend):
         """Helper method to run a test case."""
         tensor_ir, expected = self._create_rescale_computation(inputs, scale_exp)
-        expected_cts, results, _, _ = run_compiler_and_backend(
-            backend, tensor_ir, inputs, args
-        )
+
+        # Run compiler + backend
+        results, kernel = run_compiler_and_backend(tensor_ir, inputs, args, backend)
+
+        # Check result - using allclose to handle float/int type differences
+        expected_cts = apply_layout(expected, kernel.layout)
         # Rescale always uses allclose due to float/int differences
         for expected_vec, result_vec in zip(expected_cts, results):
             assert np.allclose(expected_vec, result_vec, rtol=1e-5, atol=1e-5)
