@@ -24,3 +24,6 @@ docs/_build/
 docs/.doctrees/
 docs/*.doctrees
 docs/source/api_reference/*.rst
+
+# Large datasets (keep out of Git history)
+benchmarks/e2e/resnet/data/cifar-10-batches-py/
