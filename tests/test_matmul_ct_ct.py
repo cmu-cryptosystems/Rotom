@@ -8,6 +8,7 @@ in the Rotom homomorphic encryption system.
 import random
 
 import numpy as np
+import pytest
 
 from frontends.tensor import TensorTerm
 from ir.dim import *
@@ -73,6 +74,7 @@ class TestMatrixMultiplicationCiphertextCiphertext:
 
         self._run_test_case(inputs, args, backend)
 
+    @pytest.mark.slow
     def test_matmul_ct_ct_64x64(self, backend):
         """Test ciphertext-ciphertext matrix multiplication with 64x64 binary random matrices."""
         # Create args
@@ -150,6 +152,7 @@ class TestMatrixMultiplicationCiphertextCiphertext:
 
         self._run_test_case(inputs, args, backend)
 
+    @pytest.mark.slow
     def test_matmul_ct_ct_64x64_rolls(self, backend):
         """Test ciphertext-ciphertext matrix multiplication with 64x64 binary random matrices with rolls."""
         # Create args
