@@ -774,10 +774,16 @@ def apply_sum_roll(term, kernel):
             new_ct_dims[empty_ct_dim_index],
         )
 
-        new_roll = Roll(
-            new_dims[empty_ct_dim_index],
-            new_dims[len(new_ct_dims) + slot_dim_index],
-        )
+        dim_to_roll = new_dims[empty_ct_dim_index]
+        dim_to_roll_by = new_dims[len(new_ct_dims) + slot_dim_index]
+
+        # Guard against constructing invalid rolls; if extents don't match,
+        # this layout candidate is not roll-alignable under the original
+        # semantics, so we skip applying a sum roll.
+        if dim_to_roll.extent != dim_to_roll_by.extent:
+            return None
+
+        new_roll = Roll(dim_to_roll, dim_to_roll_by)
 
         roll_indices = [roll.roll_index(layout.get_dims()) for roll in layout.rolls]
         updated_rolls = []

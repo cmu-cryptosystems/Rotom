@@ -10,8 +10,10 @@ import numpy as np
 from frontends.tensor import TensorTerm
 from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
-from tests.conftest import assert_results_equal, run_compiler_and_backend
+from lower.lower import Lower
+from tests.conftest import assert_results_equal, run_backend
 from tests.test_util import get_default_args
+from util.layout_util import apply_layout
 
 
 class TestCompaction:
@@ -19,10 +21,10 @@ class TestCompaction:
 
     def _run_test_case(self, kernel, inputs, args, backend):
         """Helper method to run a test case."""
-        tensor_term = kernel.cs[0].layout.term
-        expected_cts, results, _, _ = run_compiler_and_backend(
-            backend, tensor_term, inputs, args
-        )
+        # Lower the manually constructed compact kernel directly.
+        circuit_ir = Lower(kernel).run()
+        results = run_backend(backend, circuit_ir, inputs, args)
+        expected_cts = apply_layout(inputs["a"], kernel.layout)
         assert_results_equal(expected_cts, results, backend)
 
     def test_compact(self, backend):
