@@ -187,21 +187,21 @@ class FhelipeWrapper:
                 op = line.split()[3]
                 match op:
                     case "InputC":
-                        self.parse_input_c(line)
+                        _term = self.parse_input_c(line)
                     case "ZeroC":
-                        self.parse_zero_c(line)
+                        _term = self.parse_zero_c(line)
                     case "RotateC":
-                        self.parse_rotate_c(line)
+                        _term = self.parse_rotate_c(line)
                     case "AddCC":
-                        self.parse_add_cc(line)
+                        _term = self.parse_add_cc(line)
                     case "MulCC":
-                        self.parse_mul_cc(line)
+                        _term = self.parse_mul_cc(line)
                     case "AddCP":
-                        self.parse_add_cp(line)
+                        _term = self.parse_add_cp(line)
                     case "MulCP":
-                        self.parse_mul_cp(line)
+                        _term = self.parse_mul_cp(line)
                     case "RescaleC":
-                        self.parse_rescale_c(line)
+                        _term = self.parse_rescale_c(line)
                     case "OutputC":
                         output.append(self.parse_output(line))
                     case _:
@@ -240,7 +240,7 @@ def main():
 
     w = FhelipeWrapper(args)
     comp = w.create_comp()
-    w.run(comp, {}, args.path)
+    _results = w.run(comp, {}, args.path)
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ def retrieval():
     inputs["query"] = np.array([random.choice(range(2)) for _ in range(10)])
 
     keys = TensorTerm.Tensor("point", [1024, 10], True)
-    TensorTerm.Tensor("tests", [1024], True)
+    _values = TensorTerm.Tensor("tests", [1024], True)
     query = TensorTerm.Tensor("tests", [10], True)
 
     diff = TensorTerm.const(1) - ((keys - query) * (keys - query))

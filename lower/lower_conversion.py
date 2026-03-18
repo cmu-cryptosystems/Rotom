@@ -70,10 +70,10 @@ def lower_conversion(env, kernel):
     slot_segments = get_segments(split_slot_dims)
 
     relevant_slot_dims = []
-    stride = 1
+    acc = 1
     for dim in kernel.cs[0][::-1]:
-        if stride < kernel.layout.n:
-            stride *= dim.extent
+        if acc < kernel.layout.n:
+            acc *= dim.extent
             relevant_slot_dims.insert(0, copy(dim))
         else:
             break

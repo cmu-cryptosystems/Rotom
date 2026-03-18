@@ -31,23 +31,8 @@ Layout Example:
 from enum import Enum
 from typing import Any, Dict, Iterable, List, Optional
 
-from .tensor_args import (
-    Conv2dArgs,
-    PolyCallArgs,
-    ReshapeArgs,
-    TensorPlaceholderArgs,
-)
+from .tensor_args import Conv2dArgs
 from .tensor_evaluator import TensorEvaluator
-
-# Re-export args so "from frontends.tensor import Conv2dArgs" still works.
-__all__ = [
-    "Conv2dArgs",
-    "PolyCallArgs",
-    "ReshapeArgs",
-    "TensorPlaceholderArgs",
-    "TensorOp",
-    "TensorTerm",
-]
 
 
 class TensorOp(Enum):

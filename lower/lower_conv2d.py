@@ -1,4 +1,3 @@
-from frontends.tensor_args import Conv2dArgs
 from ir.analysis.shape import Shape
 from ir.dim import DimType
 from ir.he import HEOp, HETerm
@@ -32,20 +31,14 @@ def lower_conv2d(env, kernel):
     b_cs = [HETerm(HEOp.CS, [ct], ct.secret) for ct in b_cts.values()]
 
     # rotate a based a_shape
-    get_term_shape(kernel.cs[0].layout.term)
+    _a_shape = get_term_shape(kernel.cs[0].layout.term)
     b_shape = get_term_shape(kernel.cs[1].layout.term)
 
-    Conv2dArgs.from_term(kernel.layout.term)
-    computed = Conv2dArgs.get_computed_padding(kernel.layout.term)
-    assert (
-        computed is not None
-    ), "CONV2D term should have computed padding from assignment"
-    pad_top, _pad_bottom, pad_left, _pad_right = (
-        computed[0],
-        computed[1],
-        computed[2],
-        computed[3],
-    )
+    pad_top = kernel.layout.term.cs[4][0]
+    _pad_bottom = kernel.layout.term.cs[4][1]
+    pad_left = kernel.layout.term.cs[4][2]
+    _pad_right = kernel.layout.term.cs[4][3]
+    _stride = kernel.layout.term.cs[2]
 
     # calculate rotation amounts for input ciphertexts
     # assumes dim 1 and 2 are continuous and in the slot dimensions
@@ -91,8 +84,9 @@ def lower_conv2d(env, kernel):
     num_filter_positions = b_shape[2] * b_shape[3]
     b_num_cts = kernel.cs[1].layout.num_ct()
     b_ct_dims = kernel.cs[1].layout.ct_dims
+    _inner_stride = 1
     if b_ct_dims and b_ct_dims[-1].dim is None:
-        b_ct_dims[-1].extent
+        _inner_stride = b_ct_dims[-1].extent
     dim_indices_masks = get_dim_indices(b_ct_dims)
     dim_map_masks = get_dim_map(b_ct_dims)
     dim_to_pos_masks = {
@@ -137,8 +131,9 @@ def lower_conv2d(env, kernel):
     c_in_count = b_shape[1]
     b_ct_dims = kernel.cs[1].layout.ct_dims
     # Stride to skip within a filter position (e.g. R dim extent)
+    _inner_stride = 1
     if b_ct_dims and b_ct_dims[-1].dim is None:
-        b_ct_dims[-1].extent
+        _inner_stride = b_ct_dims[-1].extent
 
     a_rot_cs = []
     if original_input_layout is not None:
@@ -175,7 +170,7 @@ def lower_conv2d(env, kernel):
     dim_map = get_dim_map(b_ct_dims)
     # Tensor dims: 0=c_out, 1=c_in, 2=f_h, 3=f_w. Find which ct_dim has each.
     dim_to_pos = {dim.dim: dim_map[dim] for dim in b_ct_dims if dim.dim is not None}
-    b_shape[2]
+    _f_h_extent = b_shape[2]
     f_w_extent = b_shape[3]
     cts = {}
     for b_idx, b_ct in enumerate(b_cs):

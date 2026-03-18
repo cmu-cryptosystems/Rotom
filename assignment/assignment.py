@@ -18,6 +18,8 @@ while maintaining correctness of the computation graph semantics.
 
 from copy import deepcopy as copy
 
+# import frontend terms
+
 from assignment.gen.gen_binop import gen_binop
 from assignment.gen.gen_block_matmul import gen_block_matmul
 from assignment.gen.gen_const import gen_const

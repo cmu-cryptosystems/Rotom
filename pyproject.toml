@@ -31,8 +31,6 @@ dev = [
     "pytest-cov>=4.1.0",
     "pytest-timeout>=2.1.0",
     "ruff>=0.8.0",
-    "flake8>=6.0.0",
-    "isort>=5.12.0",
     "mypy>=1.5.0",
     "bandit>=1.7.5",
     "safety>=2.3.0",
@@ -51,18 +49,11 @@ target-version = "py312"
 exclude = [".eggs", ".git", ".hg", ".mypy_cache", ".tox", ".venv", "build", "dist"]
 
 [tool.ruff.lint]
-# Star imports used intentionally; E402 = import not at top (e.g. backends/toy.py)
+# Star imports used intentionally; E402 = import not at top
 ignore = ["F403", "F405", "E402"]
 
 [tool.ruff.format]
 quote-style = "double"
-
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-line_length = 88
-known_first_party = ["rotom"]
-known_third_party = ["numpy", "matplotlib", "tqdm", "openfhe"]
 
 [tool.mypy]
 python_version = "3.12"

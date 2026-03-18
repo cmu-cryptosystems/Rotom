@@ -173,7 +173,7 @@ class Shape:
                 a_shape = copy(self.padded_shapes[args.input])
                 b_shape = copy(self.padded_shapes[args.filter])
 
-                a_shape[0]
+                _c_i = a_shape[0]
                 h_i = a_shape[1]
                 w_i = a_shape[2]
 

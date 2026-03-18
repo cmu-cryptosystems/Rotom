@@ -123,19 +123,19 @@ def parse_file_data(path):
                 if "compile time:" in line.lower():
                     try:
                         compile_time = float(line.split(":")[-1].strip())
-                    except Exception:
+                    except (ValueError, IndexError):
                         pass
 
                 # Extract runtime (look for "runtime:" or "circuit runtime:")
                 if "runtime:" in line.lower() and "circuit runtime" not in line.lower():
                     try:
                         runtime = float(line.split(":")[-1].strip())
-                    except Exception:
+                    except (ValueError, IndexError):
                         pass
                 elif "circuit runtime:" in line.lower():
                     try:
                         runtime = float(line.split(":")[-1].strip())
-                    except Exception:
+                    except (ValueError, IndexError):
                         pass
 
                 # Extract data size
@@ -187,7 +187,7 @@ def parse_data_to_dictionary(data_lines):
                     enum_part, value = part.split(": ")
                     op_name = enum_part.split("'")[1].split("'")[0].split(".")[-1]
                     result[op_name] = int(value)
-                except Exception:
+                except (ValueError, IndexError, KeyError):
                     pass
     return result
 
@@ -557,7 +557,7 @@ def generate_exec_plot(data_df, output_path="plots/results_exec.pdf"):
                     )
 
                     if not is_timeout:
-                        ax.bar(
+                        _lan_bar = ax.bar(
                             pos + (k - 1.5) * bar_width,
                             lan_value,
                             bar_width,
@@ -566,7 +566,7 @@ def generate_exec_plot(data_df, output_path="plots/results_exec.pdf"):
                         )
 
                         if overhead_value > 0:
-                            ax.bar(
+                            _wan_bar = ax.bar(
                                 pos + (k - 1.5) * bar_width,
                                 overhead_value,
                                 bar_width,
@@ -619,7 +619,7 @@ def generate_exec_plot(data_df, output_path="plots/results_exec.pdf"):
                                 boxstyle="round,pad=0.2",
                             ),
                         )
-                        ax.bar(
+                        _timeout_bar = ax.bar(
                             pos + (k - 1.5) * bar_width,
                             timeout_placeholder,
                             bar_width,

@@ -1,4 +1,3 @@
-from frontends.tensor_args import Conv2dArgs
 from ir.analysis.shape import Shape
 from ir.dim import DimType
 from ir.he import HEOp, HETerm
@@ -44,20 +43,15 @@ def lower_conv2d_roll(env, kernel):
     shape.run()
 
     # figure out filters
-    args = Conv2dArgs.from_term(kernel.layout.term)
-    computed = Conv2dArgs.get_computed_padding(kernel.layout.term)
-    assert (
-        computed is not None
-    ), "CONV2D term should have computed padding from assignment"
-    padding = computed
-    a_shape = shape.shapes[args.input]
-    b_shape = shape.shapes[args.filter]
-    a_shape[0]
+    padding = kernel.layout.term.cs[4]
+    a_shape = shape.shapes[kernel.layout.term.cs[0]]
+    b_shape = shape.shapes[kernel.layout.term.cs[1]]
+    _i_c = a_shape[0]
     i_h = a_shape[1]
     i_w = a_shape[2]
     assert i_h == i_w
-    b_shape[0]
-    b_shape[1]
+    _f_o = b_shape[0]
+    _f_i = b_shape[1]
     f_h = b_shape[2]
     f_w = b_shape[3]
 

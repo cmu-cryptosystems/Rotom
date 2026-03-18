@@ -128,8 +128,8 @@ def add_replicated_dimensions_roll(a_shape, b_shape):
 
     replicated_dims = {}
     c_in = b_shape[1]  # Number of input channels
-    b_shape[2]  # Filter height
-    b_shape[3]  # Filter width
+    _h_f = b_shape[2]  # Filter height (unused; for documentation)
+    _w_f = b_shape[3]  # Filter width (unused; for documentation)
 
     # Replicate for input channels (but only if we need different filters per channel)
     if c_in > 1:
