@@ -5,6 +5,7 @@ from util.util import split_lists
 
 
 def lower_index(env, kernel):
+    """Lower an INDEX kernel to select and mask slots corresponding to an index value."""
     input_cts = env[kernel.cs[0]]
     # map kernel dims to layout indices
     dim_map = get_dim_indices_by_dim(kernel.cs[0].layout.get_dims())

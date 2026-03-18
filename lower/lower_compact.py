@@ -12,6 +12,7 @@ from util.util import separate_dims
 
 
 def lower_compact(env, kernel):
+    """Lower a COMPACT kernel by packing non-empty slots into a smaller layout."""
     n = kernel.layout.n
 
     dims, cs_dims = align_dimension_extents_compact(

@@ -5,6 +5,7 @@ from util.layout_util import align_dimension_extents, get_segments
 
 
 def lower_replicate(env, kernel):
+    """Lower a REPLICATE kernel by duplicating data across dimensions."""
     layout = kernel.layout
     cs = kernel.cs[0]
     input_cts = env[cs]
