@@ -20,6 +20,8 @@ CKPT_FILE = os.path.join(DATA_DIR, "resnet20.silu.model")
 
 _ARCHIVE_PATH = os.path.join(DATA_DIR, "cifar-10-python.tar.gz")
 _EXTRACTED_DIR = os.path.join(DATA_DIR, "cifar-10-batches-py")
+_CIFAR10_URL = "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"
+_CIFAR10_MD5 = "c58f30108f718f92721af3b95e74349a"
 
 
 def ensure_cifar10_extracted() -> None:
@@ -27,9 +29,29 @@ def ensure_cifar10_extracted() -> None:
     if os.path.isdir(_EXTRACTED_DIR):
         return
     if not os.path.exists(_ARCHIVE_PATH):
-        raise FileNotFoundError(
-            f"Missing CIFAR-10 archive at {_ARCHIVE_PATH}. "
-            "Copy it from DaCapo: dacapo/examples/data/CIFAR10/cifar-10-python.tar.gz"
+        if (
+            os.environ.get("ROTOM_OFFLINE", "").strip()
+            or os.environ.get("CI", "").strip()
+        ):
+            raise FileNotFoundError(
+                f"Missing CIFAR-10 archive at {_ARCHIVE_PATH}. "
+                "Set ROTOM_OFFLINE=0 to allow auto-download, or copy it from "
+                "DaCapo: dacapo/examples/data/CIFAR10/cifar-10-python.tar.gz"
+            )
+        try:
+            from torchvision.datasets.utils import download_url
+        except Exception as e:  # pragma: no cover
+            raise FileNotFoundError(
+                f"Missing CIFAR-10 archive at {_ARCHIVE_PATH}. "
+                "Install torchvision to enable auto-download, or copy it from "
+                "DaCapo: dacapo/examples/data/CIFAR10/cifar-10-python.tar.gz"
+            ) from e
+
+        download_url(
+            _CIFAR10_URL,
+            root=DATA_DIR,
+            filename=os.path.basename(_ARCHIVE_PATH),
+            md5=_CIFAR10_MD5,
         )
     with tarfile.open(_ARCHIVE_PATH, "r:gz") as tf:
         tf.extractall(path=DATA_DIR)

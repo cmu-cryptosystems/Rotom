@@ -27,3 +27,4 @@ docs/source/api_reference/*.rst
 
 # Large datasets (keep out of Git history)
 benchmarks/e2e/resnet/data/cifar-10-batches-py/
+benchmarks/e2e/resnet/data/cifar-10-python.tar.gz
