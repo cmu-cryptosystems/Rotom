@@ -43,11 +43,8 @@ results = Toy(circuit_ir, inputs, args).run()
 # Unit tests
 pytest
 
-# Integration tests
-python main.py
-
 # Specific benchmarks
-python main.py --benchmark matmul --backend toy --rolls
+python main.py --benchmark matmul_128_64 --backend toy --rolls
 ```
 
 ### Downloading Benchmarks
@@ -79,8 +76,8 @@ Rotom includes wrappers for running benchmarks from FHELIPE and Viaduct compiler
 # Run a FHELIPE benchmark
 python main.py --fhelipe <path_to_benchmark_directory> --n <slots>
 
-# Example: Run double matrix multiplication benchmark with 16384 slots
-python main.py --fhelipe benchmarks/fhelipe_benchmarks/double_matmul_128_64 --n 16384
+# Example: Run double matrix multiplication benchmark with 32768 slots
+python main.py --fhelipe benchmarks/fhelipe_benchmarks/double_matmul_128_64 --n 32768
 
 # Use --not-secure flag to allow smaller ring dimensions (for testing)
 python main.py --fhelipe benchmarks/fhelipe_benchmarks/double_matmul_128_64 --n 4096 --not-secure
@@ -94,8 +91,8 @@ python main.py --fhelipe benchmarks/fhelipe_benchmarks/double_matmul_128_64 --n 
 # Run a Viaduct benchmark
 python main.py --viaduct <path_to_benchmark_file> --n <slots>
 
-# Example: Run double matrix multiplication benchmark with 16384 slots
-python main.py --viaduct benchmarks/viaduct_benchmarks/double_matmul_ct_pt_e1_o0.vhe --n 16384
+# Example: Run double matrix multiplication benchmark with 32768 slots
+python main.py --viaduct benchmarks/viaduct_benchmarks/double_matmul_ct_pt_e1_o0.vhe --n 32768
 
 # Use --not-secure flag to allow smaller ring dimensions (for testing)
 python main.py --viaduct benchmarks/viaduct_benchmarks/distance_e1_o0.vhe --n 4096 --not-secure
