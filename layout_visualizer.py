@@ -14,7 +14,56 @@ from ir.layout import Layout
 from util.layout_util import apply_layout
 
 
-def visualize_layout(layout_str, n, tensor_shape=None, secret=False):
+def _separator(width: int = 60, char: str = "=") -> str:
+    return char * width
+
+
+def _truncate_str(s: str, max_len: int) -> str:
+    if len(s) <= max_len:
+        return s
+    return s[: max_len - 3] + "..."
+
+
+def _format_array(arr: np.ndarray, *, max_elements: int, precision: int) -> str:
+    # threshold controls whether NumPy uses ellipses for large arrays.
+    return np.array2string(
+        arr,
+        precision=precision,
+        separator=", ",
+        threshold=max_elements,
+        max_line_width=120,
+        suppress_small=False,
+    )
+
+
+def _format_packed_value(
+    value, *, max_elements: int, precision: int, max_repr_len: int
+):
+    # Try to render numpy arrays and numeric lists nicely; otherwise fall back to repr().
+    if isinstance(value, np.ndarray):
+        return _format_array(value, max_elements=max_elements, precision=precision)
+    if isinstance(value, (list, tuple)):
+        # Heuristic: only attempt array rendering if it looks numeric.
+        sample = value[: min(16, len(value))]
+        if all(isinstance(x, (int, float, np.number)) for x in sample):
+            return _format_array(
+                np.asarray(value), max_elements=max_elements, precision=precision
+            )
+
+    return _truncate_str(repr(value), max_repr_len=max_repr_len)
+
+
+def visualize_layout(
+    layout_str,
+    n,
+    tensor_shape=None,
+    secret=False,
+    *,
+    max_tensor_elements: int = 64,
+    max_packed_elements: int = 64,
+    max_repr_len: int = 220,
+    precision: int = 3,
+):
     """
     Visualize a layout by creating a test tensor and showing the packed result.
 
@@ -42,24 +91,54 @@ def visualize_layout(layout_str, n, tensor_shape=None, secret=False):
         for dim_size in tensor_shape:
             total_elements *= dim_size
 
-        # Create flat array and reshape
-        flat_tensor = np.array([i for i in range(total_elements)])
-        tensor = flat_tensor.reshape(tensor_shape)
+        tensor = np.arange(total_elements, dtype=float).reshape(tensor_shape)
 
-        print(f"=== Layout: {layout_str} ===")
-        print(f"Test tensor shape: {tensor_shape}")
-        print("Original tensor:")
-        print(tensor)
-        print(f"Layout: {layout.layout_str()}")
+        print("\n" + _separator())
+        print(f"LAYOUT: {layout_str}")
+        print(_separator())
+
+        print(f"HE slots (n): {n}")
+        print(f"Secret/plaintext: {secret}")
+        print(f"Tensor shape: {tensor_shape} (elements={total_elements})")
+        print("\nOriginal tensor:")
+        print(
+            _format_array(
+                np.asarray(tensor),
+                max_elements=max_tensor_elements,
+                precision=precision,
+            )
+        )
+        print("\nLayout (canonical):")
+        print(layout.layout_str())
 
         # Apply layout and show result
         layout_tensor = apply_layout(tensor, layout)
-        print("Packed vector:")
-        if isinstance(layout_tensor, list) and len(layout_tensor) > 1:
-            for i, ct in enumerate(layout_tensor):
-                print(f"Ciphertext {i}: {ct}")
+        print("\nPacked vector(s):")
+
+        if isinstance(layout_tensor, list):
+            print(f"  ciphertexts: {len(layout_tensor)}")
+            if len(layout_tensor) == 0:
+                print("  (empty)")
+            else:
+                for i, ct in enumerate(layout_tensor):
+                    # Keep per-ciphertext output readable even for large packed values.
+                    formatted = _format_packed_value(
+                        ct,
+                        max_elements=max_packed_elements,
+                        precision=precision,
+                        max_repr_len=max_repr_len,
+                    )
+                    print(f"  [{i}] {formatted}")
         else:
-            print(layout_tensor)
+            formatted = _format_packed_value(
+                layout_tensor,
+                max_elements=max_packed_elements,
+                precision=precision,
+                max_repr_len=max_repr_len,
+            )
+            print(formatted)
+
+        print(_separator())
         print()
 
         return layout, layout_tensor
@@ -74,7 +153,7 @@ def demo_layout_examples():
     This function shows how different layouts affect the packing of tensor data
     into homomorphic encryption vectors.
     """
-    print("=== Layout Visualization Examples ===\n")
+    print("Layout Visualization Examples\n" + _separator())
 
     # Example 1: Row-major layout
     print("1. Row-major layout (standard matrix storage):")
@@ -115,14 +194,14 @@ def compare_layouts(layout_strings, n, tensor_shape):
     Returns:
         list: List of (layout_str, layout_obj, packed_data) tuples
     """
-    print(f"=== Comparing Layouts for Tensor Shape {tensor_shape} ===\n")
+    print(f"Comparing Layouts for Tensor Shape {tensor_shape}\n" + _separator())
 
     results = []
     for i, layout_str in enumerate(layout_strings, 1):
-        print(f"Layout {i}: {layout_str}")
+        print(f"\n[{i}/{len(layout_strings)}] {layout_str}")
         layout, packed = visualize_layout(layout_str, n, tensor_shape)
         results.append((layout_str, layout, packed))
-        print("-" * 50)
+        print(_separator(char="-", width=50))
 
     return results
 
