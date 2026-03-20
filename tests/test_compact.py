@@ -13,7 +13,7 @@ from ir.layout import Layout
 from lower.lower import Lower
 from tests.conftest import assert_results_equal, run_backend
 from tests.test_util import get_default_args
-from util.layout_util import apply_layout
+from util.layout_util import apply_layout, parse_layout
 
 
 class TestCompaction:
@@ -45,12 +45,12 @@ class TestCompaction:
 
         # Create prior layout: [1:4:1];[0:4:1][G:4]
         # This has dim 1 in ct_dims (extent 4, so 4 ciphertexts)
-        prior_layout = Layout.from_string("[1:4:1];[0:4:1][G:4]", args.n, True)
+        prior_layout = parse_layout("[1:4:1];[0:4:1][G:4]", secret=True)
         prior_layout.term = a_term
 
         # Create target layout: [0:4:1][1:4:1]
         # This has dim 1 moved to slot_dims
-        target_layout = Layout.from_string("[0:4:1][1:4:1]", args.n, True)
+        target_layout = parse_layout("[0:4:1][1:4:1]", secret=True)
         target_layout.term = a_term
 
         # Create input kernel (TENSOR)

@@ -5,6 +5,7 @@ from ..kernel import Kernel, KernelOp
 from ..kernel_cost import KernelCost
 from ..layout import Layout
 from ..roll import Roll
+from util.layout_util import parse_layout
 
 
 # Dimensions
@@ -304,12 +305,12 @@ def test_cost_matmul_3():
     assert operations["rot"] == 8
 
 
-# Tests for Layout.from_string method
+# Tests for parsing a layout string into a Layout object (n is inferred)
 def test_layout_from_string_simple():
     """Test creating a layout from a simple string with just slot dimensions."""
-    layout = Layout.from_string("[0:4:1]", 16)
-    assert layout.layout_str() == "[G:4][0:4:1]"
-    assert layout.n == 16
+    layout = parse_layout("[0:4:1]")
+    assert layout.layout_str() == "[0:4:1]"
+    assert layout.n == 4
     assert not layout.secret
     assert len(layout.rolls) == 0
     assert len(layout.dims) == 1
@@ -317,7 +318,7 @@ def test_layout_from_string_simple():
 
 def test_layout_from_string_multiple_dimensions():
     """Test creating a layout from a string with multiple slot dimensions."""
-    layout = Layout.from_string("[0:4:1][1:4:1]", 16)
+    layout = parse_layout("[0:4:1][1:4:1]")
     assert layout.layout_str() == "[0:4:1][1:4:1]"
     assert layout.n == 16
     assert not layout.secret
@@ -327,7 +328,7 @@ def test_layout_from_string_multiple_dimensions():
 
 def test_layout_from_string_with_roll():
     """Test creating a layout from a string with roll operations."""
-    layout = Layout.from_string("roll(0,1) [1:4:1][0:4:1]", 16)
+    layout = parse_layout("roll(0,1) [1:4:1][0:4:1]")
     assert layout.layout_str() == "roll(0,1) [1:4:1][0:4:1]"
     assert layout.n == 16
     assert not layout.secret
@@ -337,7 +338,7 @@ def test_layout_from_string_with_roll():
 
 def test_layout_from_string_with_ciphertext_dimensions():
     """Test creating a layout from a string with ciphertext dimensions."""
-    layout = Layout.from_string("[R:4:1];[0:4:1][1:4:1]", 16)
+    layout = parse_layout("[R:4:1];[0:4:1][1:4:1]")
     assert layout.layout_str() == "[R:4:1];[0:4:1][1:4:1]"
     assert layout.n == 16
     assert not layout.secret
@@ -347,7 +348,7 @@ def test_layout_from_string_with_ciphertext_dimensions():
 
 def test_layout_from_string_with_roll_and_ciphertext():
     """Test creating a layout from a string with both roll operations and ciphertext dimensions."""
-    layout = Layout.from_string("roll(0,1) [R:4:1];[1:4:1][0:4:1]", 16)
+    layout = parse_layout("roll(0,1) [R:4:1];[1:4:1][0:4:1]")
     assert layout.layout_str() == "roll(0,1) [R:4:1];[1:4:1][0:4:1]"
     assert layout.n == 16
     assert not layout.secret
@@ -357,17 +358,17 @@ def test_layout_from_string_with_roll_and_ciphertext():
 
 def test_layout_from_string_secret_true():
     """Test creating a secret layout from a string."""
-    layout = Layout.from_string("[0:4:1]", 16, secret=True)
-    assert layout.layout_str() == "[G:4][0:4:1]"
-    assert layout.n == 16
+    layout = parse_layout("[0:4:1]", secret=True)
+    assert layout.layout_str() == "[0:4:1]"
+    assert layout.n == 4
     assert layout.secret
 
 
 def test_layout_from_string_complex_rolls():
     """Test creating a layout with multiple roll operations."""
-    layout = Layout.from_string("roll(0,1) roll(2,3) [0:4:1][1:4:1][2:4:1][3:4:1]", 16)
-    assert layout.layout_str() == "roll(0,1) roll(2,3) [0:4:1][1:4:1];[2:4:1][3:4:1]"
-    assert layout.n == 16
+    layout = parse_layout("roll(0,1) roll(2,3) [0:4:1][1:4:1][2:4:1][3:4:1]")
+    assert layout.layout_str() == "roll(0,1) roll(2,3) [0:4:1][1:4:1][2:4:1][3:4:1]"
+    assert layout.n == 256
     assert not layout.secret
     assert len(layout.rolls) == 2
     assert len(layout.dims) == 4
@@ -376,12 +377,12 @@ def test_layout_from_string_complex_rolls():
 def test_layout_from_string_edge_cases():
     """Test edge cases for layout string parsing."""
     # Test with extra whitespace
-    layout = Layout.from_string("  [0:4:1]  ", 16)
-    assert layout.layout_str() == "[G:4][0:4:1]"
+    layout = parse_layout("  [0:4:1]  ")
+    assert layout.layout_str() == "[0:4:1]"
 
     # Test with empty roll operations (should be ignored)
-    layout = Layout.from_string("roll(,) [0:4:1]", 16)
-    assert layout.layout_str() == "[G:4][0:4:1]"
+    layout = parse_layout("roll(,) [0:4:1]")
+    assert layout.layout_str() == "[0:4:1]"
     assert len(layout.rolls) == 0
 
 
@@ -389,7 +390,7 @@ def test_layout_from_string_parsing_accuracy():
     """Test that the parsed layout matches manually created layouts."""
     # Test simple case
     layout_str = "[0:4:1][1:4:1]"
-    parsed_layout = Layout.from_string(layout_str, 16)
+    parsed_layout = parse_layout(layout_str)
     manual_layout = Layout(
         None, [], [Dim.parse("[0:4:1]"), Dim.parse("[1:4:1]")], 16, False
     )
@@ -400,7 +401,7 @@ def test_layout_from_string_parsing_accuracy():
 
     # Test with roll
     layout_str = "roll(0,1) [1:4:1][0:4:1]"
-    parsed_layout = Layout.from_string(layout_str, 16)
+    parsed_layout = parse_layout(layout_str)
     # The roll indices refer to positions in the dimension list
     dims = [Dim.parse("[1:4:1]"), Dim.parse("[0:4:1]")]
     manual_layout = Layout(None, [Roll(dims[0], dims[1])], dims, 16, False)
@@ -414,14 +415,14 @@ def test_layout_from_string_invalid_input():
     """Test behavior with invalid input strings."""
     # Test with malformed dimension strings (should raise an exception)
     try:
-        Layout.from_string("[invalid]", 16)
+        parse_layout("[invalid]")
         assert False, "Should have raised an exception for invalid dimension"
     except Exception:
         pass  # Expected behavior
 
     # Test with malformed roll strings (should handle gracefully)
-    layout = Layout.from_string("roll(invalid) [0:4:1]", 16)
-    assert layout.layout_str() == "[G:4][0:4:1]"
+    layout = parse_layout("roll(invalid) [0:4:1]")
+    assert layout.layout_str() == "[0:4:1]"
     assert len(layout.rolls) == 0  # Invalid roll should be ignored
 
 
@@ -437,11 +438,11 @@ def test_layout_from_string_roundtrip():
 
     for layout_str in test_cases:
         # Create layout from string
-        layout = Layout.from_string(layout_str, 16)
+        layout = parse_layout(layout_str)
         # Get the string representation
         generated_str = layout.layout_str()
         # Parse the generated string again
-        roundtrip_layout = Layout.from_string(generated_str, 16)
+        roundtrip_layout = parse_layout(generated_str)
         # Compare layouts
         assert roundtrip_layout.layout_str() == layout.layout_str()
         assert roundtrip_layout.n == layout.n

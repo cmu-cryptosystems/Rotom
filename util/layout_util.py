@@ -461,8 +461,21 @@ def mul(vec, n):
     return [v * n if v is not None else None for v in vec]
 
 
-def apply_layout(pt_tensor, layout):
-    """apply a layout to a pt tensor"""
+def _row_major_linear_index(coords, shape):
+    """C-order ravel index for integer coords and shape tuples."""
+    acc = 0
+    for c, s in zip(coords, shape):
+        acc = acc * int(s) + int(c)
+    return acc
+
+
+def apply_layout(pt_tensor, layout, *, return_slot_mapping=False):
+    """Apply a layout to a plaintext tensor.
+
+    If ``return_slot_mapping`` is True, also returns per-slot provenance:
+    each ciphertext slot is tagged as a ``tensor`` read (with coords / linear
+    index), a layout ``gap`` (unused dimension → stored 0), or ``oob``.
+    """
     layout_len = max(len(layout), layout.n)
     # get base_term indices
     dims = layout.get_dims()
@@ -535,11 +548,15 @@ def apply_layout(pt_tensor, layout):
     pt_tensor_ndim = np.ndim(pt_tensor)
 
     cts = []
+    per_ct_maps = [] if return_slot_mapping else None
+    shape_tuple = tuple(int(s) for s in pt_tensor.shape)
+
     for ct_index in range(len(base_indices_by_cts)):
         ct_indices = base_indices_by_cts[ct_index]
         ct = []
+        slot_map = [] if return_slot_mapping else None
 
-        for index in ct_indices:
+        for slot_i, index in enumerate(ct_indices):
             # Pad index with 0 for dimensions not covered by layout (e.g. G group dim)
             effective_index = list(index)
             while len(effective_index) < pt_tensor_ndim:
@@ -548,12 +565,33 @@ def apply_layout(pt_tensor, layout):
             # Check if any required index is None
             if any(effective_index[i] is None for i in range(pt_tensor_ndim)):
                 ct.append(0)
+                if return_slot_mapping:
+                    slot_map.append(
+                        {
+                            "slot": slot_i,
+                            "kind": "gap",
+                            "coords": None,
+                            "linear": None,
+                            "label": "gap (unused)",
+                        }
+                    )
                 continue
 
             if any(
                 effective_index[i] >= pt_tensor.shape[i] for i in range(pt_tensor_ndim)
             ):
                 ct.append(0)
+                if return_slot_mapping:
+                    coords = [int(effective_index[i]) for i in range(pt_tensor_ndim)]
+                    slot_map.append(
+                        {
+                            "slot": slot_i,
+                            "kind": "oob",
+                            "coords": coords,
+                            "linear": None,
+                            "label": "out of range",
+                        }
+                    )
                 continue
 
             # Access tensor using the appropriate number of indices
@@ -583,9 +621,34 @@ def apply_layout(pt_tensor, layout):
                 value = value.item()
             ct.append(value)
 
+            if return_slot_mapping:
+                coords = [int(effective_index[i]) for i in range(pt_tensor_ndim)]
+                linear = int(_row_major_linear_index(coords, shape_tuple))
+                if pt_tensor_ndim == 0:
+                    label = "T[]"
+                elif pt_tensor_ndim == 1:
+                    label = f"T[{coords[0]}]"
+                elif pt_tensor_ndim == 2:
+                    label = f"T[{coords[0]},{coords[1]}]"
+                else:
+                    label = f"T[{','.join(map(str, coords))}]"
+                slot_map.append(
+                    {
+                        "slot": slot_i,
+                        "kind": "tensor",
+                        "coords": coords,
+                        "linear": linear,
+                        "label": label,
+                    }
+                )
+
         # this places cts in row-major order
         cts.append(ct)
+        if return_slot_mapping:
+            per_ct_maps.append(slot_map)
 
+    if return_slot_mapping:
+        return cts, per_ct_maps
     return cts
 
 
@@ -601,32 +664,62 @@ def apply_punctured_layout(pt_tensor, layout):
     return cts
 
 
-def parse_layout(layout_str, n, secret):
+def infer_n_from_layout_str(layout_str: str) -> int | None:
+    """
+    Infer HE vector slot count `n` from a layout string.
+
+    Rule:
+      - If there is a `;`, compute the product of extents of bracket terms after `;`.
+      - Otherwise, compute the product of extents of all bracket terms.
+
+    Extent extraction supports the layout syntax used by `Dim.parse`, including:
+      - `[i:n:s]` / `[R:n:s]` -> extent is the middle `n`
+      - `[R:n]` / `[G:n]` / `[i:n]` -> extent is the second `n`
+      - `[n]` -> extent is the only `n`
+    """
     import re
 
-    result = {"roll": None, "dims": []}
+    traversal = layout_str.split(";", 1)[1] if ";" in layout_str else layout_str
 
-    # Extract roll numbers if present
-    roll_match = re.search(r"roll\((\d+),(\d+)\)", layout_str)
-    if roll_match:
-        result["roll"] = {
-            "to": int(roll_match.group(1)),
-            "from": int(roll_match.group(2)),
-        }
+    extents: list[int] = []
+    for token in re.findall(r"\[([^\]]+)\]", traversal):
+        parts = [p.strip() for p in token.split(":")]
+        if not parts:
+            continue
 
-    # Extract all bracket terms [number:number:number] or [number:number]
-    dim_matches = re.findall(r"\[\d+:\d+(?::\d+)?\]", layout_str)
-    if dim_matches:
-        for dim in dim_matches:
-            # Remove the brackets and split by colon
-            result["dims"].append(dim)
+        extent: int | None = None
+        try:
+            if len(parts) == 1:
+                extent = int(parts[0])
+            elif len(parts) == 2:
+                # [R:n] / [G:n] or potentially [i:n]
+                extent = int(parts[1])
+            elif len(parts) == 3:
+                # [i:n:s] / [R:n:s]
+                extent = int(parts[1])
+        except ValueError:
+            continue
 
-    # transform rolls
-    rolls = []
-    for roll in result["roll"]:
-        rolls.append(Roll(roll["to"], roll["from"]))
-    dims = []
-    for dim in result["dims"]:
-        dims.append(Dim.parse(dim))
+        if extent is not None and extent >= 1:
+            extents.append(int(extent))
 
-    return Layout(None, rolls, dims, n, secret)
+    if not extents:
+        return None
+
+    out = 1
+    for e in extents:
+        out *= e
+    return out
+
+
+def parse_layout(layout_str: str, n: int | None = None, secret: bool = False):
+    """
+    Parse a layout string into a `Layout` object.
+
+    Unlike `Layout.from_string`, this helper can infer `n` from the layout string
+    (using `infer_n_from_layout_str`), so callers don't have to provide it.
+    """
+    if n is None:
+        inferred = infer_n_from_layout_str(layout_str)
+        n = inferred if inferred is not None else 16
+    return Layout.from_string(layout_str, n, secret)

@@ -1,0 +1,1622 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rotom — Layout Visualizer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg-deep: #05060a;
+        --bg: #0a0c14;
+        --pt-pane: #0e1018;
+        --pt-pane-head: #12151f;
+        --pt-box: #12141c;
+        --pt-box-border: #2a3142;
+        --surface: rgba(18, 22, 36, 0.85);
+        --surface-2: rgba(28, 32, 52, 0.55);
+        --border: rgba(255, 255, 255, 0.08);
+        --border-strong: rgba(255, 255, 255, 0.14);
+        --text: #f1f5f9;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-dim: rgba(56, 189, 248, 0.15);
+        --accent-2: #fb923c;
+        --accent-2-dim: rgba(251, 146, 60, 0.15);
+        --danger: #fb7185;
+        /* Keep navbar styling consistent with `website/index.html` */
+        --blue: var(--accent);
+        --orange: var(--accent-2);
+        --pt-print-bg: #080a10;
+        --radius: 12px;
+        --radius-sm: 8px;
+        --font: "DM Sans", system-ui, -apple-system, sans-serif;
+        --mono: "JetBrains Mono", ui-monospace, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        font-family: var(--font);
+        background: var(--bg-deep);
+        color: var(--text);
+        line-height: 1.5;
+        overflow: hidden;
+      }
+
+      .ambient {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 0;
+        background:
+          radial-gradient(ellipse 80% 50% at 15% -10%, rgba(56, 189, 248, 0.12), transparent 55%),
+          radial-gradient(ellipse 60% 45% at 95% 10%, rgba(251, 146, 60, 0.12), transparent 50%),
+          var(--bg-deep);
+      }
+
+      .shell {
+        position: relative;
+        z-index: 1;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        max-width: 1440px;
+        margin: 0 auto;
+        width: calc(100% - 88px);
+      }
+
+      /* Landing-page navbar (shared across `/` and `/visualizer`) */
+      nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.85rem 0 1.1rem;
+        flex-wrap: wrap;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-weight: 800;
+        font-size: 1.15rem;
+        letter-spacing: -0.04em;
+        color: var(--text);
+        text-decoration: none;
+      }
+
+      .brand-mark {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, var(--blue), var(--orange));
+        box-shadow: 0 4px 20px rgba(56, 189, 248, 0.25);
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        flex-wrap: wrap;
+      }
+
+      .nav-links a {
+        padding: 0.45rem 0.85rem;
+        font-size: 0.88rem;
+        font-weight: 500;
+        color: var(--muted);
+        text-decoration: none;
+        border-radius: 8px;
+      }
+
+      .nav-links a:hover {
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      /* Python Tutor–style top bar: compact, tool + primary action */
+      .pt-header {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.55rem 1rem;
+        border-bottom: 1px solid var(--pt-box-border);
+        background: var(--pt-pane-head);
+      }
+
+      .pt-header h1 {
+        margin: 0;
+        font-size: 1.05rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+
+      .pt-header-sub {
+        margin: 0.15rem 0 0;
+        font-size: 0.75rem;
+        color: var(--muted);
+        max-width: 28rem;
+        line-height: 1.4;
+      }
+
+      .pt-header-left {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-width: 0;
+      }
+
+      .pt-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.45rem;
+      }
+
+      a.pt-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.42rem 0.85rem;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--pt-box-border);
+        background: var(--pt-box);
+        color: var(--text);
+        text-decoration: none;
+        font-family: var(--font);
+        font-size: 0.8125rem;
+        font-weight: 700;
+        transition: background 0.12s, border-color 0.12s, filter 0.12s;
+      }
+
+      a.pt-back:hover {
+        background: #1a1e2a;
+        border-color: var(--border-strong);
+      }
+
+      button {
+        font-family: var(--font);
+        font-size: 0.8125rem;
+        font-weight: 600;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+        padding: 0.42rem 0.85rem;
+        cursor: pointer;
+        transition: background 0.12s, border-color 0.12s, filter 0.12s;
+      }
+
+      button:active {
+        transform: scale(0.99);
+      }
+
+      button.pt-secondary {
+        background: var(--pt-box);
+        color: var(--text);
+        border-color: var(--pt-box-border);
+      }
+
+      button.pt-secondary:hover {
+        background: #1a1e2a;
+        border-color: var(--border-strong);
+      }
+
+      /* PT uses a strong primary “Visualize” — keep dark-theme accent */
+      button.pt-visualize {
+        background: var(--accent-2);
+        border: 1px solid rgba(251, 146, 60, 0.6);
+        color: #f8fafc;
+        padding: 0.5rem 1.1rem;
+        font-weight: 700;
+        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset;
+      }
+
+      button.pt-visualize:hover {
+        filter: brightness(1.08);
+      }
+
+      button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .pt-hint {
+        font-size: 0.68rem;
+        color: var(--muted);
+      }
+
+      .kbd {
+        font-family: var(--mono);
+        font-size: 0.62rem;
+        padding: 0.08rem 0.3rem;
+        border-radius: 4px;
+        border: 1px solid var(--pt-box-border);
+        background: var(--pt-box);
+        color: var(--muted);
+      }
+
+      /* Main split: code | visualization (Python Tutor layout) */
+      .pt-workspace {
+        flex: 1;
+        display: grid;
+        grid-template-columns: minmax(280px, var(--left-pane-size, 42%)) 8px minmax(340px, 1fr);
+        min-height: 0;
+        border-bottom: 1px solid var(--pt-box-border);
+      }
+
+      @media (max-width: 900px) {
+        .shell {
+          width: calc(100% - 16px);
+        }
+        .pt-workspace {
+          grid-template-columns: 1fr;
+          grid-template-rows: minmax(220px, 35vh) minmax(280px, 1fr);
+        }
+      }
+
+      .pane-splitter {
+        background: rgba(255, 255, 255, 0.05);
+        border-left: 1px solid var(--pt-box-border);
+        border-right: 1px solid var(--pt-box-border);
+        cursor: col-resize;
+        transition: background 0.12s ease;
+        user-select: none;
+        touch-action: none;
+      }
+
+      .pane-splitter:hover,
+      .pane-splitter.dragging {
+        background: rgba(251, 146, 60, 0.22);
+      }
+
+      .pt-pane {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        background: var(--pt-pane);
+      }
+
+      .pt-pane--viz {
+        background: var(--pt-pane);
+      }
+
+      .pt-pane--code {
+        background: transparent;
+        border-right: none;
+      }
+
+      @media (max-width: 900px) {
+        .pt-pane--code {
+          border-bottom: none;
+        }
+
+        .pane-splitter {
+          display: none;
+        }
+      }
+
+      .pt-pane-title {
+        flex-shrink: 0;
+        padding: 0.4rem 0.75rem;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--muted);
+        background: rgba(0, 0, 0, 0.35);
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+      }
+
+      .presets {
+        flex-shrink: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.45rem 0.65rem;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+        background: rgba(0, 0, 0, 0.2);
+      }
+
+      .presets-label {
+        font-size: 0.62rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        width: 100%;
+        margin-bottom: 0.05rem;
+      }
+
+      .presets button {
+        padding: 0.22rem 0.5rem;
+        font-size: 0.68rem;
+        font-weight: 500;
+        border-radius: 6px;
+        background: var(--pt-box);
+        border-color: var(--pt-box-border);
+        color: var(--text);
+      }
+
+      .presets button:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      .quick-help {
+        flex-shrink: 0;
+        padding: 0.45rem 0.65rem;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+        background: rgba(0, 0, 0, 0.12);
+        font-size: 0.66rem;
+        color: #94a3b8;
+        line-height: 1.4;
+      }
+
+      .quick-help ol {
+        margin: 0.3rem 0 0.35rem 1rem;
+        padding: 0;
+      }
+
+      .quick-help li {
+        margin: 0.12rem 0;
+      }
+
+      .quick-help-advanced {
+        margin-top: 0.2rem;
+      }
+
+      .quick-help strong {
+        color: var(--text);
+      }
+
+      .quick-help code {
+        font-family: var(--mono);
+        font-size: 0.62rem;
+        color: var(--accent);
+      }
+
+      #editor {
+        flex: 1;
+        min-height: 0;
+        background: rgba(0, 0, 0, 0.15);
+      }
+
+      .code-runbar {
+        flex-shrink: 0;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 0.55rem;
+        padding: 0.45rem 0.65rem;
+        border-top: 1px solid rgba(148, 163, 184, 0.12);
+        background: rgba(0, 0, 0, 0.25);
+      }
+
+      /* Landing-page mock window chrome — shared by editor (left) and preview (right) */
+      .code-mock-shell,
+      .viz-mock-shell {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        border-radius: 16px;
+        border: 1px solid rgba(148, 163, 184, 0.12);
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(3, 7, 18, 0.98) 100%);
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+        overflow: hidden;
+      }
+
+      .code-mock-shell {
+        margin: 0.5rem 0.45rem 0.45rem 0.65rem;
+      }
+
+      .viz-mock-shell {
+        margin: 0.5rem 0.65rem 0.45rem;
+      }
+
+      .viz-mock-bar {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.65rem 1rem;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+        background: rgba(0, 0, 0, 0.35);
+      }
+
+      .viz-mock-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
+      .viz-mock-dot:nth-child(1) {
+        background: #f87171;
+      }
+
+      .viz-mock-dot:nth-child(2) {
+        background: #fbbf24;
+      }
+
+      .viz-mock-dot:nth-child(3) {
+        background: #4ade80;
+      }
+
+      .viz-mock-title {
+        margin-left: 0.35rem;
+        font-family: var(--mono);
+        font-size: 0.68rem;
+        font-weight: 500;
+        color: #94a3b8;
+        letter-spacing: 0.02em;
+      }
+
+      .viz-mock-inner {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .pt-viz-scroll {
+        flex: 1;
+        min-height: 0;
+        overflow-x: auto;
+        overflow-y: auto;
+        padding: 0.5rem 0.75rem 0.55rem;
+        scrollbar-width: thin;
+        background: rgba(0, 0, 0, 0.15);
+      }
+
+      @media (max-height: 760px) {
+        .pt-viz-scroll {
+          overflow-x: auto;
+          overflow-y: auto;
+        }
+      }
+
+      /* In-mock panels: match landing “mock pane” tone */
+      .pt-box {
+        background: rgba(15, 23, 42, 0.45);
+        border: 1px solid rgba(148, 163, 184, 0.1);
+        border-radius: 10px;
+        margin-bottom: 0.6rem;
+        box-shadow: none;
+      }
+
+      .pt-box-hd {
+        padding: 0.4rem 0.7rem;
+        font-size: 0.65rem;
+        font-weight: 600;
+        color: #94a3b8;
+        background: rgba(0, 0, 0, 0.25);
+        border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+        font-family: var(--mono);
+        text-transform: none;
+        letter-spacing: 0.02em;
+      }
+
+      .pt-box-bd {
+        padding: 0.55rem 0.7rem;
+      }
+
+      .pt-printed {
+        flex-shrink: 0;
+        max-height: min(20vh, 170px);
+        min-height: 84px;
+        display: flex;
+        flex-direction: column;
+        margin: 0 0.65rem 0.35rem;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.12);
+        border-top: 1px solid rgba(148, 163, 184, 0.12);
+        background: rgba(0, 0, 0, 0.35);
+        overflow: hidden;
+      }
+
+      .pt-printed-label {
+        flex-shrink: 0;
+        padding: 0.35rem 0.75rem;
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #94a3b8;
+        font-family: var(--mono);
+        background: rgba(0, 0, 0, 0.25);
+        border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+      }
+
+      #output-log {
+        flex: 1;
+        margin: 0;
+        padding: 0.6rem 0.85rem;
+        overflow: auto;
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: #cbd5e1;
+      }
+
+      #output-log.error {
+        color: var(--danger);
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        margin-bottom: 0.75rem;
+      }
+
+      .chip {
+        font-family: var(--mono);
+        font-size: 0.65rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--pt-box-border);
+        color: var(--muted);
+      }
+
+      .chip strong {
+        color: var(--text);
+        font-weight: 500;
+      }
+
+      .layout-chip {
+        font-family: var(--mono);
+      }
+
+      .layout-chip.row-major {
+        border-color: rgba(250, 204, 21, 0.7);
+        color: #fef08a;
+      }
+
+      .layout-chip.column-major {
+        border-color: rgba(34, 197, 94, 0.7);
+        color: #bbf7d0;
+      }
+
+      .layout-resolved {
+        font-family: var(--mono);
+        font-size: 0.7rem;
+        line-height: 1.45;
+        padding: 0.5rem 0.65rem;
+        border-radius: 6px;
+        background: rgba(0, 0, 0, 0.45);
+        border: 1px solid var(--pt-box-border);
+        color: #cbd5e1;
+        word-break: break-all;
+        margin-bottom: 0.75rem;
+      }
+
+      .layout-resolved .lbl {
+        display: block;
+        font-size: 0.62rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        margin-bottom: 0.3rem;
+      }
+
+      section.viz-block {
+        margin-bottom: 0.9rem;
+      }
+
+      section.viz-block h3 {
+        margin: 0 0 0.5rem;
+        font-size: 0.74rem;
+        font-weight: 600;
+        color: #e2e8f0;
+      }
+
+      .legend {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        margin-top: 0.45rem;
+        font-size: 0.62rem;
+        color: var(--muted);
+        font-family: var(--mono);
+      }
+
+      .legend-bar {
+        flex: 1;
+        max-width: 160px;
+        height: 7px;
+        border-radius: 4px;
+        background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      }
+
+      .grid-2d {
+        display: grid;
+        gap: 3px;
+        width: fit-content;
+        max-width: 100%;
+      }
+
+      .cell {
+        font-family: var(--mono);
+        font-size: clamp(0.62rem, 1.4vw, 0.76rem);
+        font-weight: 500;
+        min-width: 2rem;
+        min-height: 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        border: 1px solid rgba(0, 0, 0, 0.4);
+        cursor: default;
+        transition: transform 0.1s, box-shadow 0.1s;
+      }
+
+      .cell:hover {
+        transform: scale(1.05);
+        z-index: 2;
+        box-shadow: 0 3px 14px rgba(0, 0, 0, 0.5);
+      }
+
+      .cell.dim {
+        opacity: 0.5;
+        font-size: 0.55rem;
+      }
+
+      .maps-link.maps-hl {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(251, 146, 60, 0.2);
+        z-index: 4;
+      }
+
+      .viz-hint {
+        font-size: 0.68rem;
+        color: var(--muted);
+        margin: 0 0 0.5rem;
+        line-height: 1.45;
+      }
+
+      .slot-strip.vector-continuous {
+        width: 100%;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding-bottom: 0.25rem;
+        scrollbar-width: thin;
+      }
+
+      .slot-strip.vector-continuous .slot {
+        flex: 0 0 auto;
+      }
+
+      .slot.kind-gap,
+      .slot.kind-oob {
+        opacity: 0.65;
+        border-style: dashed;
+      }
+
+      .map-table-wrap {
+        overflow: auto;
+        max-height: 140px;
+        border: 1px solid var(--pt-box-border);
+        border-radius: 6px;
+        margin-top: 0.35rem;
+      }
+
+      .viz-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.7rem;
+      }
+
+      @media (max-width: 1024px) {
+        .viz-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .compact-note {
+        font-size: 0.68rem;
+        color: var(--muted);
+        font-family: var(--mono);
+        margin: 0 0 0.35rem;
+      }
+
+      .map-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: var(--mono);
+        font-size: 0.58rem;
+      }
+
+      .map-table th,
+      .map-table td {
+        padding: 0.22rem 0.35rem;
+        text-align: left;
+        border-bottom: 1px solid var(--pt-box-border);
+      }
+
+      .map-table th {
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--muted);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-size: 0.58rem;
+      }
+
+      .map-table tr:hover td {
+        background: rgba(251, 146, 60, 0.08);
+      }
+
+      .row-label {
+        font-size: 0.62rem;
+        color: var(--muted);
+        font-family: var(--mono);
+        margin-bottom: 0.3rem;
+      }
+
+      .tensor-slice-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 0.55rem;
+      }
+
+      .tensor-slice-block {
+        border: 1px solid var(--pt-box-border);
+        border-radius: 6px;
+        padding: 0.45rem;
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .ct-row {
+        margin-bottom: 0.85rem;
+      }
+
+      .ct-row-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-bottom: 0.25rem;
+      }
+
+      .ct-toggle {
+        padding: 0.2rem 0.45rem;
+        font-size: 0.64rem;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--pt-box-border);
+        color: var(--muted);
+      }
+
+      .ct-toggle:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      .slot-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 3px;
+      }
+
+      .slot {
+        font-family: var(--mono);
+        font-size: 0.58rem;
+        min-width: 1.65rem;
+        height: 1.65rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 3px;
+        border: 1px solid rgba(0, 0, 0, 0.4);
+        position: relative;
+      }
+
+      .slot.slot-ellipsis {
+        border-style: dashed;
+        color: var(--muted);
+        background: rgba(148, 163, 184, 0.12);
+      }
+
+      .slot::after {
+        content: attr(data-i);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%) translateY(-3px);
+        font-size: 0.52rem;
+        color: var(--muted);
+        opacity: 0;
+        pointer-events: none;
+        white-space: nowrap;
+        transition: opacity 0.1s;
+      }
+
+      .slot:hover::after {
+        opacity: 1;
+      }
+
+      .empty-preview {
+        text-align: center;
+        padding: 2rem 1rem;
+        color: var(--muted);
+        font-size: 0.85rem;
+        line-height: 1.6;
+      }
+
+      .empty-preview code {
+        font-family: var(--mono);
+        font-size: 0.85em;
+        color: var(--accent);
+        background: var(--accent-dim);
+        padding: 0.08em 0.3em;
+        border-radius: 4px;
+      }
+
+      .status-bar {
+        flex-shrink: 0;
+        font-size: 0.7rem;
+        color: var(--muted);
+        padding: 0.35rem 1rem 0.45rem;
+        background: var(--pt-pane-head);
+        border-top: 1px solid var(--pt-box-border);
+      }
+
+      .status-bar code {
+        font-family: var(--mono);
+        font-size: 0.65rem;
+      }
+
+      .status-bar.error {
+        color: var(--danger);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="ambient" aria-hidden="true"></div>
+    <div class="shell">
+      <nav>
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true"></span>
+          Rotom
+        </a>
+        <div class="nav-links">
+          <a href="/#features">Product</a>
+          <a href="/#developers">Contribute</a>
+          <a href="/#paper">Research</a>
+          <a href="https://github.com/cmu-cryptosystems" target="_blank" rel="noopener noreferrer">Organization</a>
+          <a href="https://github.com/cmu-cryptosystems/Rotom" target="_blank" rel="noopener noreferrer">Repository</a>
+          <a href="https://eprint.iacr.org/2025/1319" target="_blank" rel="noopener noreferrer">Paper</a>
+        </div>
+      </nav>
+
+      <header class="pt-header">
+        <div class="pt-header-left">
+          <div>
+            <h1>Rotom — Layout Visualizer</h1>
+            <p class="pt-header-sub">
+              Starting tensor on the right (sequential test values), ciphertext slots below — each slot shows which
+              tensor element it stores. Hover any linked cell to highlight the same entry across tensor and vectors
+              (C-order / row-major indices). Enter a raw layout string directly (no <code>layout_str =</code> needed).
+            </p>
+          </div>
+        </div>
+      </header>
+
+      <div class="pt-workspace">
+        <div class="pt-pane pt-pane--code">
+          <div class="viz-mock-inner">
+              <div class="presets">
+                <span class="presets-label">Load example</span>
+                <button type="button" data-preset="row">4×4 row-major</button>
+                <button type="button" data-preset="col">4×4 column-major</button>
+                <button type="button" data-preset="roll">Roll + 4×4</button>
+                <button type="button" data-preset="rep">Replicated CTs</button>
+                <button type="button" data-preset="3d">3D tensor</button>
+              </div>
+              <div class="quick-help">
+                <strong>Quick instructions:</strong>
+                <ol>
+                  <li>Write only layout text (for example, <code>roll(0,1) [0:4:1][1:4:1]</code>).</li>
+                  <li>Click <strong>Visualize layout</strong>.</li>
+                  <li>Hover a tensor cell or slot to trace the mapping.</li>
+                </ol>
+                <div class="quick-help-advanced">
+                  Advanced mode still supports assignments: <code>layout_str</code>, <code>n</code>, <code>tensor_shape</code>,
+                  <code>secret</code>.
+                </div>
+              </div>
+              <div id="editor"></div>
+              <div class="code-runbar">
+                <span class="pt-hint"><span class="kbd">Ctrl/Cmd + Enter</span></span>
+                <button type="button" class="pt-visualize" id="btn-run">Visualize layout</button>
+              </div>
+            </div>
+        </div>
+        <div class="pane-splitter" id="pane-splitter" aria-label="Resize panes" role="separator"></div>
+
+        <div class="pt-pane pt-pane--viz">
+          <div class="viz-mock-inner">
+            <div class="pt-viz-scroll" id="viz-scroll">
+              <div id="viz-root">
+                <div class="empty-preview">
+                  Press <strong>Visualize layout</strong> (or <code>Ctrl+Enter</code>). You’ll see the test tensor, each
+                  ciphertext slot labeled with its source <code>T[i,j,…]</code>, and a mapping table. Stdout is in
+                  <strong>Printed output</strong> below.
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="pt-printed">
+            <div class="pt-printed-label">Printed output</div>
+            <pre id="output-log"></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="status-bar" id="status">
+        Ready — <code>.venv</code> + uvicorn (see <code>website/README.md</code>).
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+    <script>
+      const PRESETS = {
+        row: `[0:4:1][1:4:1]`,
+        col: `[1:4:1][0:4:1]`,
+        roll: `roll(0,1) [0:4:1][1:4:1]`,
+        rep: `[R:4:1];[0:4:1][1:4:1]`,
+        "3d": `[0:2:1][1:4:1][2:4:1]`,
+      };
+
+      const defaultCode = PRESETS.row;
+
+      const vizRoot = document.getElementById("viz-root");
+      const vizScroll = document.getElementById("viz-scroll");
+      const outputLog = document.getElementById("output-log");
+      const statusEl = document.getElementById("status");
+      const workspace = document.querySelector(".pt-workspace");
+      const splitter = document.getElementById("pane-splitter");
+
+      let editorInstance = null;
+      let draggingSplitter = false;
+
+      function clearMapHighlight() {
+        vizScroll.querySelectorAll(".maps-hl").forEach((el) => el.classList.remove("maps-hl"));
+      }
+
+      function applyMapHighlight(linearKey) {
+        clearMapHighlight();
+        if (linearKey == null || linearKey === "") return;
+        vizScroll.querySelectorAll(`[data-maps-linear="${linearKey}"]`).forEach((el) => el.classList.add("maps-hl"));
+      }
+
+      vizScroll.addEventListener("mouseover", (e) => {
+        const el = e.target.closest("[data-maps-linear]");
+        if (!el) return;
+        applyMapHighlight(el.getAttribute("data-maps-linear"));
+      });
+
+      vizScroll.addEventListener("mouseout", (e) => {
+        const to = e.relatedTarget;
+        if (!to || !vizScroll.contains(to)) clearMapHighlight();
+      });
+
+      function setStatus(msg, isError = false) {
+        statusEl.textContent = msg;
+        statusEl.className = "status-bar" + (isError ? " error" : "");
+      }
+
+      function showLog(text, isError = false) {
+        outputLog.textContent = text;
+        outputLog.className = isError ? "error" : "";
+      }
+
+
+      function isMobileLayout() {
+        return window.matchMedia("(max-width: 900px)").matches;
+      }
+
+      function setLeftPaneSizeFromPointer(clientX) {
+        if (!workspace || isMobileLayout()) return;
+        const rect = workspace.getBoundingClientRect();
+        const raw = ((clientX - rect.left) / rect.width) * 100;
+        const clamped = Math.max(24, Math.min(76, raw));
+        workspace.style.setProperty("--left-pane-size", `${clamped}%`);
+      }
+
+      function startSplitterDrag(clientX) {
+        if (isMobileLayout()) return;
+        draggingSplitter = true;
+        splitter.classList.add("dragging");
+        document.body.style.cursor = "col-resize";
+        document.body.style.userSelect = "none";
+        setLeftPaneSizeFromPointer(clientX);
+      }
+
+      function stopSplitterDrag() {
+        if (!draggingSplitter) return;
+        draggingSplitter = false;
+        splitter.classList.remove("dragging");
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
+
+      function normT(v, min, max) {
+        if (max === min) return 0.5;
+        return (v - min) / (max - min);
+      }
+
+      function colorsForValue(v, min, max) {
+        const t = normT(v, min, max);
+        const h = 208 + t * (32 - 208);
+        const s = 78;
+        const l = 30 + t * 16;
+        const bg = `hsl(${h} ${s}% ${l}%)`;
+        const fg = l > 48 ? "#0f172a" : "#f8fafc";
+        return { bg, fg };
+      }
+
+      function layoutLabel(order) {
+        if (order === "row-major") return "row-major [0][1]";
+        if (order === "column-major") return "column-major [1][0]";
+        return "custom";
+      }
+
+      function inferColorPattern(grouping, order, resolvedLayout) {
+        if (grouping && typeof grouping.mode === "string") return grouping.mode;
+        if (order === "row-major") return "row";
+        if (order === "column-major") return "column";
+        if ((resolvedLayout || "").includes("roll(")) return "diagonal-diff";
+        return "value";
+      }
+
+      function paletteColor(groupIdx) {
+        const blues = [210, 218, 226, 234];
+        const oranges = [26, 32, 38, 44];
+        const useBlue = groupIdx % 2 === 0;
+        const hueList = useBlue ? blues : oranges;
+        const hue = hueList[Math.floor(groupIdx / 2) % hueList.length];
+        const sat = useBlue ? 72 : 84;
+        const light = useBlue ? 36 : 44;
+        const fg = useBlue ? "#f8fafc" : "#1f2937";
+        return { bg: `hsl(${hue} ${sat}% ${light}%)`, fg };
+      }
+
+      function groupIndexFromCoords(coords, pattern, rows = 1, cols = 1) {
+        if (!Array.isArray(coords) || coords.length < 2) return null;
+        const r = Number(coords[0] || 0);
+        const c = Number(coords[1] || 0);
+        if (pattern === "row") return r;
+        if (pattern === "column") return c;
+        if (pattern === "diagonal" || pattern === "diagonal-diff") {
+          const mod = Math.max(rows, cols);
+          return ((r - c) % mod + mod) % mod;
+        }
+        if (pattern === "diagonal-sum") {
+          const mod = Math.max(rows, cols);
+          return (r + c) % mod;
+        }
+        return null;
+      }
+
+      function majorColorForEntry(entry, pattern, rows = 1, cols = 1) {
+        if (!entry || entry.kind !== "tensor") return null;
+        if (Array.isArray(entry.coords) && entry.coords.length >= 2) {
+          const g = groupIndexFromCoords(entry.coords, pattern, rows, cols);
+          if (g != null) return paletteColor(g);
+        }
+        if (entry.linear != null && !Number.isNaN(Number(entry.linear))) {
+          return paletteColor(Number(entry.linear));
+        }
+        return null;
+      }
+
+      function flattenTensor(data) {
+        if (!Array.isArray(data)) return [data];
+        return data.flatMap(flattenTensor);
+      }
+
+      function makeCell(v, min, max, title, mapsLinear, forcedColors = null) {
+        const { bg, fg } = forcedColors || colorsForValue(Number(v), min, max);
+        const el = document.createElement("div");
+        el.className = "cell maps-link";
+        el.style.background = bg;
+        el.style.color = fg;
+        el.textContent = v;
+        el.title = title || String(v);
+        if (mapsLinear != null) el.setAttribute("data-maps-linear", String(mapsLinear));
+        return el;
+      }
+
+      function layoutTensorCellColors(r, c, rows, cols, pattern, linearIndex) {
+        const g = groupIndexFromCoords([r, c], pattern, rows, cols);
+        if (g != null) return paletteColor(g);
+        if (linearIndex != null && !Number.isNaN(Number(linearIndex))) {
+          return paletteColor(Number(linearIndex));
+        }
+        return null;
+      }
+
+      function renderTensor(tensor, ndim, vr, colorPattern) {
+        const wrap = document.createElement("div");
+        const min = vr.min;
+        const max = vr.max;
+
+        if (ndim === 0) {
+          wrap.appendChild(
+            makeCell(tensor, min, max, "scalar linear 0", 0, paletteColor(0))
+          );
+          return wrap;
+        }
+
+        if (ndim === 1) {
+          const strip = document.createElement("div");
+          strip.className = "slot-strip";
+          tensor.forEach((v, i) => {
+            strip.appendChild(
+              makeCell(v, min, max, `T[${i}]  linear ${i}`, i, paletteColor(i))
+            );
+          });
+          wrap.appendChild(strip);
+          return wrap;
+        }
+
+        if (ndim === 2) {
+          const rows = tensor.length;
+          const cols = tensor[0].length;
+          const grid = document.createElement("div");
+          grid.className = "grid-2d";
+          grid.style.gridTemplateColumns = `repeat(${cols}, minmax(1.85rem, 1fr))`;
+          for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+              const li = r * cols + c;
+              const forcedColors = layoutTensorCellColors(r, c, rows, cols, colorPattern, li);
+              grid.appendChild(
+                makeCell(tensor[r][c], min, max, `T[${r},${c}]  linear ${li}`, li, forcedColors)
+              );
+            }
+          }
+          wrap.appendChild(grid);
+          return wrap;
+        }
+
+        // Higher dimensions: recursively show first-axis slices until 2D grids.
+        const stack = document.createElement("div");
+        stack.className = "tensor-slice-stack";
+
+        function renderSlice(node, prefixCoords, dimsLeft) {
+          if (!Array.isArray(node)) return;
+          if (dimsLeft === 2) {
+            const rows = node.length;
+            const cols = rows > 0 && Array.isArray(node[0]) ? node[0].length : 0;
+            const block = document.createElement("div");
+            block.className = "tensor-slice-block";
+            const lbl = document.createElement("div");
+            lbl.className = "row-label";
+            const p = prefixCoords.length ? prefixCoords.map((x) => `[${x}]`).join("") : "";
+            lbl.textContent = `Slice ${p || "[root]"} -> ${rows}x${cols}`;
+            block.appendChild(lbl);
+
+            const grid = document.createElement("div");
+            grid.className = "grid-2d";
+            grid.style.gridTemplateColumns = `repeat(${cols}, minmax(1.85rem, 1fr))`;
+            for (let r = 0; r < rows; r++) {
+              for (let c = 0; c < cols; c++) {
+                const coords = [...prefixCoords, r, c];
+                const li = coords.reduce((acc, coord, i) => acc * Number(vrShape[i]) + Number(coord), 0);
+                const forcedColors = layoutTensorCellColors(r, c, rows, cols, colorPattern, li);
+                grid.appendChild(
+                  makeCell(node[r][c], min, max, `T[${coords.join(",")}]  linear ${li}`, li, forcedColors)
+                );
+              }
+            }
+            block.appendChild(grid);
+            stack.appendChild(block);
+            return;
+          }
+          for (let i = 0; i < node.length; i++) {
+            renderSlice(node[i], [...prefixCoords, i], dimsLeft - 1);
+          }
+        }
+
+        // Capture tensor shape from nested array structure once, for linear indices.
+        const vrShape = [];
+        let t = tensor;
+        while (Array.isArray(t)) {
+          vrShape.push(t.length);
+          t = t[0];
+        }
+
+        renderSlice(tensor, [], ndim);
+        wrap.appendChild(stack);
+        return wrap;
+      }
+
+      function renderPacked(packed, vr, heN, colorPattern, tensorShape) {
+        const root = document.createElement("div");
+        const min = vr.min;
+        const max = vr.max;
+        const rows = Array.isArray(tensorShape) && tensorShape.length > 0 ? Number(tensorShape[0]) : 1;
+        const cols = Array.isArray(tensorShape) && tensorShape.length > 1 ? Number(tensorShape[1]) : 1;
+        const COLLAPSE_THRESHOLD = 48;
+        const EDGE_COUNT = 16;
+
+        function buildSlot(e, i, fallbackValue) {
+          const val = e && e.value !== undefined ? e.value : fallbackValue;
+          const majorColors = majorColorForEntry(e, colorPattern, rows, cols);
+          const { bg, fg } = majorColors || colorsForValue(Number(val), min, max);
+          const box = document.createElement("div");
+          box.className = "slot maps-link";
+          if (e && e.kind && e.kind !== "tensor") box.classList.add(`kind-${e.kind}`);
+          box.style.background = bg;
+          box.style.color = fg;
+          box.textContent = val;
+          box.setAttribute("data-i", String(i));
+          if (e && e.kind === "tensor" && e.linear != null) {
+            box.setAttribute("data-maps-linear", String(e.linear));
+          }
+          const srcLabel = (e && e.label) || "";
+          box.title = `slot ${i} ← ${srcLabel} = ${val}`;
+          return box;
+        }
+
+        function fillStrip(strip, slots, entries, expanded) {
+          strip.innerHTML = "";
+          const useEntries = entries && entries.length === slots.length ? entries : null;
+          const total = slots.length;
+
+          const renderIndices = [];
+          if (expanded || total <= COLLAPSE_THRESHOLD) {
+            for (let i = 0; i < total; i++) renderIndices.push(i);
+          } else {
+            for (let i = 0; i < EDGE_COUNT; i++) renderIndices.push(i);
+            renderIndices.push(-1); // ellipsis marker
+            for (let i = total - EDGE_COUNT; i < total; i++) renderIndices.push(i);
+          }
+
+          for (const idx of renderIndices) {
+            if (idx === -1) {
+              const ell = document.createElement("div");
+              ell.className = "slot slot-ellipsis";
+              ell.textContent = "...";
+              ell.title = "Hidden middle slots";
+              strip.appendChild(ell);
+              continue;
+            }
+            const e = useEntries ? useEntries[idx] : { value: slots[idx], kind: "tensor", label: "?", linear: null };
+            strip.appendChild(buildSlot(e, idx, slots[idx]));
+          }
+        }
+
+        packed.forEach((ct) => {
+          const entries = ct.entries;
+          const block = document.createElement("div");
+          block.className = "ct-row";
+          const head = document.createElement("div");
+          head.className = "ct-row-head";
+          const lbl = document.createElement("div");
+          lbl.className = "row-label";
+          lbl.textContent =
+            packed.length > 1
+              ? `Ciphertext ${ct.id} — ${ct.slots.length} slots`
+              : `Ciphertext vector — ${ct.slots.length} slots (HE n = ${heN})`;
+          head.appendChild(lbl);
+          const strip = document.createElement("div");
+          strip.className = "slot-strip vector-continuous";
+          const wide = ct.slots.length > COLLAPSE_THRESHOLD;
+          let expanded = false;
+          if (wide) {
+            const toggle = document.createElement("button");
+            toggle.type = "button";
+            toggle.className = "ct-toggle";
+            const updateToggle = () => {
+              toggle.textContent = expanded ? "Collapse" : "Expand";
+            };
+            updateToggle();
+            toggle.addEventListener("click", () => {
+              expanded = !expanded;
+              fillStrip(strip, ct.slots, entries, expanded);
+              updateToggle();
+            });
+            head.appendChild(toggle);
+          }
+
+          block.appendChild(head);
+          fillStrip(strip, ct.slots, entries, expanded);
+          block.appendChild(strip);
+          root.appendChild(block);
+        });
+
+        return root;
+      }
+
+      function renderMappingTable(v) {
+        const wrap = document.createElement("div");
+        wrap.className = "map-table-wrap";
+        const table = document.createElement("table");
+        table.className = "map-table";
+        const thead = document.createElement("thead");
+        const hr = document.createElement("tr");
+        ["CT", "Slot", "Source", "Linear", "Value"].forEach((h) => {
+          const th = document.createElement("th");
+          th.textContent = h;
+          hr.appendChild(th);
+        });
+        thead.appendChild(hr);
+        table.appendChild(thead);
+        const tbody = document.createElement("tbody");
+        for (const pv of v.packed) {
+          for (const e of pv.entries || []) {
+            const tr = document.createElement("tr");
+            const cells = [
+              String(pv.id),
+              String(e.slot),
+              e.label || e.kind || "—",
+              e.linear != null ? String(e.linear) : "—",
+              String(e.value),
+            ];
+            cells.forEach((text) => {
+              const td = document.createElement("td");
+              td.textContent = text;
+              tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+          }
+        }
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        return wrap;
+      }
+
+      function wrapPtBox(title, innerEl) {
+        const box = document.createElement("div");
+        box.className = "pt-box";
+        const hd = document.createElement("div");
+        hd.className = "pt-box-hd";
+        hd.textContent = title;
+        const bd = document.createElement("div");
+        bd.className = "pt-box-bd";
+        bd.appendChild(innerEl);
+        box.appendChild(hd);
+        box.appendChild(bd);
+        return box;
+      }
+
+      function renderViz(v) {
+        vizRoot.innerHTML = "";
+        if (!v) {
+          clearMapHighlight();
+          vizRoot.innerHTML =
+            '<div class="empty-preview">No diagram for this run (no <code>tensor_shape</code>). See <strong>Printed output</strong> below.</div>';
+          return;
+        }
+
+        const colorPattern = inferColorPattern(v.color_grouping, v.layout_order_hint, v.layout_str_resolved);
+
+        const top = document.createElement("div");
+        const chips = document.createElement("div");
+        chips.className = "chips";
+        chips.innerHTML = `
+          <span class="chip"><strong>n</strong>=${v.n}</span>
+          <span class="chip"><strong>shape</strong> ${v.tensor_shape.join("×")}</span>
+          <span class="chip"><strong>${v.secret ? "ct" : "pt"}</strong> layout</span>
+          <span class="chip"><strong>CTs</strong> ${v.num_ciphertexts}</span>
+          <span class="chip layout-chip ${v.layout_order_hint || "other"}"><strong>order</strong> ${layoutLabel(v.layout_order_hint)}</span>
+        `;
+        top.appendChild(chips);
+
+        const lr = document.createElement("div");
+        lr.className = "layout-resolved";
+        lr.innerHTML = `<span class="lbl">Resolved layout</span>${escapeHtml(v.layout_str_resolved)}`;
+        top.appendChild(lr);
+        const scale = document.createElement("p");
+        scale.className = "compact-note";
+        if (colorPattern === "row") {
+          scale.textContent = "Color mode: row-major emphasis (same row = same color).";
+        } else if (colorPattern === "column") {
+          scale.textContent = "Color mode: column-major emphasis (same column = same color).";
+        } else if (colorPattern === "diagonal" || colorPattern === "diagonal-diff") {
+          scale.textContent = "Color mode: diagonal emphasis (same diagonal = same color).";
+        } else if (colorPattern === "diagonal-sum") {
+          scale.textContent = "Color mode: anti-diagonal emphasis (same anti-diagonal = same color).";
+        } else {
+          scale.textContent = `Color scale (shared): ${v.value_range.min} -> ${v.value_range.max}`;
+        }
+        top.appendChild(scale);
+
+        vizRoot.appendChild(top);
+
+        const vizGrid = document.createElement("div");
+        vizGrid.className = "viz-grid";
+
+        const secT = document.createElement("section");
+        secT.className = "viz-block";
+        secT.innerHTML = "<h3>Starting tensor</h3>";
+        const hintT = document.createElement("p");
+        hintT.className = "viz-hint";
+        if (colorPattern === "row") {
+          hintT.innerHTML =
+            "Starting tensor is colored by <strong>row-major traversal</strong> (same-row cells share hue family).";
+        } else if (colorPattern === "column") {
+          hintT.innerHTML =
+            "Starting tensor is colored by <strong>column-major traversal</strong> (same-column cells share hue family).";
+        } else if (colorPattern === "diagonal" || colorPattern === "diagonal-diff") {
+          hintT.innerHTML =
+            "Starting tensor is colored by <strong>diagonal groups</strong> (same diagonal cells share color).";
+        } else if (colorPattern === "diagonal-sum") {
+          hintT.innerHTML =
+            "Starting tensor is colored by <strong>anti-diagonal groups</strong> (same anti-diagonal cells share color).";
+        } else {
+          hintT.innerHTML =
+            "Test values are <code>0 … N−1</code> in C-order (row-major). Each cell’s <strong>linear index</strong> matches the slot mapping below.";
+        }
+        secT.appendChild(hintT);
+        secT.appendChild(renderTensor(v.tensor, v.tensor_ndim, v.value_range, colorPattern));
+        const legT = document.createElement("div");
+        legT.className = "legend";
+        legT.innerHTML = `<span>min</span><div class="legend-bar"></div><span>max</span>`;
+        secT.appendChild(legT);
+        vizGrid.appendChild(wrapPtBox("heap: ndarray (source)", secT));
+
+        const secP = document.createElement("section");
+        secP.className = "viz-block";
+        secP.innerHTML = "<h3>Ciphertext slot packing</h3>";
+        const hintP = document.createElement("p");
+        hintP.className = "viz-hint";
+        hintP.textContent =
+          "Each ciphertext is rendered as one continuous vector of n slots. Hover a slot to highlight its tensor source.";
+        secP.appendChild(hintP);
+        secP.appendChild(renderPacked(v.packed, v.value_range, v.n, colorPattern, v.tensor_shape));
+        vizGrid.appendChild(wrapPtBox("heap: packed vectors (layout output)", secP));
+
+        const secM = document.createElement("section");
+        secM.className = "viz-block";
+        secM.innerHTML = "<h3>Slot → tensor mapping (compact)</h3>";
+        secM.appendChild(renderMappingTable(v));
+        secP.appendChild(secM);
+        vizRoot.appendChild(vizGrid);
+
+        clearMapHighlight();
+      }
+
+      function escapeHtml(s) {
+        const d = document.createElement("div");
+        d.textContent = s;
+        return d.innerHTML;
+      }
+
+      async function postJson(url, body) {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const detail = data.detail;
+          const msg =
+            typeof detail === "string"
+              ? detail
+              : Array.isArray(detail)
+                ? detail.map((d) => d.msg || JSON.stringify(d)).join("; ")
+                : res.statusText;
+          throw new Error(msg || "Request failed");
+        }
+        return data;
+      }
+
+      async function runLayout() {
+        const code = editorInstance.getValue();
+        setStatus("Running…");
+        try {
+          const data = await postJson("/api/run", { code });
+          showLog(data.output || "(no output)");
+          renderViz(data.viz);
+          setStatus("Done.");
+        } catch (e) {
+          clearMapHighlight();
+          showLog(String(e.message), true);
+          setStatus("Error.", true);
+        }
+      }
+
+      document.querySelectorAll("[data-preset]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const key = btn.getAttribute("data-preset");
+          if (PRESETS[key] && editorInstance) editorInstance.setValue(PRESETS[key]);
+        });
+      });
+
+      require.config({
+        paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs" },
+      });
+      require(["vs/editor/editor.main"], function () {
+        monaco.editor.defineTheme("rotom-mock-ide", {
+          base: "vs-dark",
+          inherit: true,
+          rules: [],
+          colors: {
+            "editor.background": "#0a0f1c",
+            "editorGutter.background": "#080c14",
+            "editorLineNumber.foreground": "#64748b",
+            "editorLineNumber.activeForeground": "#94a3b8",
+          },
+        });
+        monaco.editor.setTheme("rotom-mock-ide");
+
+        editorInstance = monaco.editor.create(document.getElementById("editor"), {
+          value: defaultCode,
+          language: "python",
+          theme: "rotom-mock-ide",
+          automaticLayout: true,
+          minimap: { enabled: false },
+          fontSize: 13,
+          fontFamily: "'JetBrains Mono', monospace",
+          lineNumbers: "on",
+          scrollBeyondLastLine: false,
+          padding: { top: 8 },
+        });
+
+        document.getElementById("btn-run").addEventListener("click", runLayout);
+
+        editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+          runLayout();
+        });
+
+        window.addEventListener("keydown", (e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+            e.preventDefault();
+            runLayout();
+          }
+        });
+
+        splitter.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          startSplitterDrag(e.clientX);
+        });
+
+        splitter.addEventListener("touchstart", (e) => {
+          if (!e.touches || e.touches.length === 0) return;
+          startSplitterDrag(e.touches[0].clientX);
+        });
+
+        window.addEventListener("mousemove", (e) => {
+          if (!draggingSplitter) return;
+          setLeftPaneSizeFromPointer(e.clientX);
+        });
+
+        window.addEventListener("touchmove", (e) => {
+          if (!draggingSplitter || !e.touches || e.touches.length === 0) return;
+          setLeftPaneSizeFromPointer(e.touches[0].clientX);
+        });
+
+        window.addEventListener("mouseup", stopSplitterDrag);
+        window.addEventListener("touchend", stopSplitterDrag);
+        window.addEventListener("touchcancel", stopSplitterDrag);
+      });
+    </script>
+  </body>
+</html>

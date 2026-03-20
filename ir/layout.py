@@ -200,9 +200,9 @@ class Layout:
             Layout: The created layout object
 
         Examples:
-            >>> layout = Layout.from_string("[0:4:1][1:4:1]", 16)
-            >>> layout = Layout.from_string("roll(0,1) [1:4:1][0:4:1]", 16)
-            >>> layout = Layout.from_string("[R:4:1];[0:4:1][1:4:1]", 16)
+            >>> layout = Layout.from_string("[0:4:1][1:4:1]")
+            >>> layout = Layout.from_string("roll(0,1) [1:4:1][0:4:1]")
+            >>> layout = Layout.from_string("[R:4:1];[0:4:1][1:4:1]")
         """
         # Parse rolls from the layout string
         rolls = []
