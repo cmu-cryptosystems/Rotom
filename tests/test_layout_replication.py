@@ -1,7 +1,6 @@
 import numpy as np
 
-from ir.layout import Layout
-from util.layout_util import apply_layout
+from util.layout_util import apply_layout, parse_layout
 
 
 def test_apply_layout_with_replicated_slot_dim():
@@ -10,7 +9,7 @@ def test_apply_layout_with_replicated_slot_dim():
 
     # Layout with a replicated dimension that ends up in slot_dims.
     # For n=4 this produces slot_dims = [R:2:1][0:2:1] and no ct_dims.
-    layout = Layout.from_string("[R:2:1][0:2:1]", n=4, secret=False)
+    layout = parse_layout("[R:2:1][0:2:1]", secret=False)
 
     # Sanity-check that we really have a replicated slot dimension
     assert layout.num_ct() == 0 or layout.num_ct() == 1
@@ -31,7 +30,7 @@ def test_apply_layout_with_replication_every_16_slots():
     #   ct dims:  [2:3:1][3:3:1]   -> 9 ciphertexts, one per (h, w)
     #   slot dims:[1:4:1][R:16:1]  -> 4 base slots (dim 1), each replicated 16 times (R)
     # So each CT has 4 blocks of 16: value at dim1=0 repeated 16×, then dim1=1 ×16, etc.
-    layout = Layout.from_string("[2:3:1][3:3:1];[1:4:1][R:16:1]", n=64, secret=False)
+    layout = parse_layout("[2:3:1][3:3:1];[1:4:1][R:16:1]", secret=False)
 
     assert layout.num_ct() == 9
     assert any(dim.dim is None for dim in layout.slot_dims)
