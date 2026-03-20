@@ -57,7 +57,6 @@ def gen_sum(term, kernels):
                 term,
                 new_perms,
                 new_dims,
-                {},
                 kernel.layout.n,
                 kernel.layout.secret,
             )

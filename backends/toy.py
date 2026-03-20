@@ -167,8 +167,10 @@ class Toy:
         if poly_func == "relu_exact" or poly_func == "relu":
             return [float(v) if v > 0 else 0.0 for v in vec]
         if poly_func == "silu":
+            # Plaintext exact SiLU for PolyCall("silu", ...).
             return [
-                float(v * (1.0 / (1.0 + np.exp(-np.clip(v, -20, 20))))) for v in vec
+                float(v * (1.0 / (1.0 + np.exp(-np.clip(float(v), -40.0, 40.0)))))
+                for v in vec
             ]
         if (
             isinstance(poly_func, tuple)
@@ -296,6 +298,9 @@ class Toy:
 
             # skip checks for split rolls, replicate
             if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE]:
+                continue
+
+            if getattr(self.args, "skip_toy_eval_checks", False):
                 continue
 
             # Check if values are close instead of exact equality

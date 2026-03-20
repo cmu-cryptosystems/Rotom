@@ -93,13 +93,17 @@ class ResNet(nn.Module):
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward_features(self, x):
+        """Conv/BN/SiLU backbone through global pool; shape [batch, 64] before classifier."""
         out = self.act(self.bn1(self.conv1(x)))
         out = self.layer1(out)
         out = self.layer2(out)
         out = self.layer3(out)
         out = F.avg_pool2d(out, out.size()[3])
-        out = out.view(out.size(0), -1)
+        return out.view(out.size(0), -1)
+
+    def forward(self, x):
+        out = self.forward_features(x)
         out = self.linear(out)
         return out
 
