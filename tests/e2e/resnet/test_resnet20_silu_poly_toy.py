@@ -37,6 +37,13 @@ from util.layout_util import apply_layout
 _RESNET_TOY_N = 32768
 _PROFILE_ENV = "ROTOM_PROFILE_RESNET20_SILU_TOY_TIMINGS"
 _DUMP_DIR_ENV = "ROTOM_DUMP_RESNET20_SILU_LAYOUTS_DIR"
+_SKIP_ON_CI = os.environ.get("CI", "").strip().lower() in {"1", "true", "yes", "on"}
+_RUN_HEAVY_E2E = os.environ.get("ROTOM_RUN_HEAVY_E2E", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 
 def _emit_stage_timings(test_name: str, stage_timings_s: dict[str, float]) -> None:
@@ -110,6 +117,10 @@ def test_resnet20_silu_poly_stem_toy_matches_tensor_eval() -> None:
 
 
 @pytest.mark.slow
+@pytest.mark.skipif(
+    _SKIP_ON_CI or not _RUN_HEAVY_E2E,
+    reason="too heavy (memory/time) for default test runs; set ROTOM_RUN_HEAVY_E2E=1 to opt in",
+)
 def test_resnet20_silu_poly_toy_matches_tensor_eval() -> None:
     """``l2_0`` stride-2 block only; activations from evaluated stem+layer1 prefix.
 
