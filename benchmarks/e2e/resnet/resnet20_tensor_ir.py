@@ -249,7 +249,6 @@ def build_resnet20_silu_poly_graph(inputs: dict) -> TensorTerm:
 
     x, h, w = _basic_block_silu_poly(x, "l2_0", 16, 32, 2, inputs, h, w)
     return x
-
     for i in range(1, 3):
         x, h, w = _basic_block_silu_poly(x, f"l2_{i}", 32, 32, 1, inputs, h, w)
 

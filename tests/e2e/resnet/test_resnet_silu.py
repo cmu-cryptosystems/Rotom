@@ -43,6 +43,7 @@ def _load_dacapo_weights(model: torch.nn.Module, ckpt_path: str) -> None:
 
 
 @pytest.mark.e2e
+@pytest.mark.slow
 def test_resnet20_no_activation_eval_matches_pytorch() -> None:
     """Full ResNet-20 TensorTerm graph (no activations) matches PyTorch in float64."""
     if not os.path.exists(CKPT_FILE):
