@@ -121,6 +121,18 @@ def test_resnet20_silu_poly_toy_matches_tensor_eval() -> None:
     model = resnet20(num_classes=10)
     model.eval()
 
+    # `apply_layout` spends significant time rebuilding a layout->indices plan.
+    # Persist those plans on disk so repeated runs (and CI) don't pay the
+    # same startup cost.
+    os.environ.setdefault(
+        "ROTOM_APPLY_LAYOUT_PLAN_CACHE_DIR",
+        str(
+            Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+            / "rotom"
+            / "apply_layout_plans"
+        ),
+    )
+
     inputs: dict = {}
     populate_resnet20_no_activation_inputs(model, inputs)
 
