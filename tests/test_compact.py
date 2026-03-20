@@ -9,7 +9,6 @@ import numpy as np
 
 from frontends.tensor import TensorTerm
 from ir.kernel import Kernel, KernelOp
-from ir.layout import Layout
 from lower.lower import Lower
 from tests.conftest import assert_results_equal, run_backend
 from tests.test_util import get_default_args

@@ -1,6 +1,5 @@
 import numpy as np
 
-from ir.layout import Layout
 from util.layout_util import apply_layout, parse_layout
 
 
