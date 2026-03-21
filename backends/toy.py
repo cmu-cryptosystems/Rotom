@@ -95,7 +95,7 @@ class Toy:
 
         # Apply rotation during packing if specified (cheaper than homomorphic rotation)
         if rot_amt is not None:
-            # positive rot_amt means left rotate (same as eval_rot):
+            # positive rot_amt means left rotate:
             # out[i] = vec[(rot_amt + i) % n] == np.roll(vec, -rot_amt)
             vector = np.roll(vector, -rot_amt)
 
@@ -173,48 +173,17 @@ class Toy:
         vec = self._as_np_vec(vec)
         if poly_func is None or poly_func == "identity":
             return vec
-        if poly_func == "relu_exact" or poly_func == "relu":
+        elif poly_func == "relu_exact" or poly_func == "relu":
             return np.where(vec > 0, vec, 0.0)
-        if poly_func == "silu":
+        elif poly_func == "silu":
             # Plaintext exact SiLU for PolyCall("silu", ...) with clipped sigmoid input.
             # Matches the prior implementation:
             #   out = v * sigmoid(clip(v, -40, 40))
             x_clip = np.clip(vec, -40.0, 40.0)
             sig = 1.0 / (1.0 + np.exp(-x_clip))
             return vec * sig
-        if (
-            isinstance(poly_func, tuple)
-            and len(poly_func) >= 5
-            and poly_func[0] == "batchnorm"
-        ):
-            _, mean_key, var_key, gamma_key, beta_key = poly_func[:5]
-            eps = float(poly_func[5]) if len(poly_func) > 5 else 1e-5
-            mean = np.asarray(self.inputs[mean_key]).flatten()
-            var = np.asarray(self.inputs[var_key]).flatten()
-            gamma = np.asarray(self.inputs[gamma_key]).flatten()
-            beta = np.asarray(self.inputs[beta_key]).flatten()
-            # Use per-channel params when poly_channel is set (one CT per channel); else first channel
-            ch = 0 if poly_channel is None else min(int(poly_channel), len(mean) - 1)
-            m, vv, g, b = (
-                float(mean[ch]),
-                float(var[ch]),
-                float(gamma[ch]),
-                float(beta[ch]),
-            )
-            inv_std = 1.0 / np.sqrt(vv + eps)
-            return g * (vec - m) * inv_std + b
-        if isinstance(poly_func, (list, tuple)) and len(poly_func) > 0:
-            try:
-                coeffs = [float(c) for c in poly_func]
-            except (TypeError, ValueError):
-                return vec
-            # coeffs are in ascending power order: y = sum_i c[i] * x^i
-            out = np.zeros_like(vec, dtype=np.float64)
-            pow_x = np.ones_like(vec, dtype=np.float64)
-            for c in coeffs:
-                out += c * pow_x
-                pow_x *= vec
-            return out
+        else:
+            raise NotImplementedError(f"Poly func {poly_func!r} not implemented for eval")
 
     def eval_poly(self, term):
         """Apply the actual POLY function when term.poly_func is set (from lowering); else identity."""
@@ -298,9 +267,6 @@ class Toy:
             # Evaluate the tensor computation to get the expected result
             # skip checks for split rolls, replicate
             if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE]:
-                continue
-
-            if getattr(self.args, "skip_toy_eval_checks", False):
                 continue
 
             # Evaluate the tensor computation to get the expected result
