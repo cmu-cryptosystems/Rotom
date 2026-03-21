@@ -9,6 +9,7 @@ logical structure.
 Key functions:
 - compact_ct_dim: Compacts ciphertext dimensions in layouts
 - find_compaction: Finds optimal compaction strategies for layouts
+- layout_ct_gap_compaction_is_fixed_point: Whether ct-axis data is already packed into gaps
 """
 
 from copy import deepcopy as copy
@@ -240,3 +241,35 @@ def find_compaction(kernel):
             return Kernel(KernelOp.COMPACT, [kernel], compacted_layout)
     else:
         return kernel
+
+
+def layout_ct_gap_compaction_is_fixed_point(layout: Layout) -> bool:
+    """Return True if ciphertext-axis extents are already merged into gap slots where applicable.
+
+    Packing splits dimensions into ``ct_dims`` (vector / multi-CT axis) and ``slot_dims``
+    (in-slot axis, including EMPTY ``G:`` gap slots). The same ``find_compaction`` pass
+    used to emit ``KernelOp.COMPACT`` can move FILL data from ``ct_dims`` into EMPTY slot
+    capacity. This helper compares merged geometry (``dimension_merging``) before and
+    after that pass: if a COMPACT would change ``layout_str()``, more compaction was
+    still available.
+
+    Layouts with rolls are ignored here (True): roll-based compaction uses a different
+    branch in ``find_compaction``, and roll conv paths are handled separately.
+
+    Raises:
+        AttributeError, NotImplementedError: If ``compaction_heuristic`` does not support
+        this ct/slot geometry (e.g. some replication + gap combinations).
+
+    Returns:
+        True when there is nothing to compact, or the suggested compaction is a no-op on
+        merged geometry; False when ``find_compaction`` would tighten packing.
+    """
+    if layout.rolls:
+        return True
+    probe = Kernel(KernelOp.TENSOR, [], layout)
+    compacted = find_compaction(probe)
+    if compacted.op != KernelOp.COMPACT:
+        return True
+    in_geom = dimension_merging(layout).layout_str()
+    out_geom = dimension_merging(compacted.layout).layout_str()
+    return in_geom == out_geom
