@@ -183,7 +183,9 @@ class Toy:
             sig = 1.0 / (1.0 + np.exp(-x_clip))
             return vec * sig
         else:
-            raise NotImplementedError(f"Poly func {poly_func!r} not implemented for eval")
+            raise NotImplementedError(
+                f"Poly func {poly_func!r} not implemented for eval"
+            )
 
     def eval_poly(self, term):
         """Apply the actual POLY function when term.poly_func is set (from lowering); else identity."""

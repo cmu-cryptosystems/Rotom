@@ -322,8 +322,7 @@ def add_replicated_dimensions(a_shape, b_shape):
 
 
 def _conv2d_output_dims_zip(a_dims, b_dims, h_o_p2, w_o_p2, stride):
-    """Build CONV2D output layout dims from replicated input and public filter layouts.
-    """
+    """Build CONV2D output layout dims from replicated input and public filter layouts."""
     output_dims = []
     spatial_out_done = {1: False, 2: False}
 
@@ -449,7 +448,7 @@ def gen_conv2d(term, cs_kernels, shapes):
         h_o_p2 = round_to_ceiling_power_of_2(h_o)
         w_o_p2 = round_to_ceiling_power_of_2(w_o)
 
-        # Output layout: 
+        # Output layout:
         output_dims = _conv2d_output_dims_zip(
             a_kernel.layout.get_dims(), b_dims, h_o_p2, w_o_p2, stride
         )
