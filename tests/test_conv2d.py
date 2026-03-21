@@ -335,3 +335,33 @@ class TestConvolution2D:
             dim_size, input_channels, output_channels, f_size, f_size, stride, padding
         )
         self._run_test_case(tensor_ir, inputs, args, backend)
+
+
+def test_conv2d_stride2_gap_split_channel_layout_regression():
+    """Minimal regression for split-channel + gap-slot input layout."""
+    args = get_default_args()
+    args.n = 512
+    args.rolls = True
+    args.conv_roll = False
+    args.backend = "toy"
+    args.benchmark = "conv2d_gap_split_channel_regression"
+
+    a = TensorTerm.Tensor(
+        "a",
+        [4, 8, 8],
+        True,
+        layout="[0:2:2][1:8:1][2:8:1][G:2][0:2:1]",
+    )
+    b = TensorTerm.Tensor("b", [8, 4, 3, 3], False)
+    y = TensorTerm.conv2d(a, b, 2, "same")
+
+    rng = np.random.default_rng(0)
+    inputs = {
+        "a": rng.normal(size=(4, 8, 8)),
+        "b": rng.normal(size=(8, 4, 3, 3)),
+    }
+
+    expected = y.eval(inputs)
+    results, kernel = run_compiler_and_backend(y, inputs, args, "toy")
+    expected_cts = apply_layout(expected, kernel.layout)
+    assert_results_equal(expected_cts, results, "toy")

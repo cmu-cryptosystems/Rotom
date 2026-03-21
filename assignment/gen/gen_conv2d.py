@@ -99,20 +99,21 @@ def calculate_padding(input_shape, filter_shape, stride, padding):
         return [0, 0, 0, 0]
 
     elif padding == "same":
-        # output dimensions
-        O_h = (H_in + S_h - 1) // S_h
-        O_w = (W_in + S_w - 1) // S_w
-
-        # total padding
-        total_padding_h = max(0, (O_h - 1) * S_h + K_h - H_in)
-        total_padding_w = max(0, (O_w - 1) * S_w + K_w - W_in)
-
-        # padding on each side
-        pad_top = total_padding_h // 2
-        pad_bottom = total_padding_h - pad_top
-        pad_left = total_padding_w // 2
-        pad_right = total_padding_w - pad_left
-        return [pad_top, pad_bottom, pad_left, pad_right]
+        if S_h == 1:
+            # Stride 1: preserve spatial size (align with tensor_evaluator._eval_conv2d).
+            O_h = (H_in + S_h - 1) // S_h
+            O_w = (W_in + S_w - 1) // S_w
+            total_padding_h = max(0, (O_h - 1) * S_h + K_h - H_in)
+            total_padding_w = max(0, (O_w - 1) * S_w + K_w - W_in)
+            pad_top = total_padding_h // 2
+            pad_bottom = total_padding_h - pad_top
+            pad_left = total_padding_w // 2
+            pad_right = total_padding_w - pad_left
+            return [pad_top, pad_bottom, pad_left, pad_right]
+        # Stride > 1: symmetric k//2 per side (PyTorch nn.Conv2d), matching tensor_evaluator.
+        p_h = K_h // 2
+        p_w = K_w // 2
+        return [p_h, p_h, p_w, p_w]
     else:
         raise NotImplementedError("unknown padding: " + padding)
 
@@ -320,6 +321,51 @@ def add_replicated_dimensions(a_shape, b_shape):
     return replicated_dims, b_dims
 
 
+def _conv2d_output_dims_zip(a_dims, b_dims, h_o_p2, w_o_p2, stride):
+    """Build CONV2D output layout dims from replicated input and public filter layouts."""
+    output_dims = []
+    spatial_out_done = {1: False, 2: False}
+
+    for a_dim, b_dim in zip(copy(a_dims), copy(b_dims)):
+        if a_dim.dim_type == DimType.EMPTY:
+            output_dims.append(Dim(None, a_dim.extent, 1, DimType.EMPTY))
+        elif a_dim.dim in [0] or b_dim.dim in [1, 2, 3]:
+            output_dims.append(Dim(None, a_dim.extent, 1, DimType.EMPTY))
+        elif a_dim.dim is None and b_dim.dim == 0:
+            output_dims.append(b_dim)
+        elif (
+            a_dim.dim in (1, 2) and a_dim.dim_type == DimType.FILL and b_dim.dim is None
+        ):
+            d = a_dim.dim
+            if spatial_out_done[d]:
+                return None
+            spatial_out_done[d] = True
+            output_dims.append(Dim(d, h_o_p2 if d == 1 else w_o_p2, 1))
+            if stride == 2:
+                output_dims.append(Dim(None, stride, 1, DimType.EMPTY))
+            elif stride != 1:
+                raise NotImplementedError("stride not supported: " + str(stride))
+        else:
+            output_dims.append(Dim(a_dim.dim, a_dim.extent, 1, DimType.FILL))
+
+    return output_dims
+
+
+def _materialized_tensor_shape(output_layout):
+    """Product of extents per logical dim index (0,1,2), ignoring EMPTY / None dim."""
+    shape_map = {}
+    for d in output_layout.get_dims():
+        if d.dim_type == DimType.EMPTY or d.dim is None:
+            continue
+        if d.dim in shape_map:
+            shape_map[d.dim] *= d.extent
+        else:
+            shape_map[d.dim] = d.extent
+    if not shape_map:
+        return []
+    return [shape_map.get(i, 1) for i in range(max(shape_map.keys()) + 1)]
+
+
 def gen_conv2d(term, cs_kernels, shapes):
     # assumption is that a_kernel (input) is secret and b_kernel (weights) is public
     #
@@ -364,16 +410,6 @@ def gen_conv2d(term, cs_kernels, shapes):
         if a_kernel.layout.rolls:
             continue
 
-        # NOTE: we assume that the a_kernel is in row-major order (dims with dim=None sort first)
-        # - This constraint can be relaxed later if needed
-        # - The actual assignment rolls the row-major layout to align with the b_kernel
-        a_dims = a_kernel.layout.get_dims()
-        a_dims.sort(
-            key=lambda x: (x.dim is not None, x.dim if x.dim is not None else 0)
-        )
-        if a_dims != a_kernel.layout.get_dims():
-            continue
-
         # Add replication dimensions to the a_kernel
         replicated_dims, b_dims = add_replicated_dimensions(a_shape, b_shape)
         for dim in replicated_dims[::-1]:
@@ -403,44 +439,30 @@ def gen_conv2d(term, cs_kernels, shapes):
             h_o = (h_i - f_h) // stride + 1
             w_o = (w_i - f_w) // stride + 1
         else:
-            # Same padding: stride 1 -> input size; stride > 1 -> ceil(H/stride) x ceil(W/stride)
             if stride == 1:
                 h_o, w_o = h_i, w_i
             else:
-                h_o = (h_i + stride - 1) // stride
-                w_o = (w_i + stride - 1) // stride
+                p_h, p_w = f_h // 2, f_w // 2
+                h_o = (h_i + 2 * p_h - f_h) // stride + 1
+                w_o = (w_i + 2 * p_w - f_w) // stride + 1
         h_o_p2 = round_to_ceiling_power_of_2(h_o)
         w_o_p2 = round_to_ceiling_power_of_2(w_o)
 
-        # Output layout: only output dims [channel, height, width] so n divides product
-        output_dims = []
-        for a_dim, b_dim in zip(copy(a_kernel.layout.get_dims()), copy(b_dims)):
-            if a_dim.dim_type == DimType.EMPTY:
-                output_dims.append(Dim(None, a_dim.extent, 1, DimType.EMPTY))
-            elif a_dim.dim in [0] or b_dim.dim in [1, 2, 3]:
-                # summation dimension (input channel or filter dims)
-                output_dims.append(Dim(None, a_dim.extent, 1, DimType.EMPTY))
-            elif a_dim.dim is None and b_dim.dim == 0:
-                # output channels only (b dims 1,2,3 are input channels and filter = summation)
-                output_dims.append(b_dim)
-            elif a_dim.dim is not None and b_dim.dim is None:
-                if stride == 1:
-                    output_dims.append(
-                        Dim(a_dim.dim, h_o_p2 if a_dim.dim == 1 else w_o_p2, 1)
-                    )
-                elif stride == 2:
-                    output_dims.append(
-                        Dim(a_dim.dim, h_o_p2 if a_dim.dim == 1 else w_o_p2, 1)
-                    )
-                    output_dims.append(Dim(None, stride, 1, DimType.EMPTY))
-                else:
-                    raise NotImplementedError("stride not supported: " + str(stride))
-            else:
-                output_dims.append(Dim(a_dim.dim, a_dim.extent, 1, DimType.FILL))
-
+        # Output layout:
+        output_dims = _conv2d_output_dims_zip(
+            a_kernel.layout.get_dims(), b_dims, h_o_p2, w_o_p2, stride
+        )
+        if output_dims is None:
+            continue
         output_layout = Layout(
             term, [], output_dims, a_kernel.layout.n, a_kernel.layout.secret
         )
+
+        expected = [b_shape[0], h_o_p2, w_o_p2]
+        kernel_shape = _materialized_tensor_shape(output_layout)
+        if kernel_shape != expected:
+            continue
+
         kernel = Kernel(KernelOp.CONV2D, [a_kernel, b_kernel], output_layout)
         output_kernels.add(kernel)
     return output_kernels
