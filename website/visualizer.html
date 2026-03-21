@@ -1085,6 +1085,24 @@
         return "custom";
       }
 
+      /** Allowlisted CSS class fragment for layout order (never raw API strings). */
+      function layoutOrderChipClass(hint) {
+        if (hint === "row-major" || hint === "column-major" || hint === "other") {
+          return hint;
+        }
+        return "other";
+      }
+
+      function appendTextChip(container, strongText, tailText) {
+        const span = document.createElement("span");
+        span.className = "chip";
+        const strong = document.createElement("strong");
+        strong.textContent = strongText;
+        span.appendChild(strong);
+        span.appendChild(document.createTextNode(tailText));
+        container.appendChild(span);
+      }
+
       function inferColorPattern(grouping, order, resolvedLayout) {
         if (grouping && typeof grouping.mode === "string") return grouping.mode;
         if (order === "row-major") return "row";
@@ -1419,13 +1437,20 @@
         const top = document.createElement("div");
         const chips = document.createElement("div");
         chips.className = "chips";
-        chips.innerHTML = `
-          <span class="chip"><strong>n</strong>=${v.n}</span>
-          <span class="chip"><strong>shape</strong> ${v.tensor_shape.join("×")}</span>
-          <span class="chip"><strong>${v.secret ? "ct" : "pt"}</strong> layout</span>
-          <span class="chip"><strong>CTs</strong> ${v.num_ciphertexts}</span>
-          <span class="chip layout-chip ${v.layout_order_hint || "other"}"><strong>order</strong> ${layoutLabel(v.layout_order_hint)}</span>
-        `;
+        appendTextChip(chips, "n", "=" + String(Number(v.n)));
+        const shapeStr = Array.isArray(v.tensor_shape)
+          ? v.tensor_shape.map((x) => String(Number(x))).join("×")
+          : "";
+        appendTextChip(chips, "shape", " " + shapeStr);
+        appendTextChip(chips, v.secret ? "ct" : "pt", " layout");
+        appendTextChip(chips, "CTs", " " + String(Number(v.num_ciphertexts)));
+        const orderChip = document.createElement("span");
+        orderChip.className = "chip layout-chip " + layoutOrderChipClass(v.layout_order_hint);
+        const orderStrong = document.createElement("strong");
+        orderStrong.textContent = "order";
+        orderChip.appendChild(orderStrong);
+        orderChip.appendChild(document.createTextNode(" " + layoutLabel(v.layout_order_hint)));
+        chips.appendChild(orderChip);
         top.appendChild(chips);
 
         const lr = document.createElement("div");
@@ -1443,7 +1468,7 @@
         } else if (colorPattern === "diagonal-sum") {
           scale.textContent = "Color mode: anti-diagonal emphasis (same anti-diagonal = same color).";
         } else {
-          scale.textContent = `Color scale (shared): ${v.value_range.min} -> ${v.value_range.max}`;
+          scale.textContent = `Color scale (shared): ${Number(v.value_range.min)} -> ${Number(v.value_range.max)}`;
         }
         top.appendChild(scale);
 
@@ -1496,7 +1521,7 @@
         secM.className = "viz-block";
         secM.innerHTML = "<h3>Slot → tensor mapping (compact)</h3>";
         secM.appendChild(renderMappingTable(v));
-        secP.appendChild(secM);
+        vizGrid.appendChild(wrapPtBox("heap: slot → tensor mapping", secM));
         vizRoot.appendChild(vizGrid);
 
         clearMapHighlight();
@@ -1511,7 +1536,10 @@
       async function postJson(url, body) {
         const res = await fetch(url, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "X-Rotom-Client": "web-v1",
+          },
           body: JSON.stringify(body),
         });
         const data = await res.json().catch(() => ({}));

@@ -74,3 +74,34 @@ secret = False
 Response: `{ "ok": true, "output": "<captured stdout>", "viz": <object|null> }`.
 
 When `tensor_shape` is set, `viz` includes the tensor grid, packed ciphertext vectors, and per-slot **`entries`** (each slot’s `label` such as `T[i,j]`, row-major **`linear`** index, `kind`: `tensor` | `gap` | `oob`, and `value`). Omit `tensor_shape` and `viz` is `null` (text-only).
+
+## Server configuration (optional)
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ROTOM_WEB_CORS_ORIGINS` | `http://127.0.0.1:8765`, `http://localhost:8765`, and `:8000` variants | Comma-separated allowed `Origin` values for browser `fetch`. Set this if you use another host/port. |
+| `ROTOM_WEB_DEBUG` | (off) | If `1` / `true`, 500 responses include exception text (local debugging only). |
+| `ROTOM_WEB_MAX_LAYOUT_LEN` | `16384` | Max `layout_str` length (characters). |
+| `ROTOM_WEB_MAX_N` | `65536` | Max HE slot count `n`. |
+| `ROTOM_WEB_MAX_TENSOR_ELEMENTS` | `250000` | Max tensor size (product of `tensor_shape`). |
+| `ROTOM_WEB_MAX_TENSOR_RANK` | `16` | Max number of dimensions in `tensor_shape`. |
+| `ROTOM_WEB_SKIP_BROWSER_CHECKS` | (off) | If `1` / `true`, disables CSRF-style checks on `POST /api/*` (for scripts only; do not use on an exposed host). |
+
+### API hardening (CSRF / cross-site POST)
+
+Browser `POST` requests to `/api/run` and `/api/run-demo` must include:
+
+- Header **`X-Rotom-Client: web-v1`** (HTML forms cannot set this; the bundled visualizer sends it automatically).
+- If the browser sends **`Origin`**, it must match `ROTOM_WEB_CORS_ORIGINS` (or the default localhost list).
+- Requests with **`Sec-Fetch-Site: cross-site`** are rejected.
+
+Automation (`curl`, tests): send the client header, e.g.
+
+```bash
+curl -s -X POST http://127.0.0.1:8765/api/run \
+  -H 'Content-Type: application/json' \
+  -H 'X-Rotom-Client: web-v1' \
+  -d '{"code": "[0:4:1][1:4:1]"}'
+```
+
+Or set `ROTOM_WEB_SKIP_BROWSER_CHECKS=1` (insecure on a public network).
