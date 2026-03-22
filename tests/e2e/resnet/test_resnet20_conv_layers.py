@@ -21,8 +21,6 @@ from __future__ import annotations
 
 import torch
 
-import pytest
-
 from assignment.assignment import LayoutAssignment
 from backends.toy import Toy
 from benchmarks.e2e.resnet.resnet_model import resnet20
@@ -71,7 +69,6 @@ def _run_conv_matches_toy(
     check_results(tensor_ir, inputs, kernel, backend_results, 0, args)
 
 
-@pytest.mark.slow
 def test_resnet20_unique_conv_stem_3_to_16_stride1() -> None:
     model = resnet20()
     _run_conv_matches_toy(
@@ -79,7 +76,6 @@ def test_resnet20_unique_conv_stem_3_to_16_stride1() -> None:
     )
 
 
-@pytest.mark.slow
 def test_resnet20_unique_conv_16_to_16_stride1() -> None:
     model = resnet20()
     _run_conv_matches_toy(
@@ -90,7 +86,6 @@ def test_resnet20_unique_conv_16_to_16_stride1() -> None:
     )
 
 
-@pytest.mark.slow
 def test_resnet20_unique_conv_16_to_32_stride2() -> None:
     model = resnet20()
     _run_conv_matches_toy(
@@ -101,7 +96,6 @@ def test_resnet20_unique_conv_16_to_32_stride2() -> None:
     )
 
 
-@pytest.mark.slow
 def test_resnet20_unique_conv_32_to_32_stride1() -> None:
     model = resnet20()
     _run_conv_matches_toy(
@@ -112,7 +106,6 @@ def test_resnet20_unique_conv_32_to_32_stride1() -> None:
     )
 
 
-@pytest.mark.slow
 def test_resnet20_unique_conv_32_to_64_stride2() -> None:
     model = resnet20()
     _run_conv_matches_toy(
@@ -123,7 +116,6 @@ def test_resnet20_unique_conv_32_to_64_stride2() -> None:
     )
 
 
-@pytest.mark.slow
 def test_resnet20_unique_conv_64_to_64_stride1() -> None:
     model = resnet20()
     _run_conv_matches_toy(
