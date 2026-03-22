@@ -1,0 +1,9 @@
+Running as unit: run-rd003a18fbe294c60881d174b64e75c7f.scope; invocation ID: a899bb5346a04b3582c54e7ca6d04d1b
+============================= test session starts ==============================
+platform linux -- Python 3.12.7, pytest-8.4.1, pluggy-1.6.0
+rootdir: /usr0/home/ejchen/code/packing/Rotom
+configfile: pytest.ini
+plugins: anyio-4.12.1, cov-7.0.0
+collected 1 item
+
+tests/e2e/resnet/test_resnet20_silu_poly_toy.py 

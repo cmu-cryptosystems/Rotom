@@ -10,6 +10,8 @@ Shortcuts use a fixed 1×1 stride-2 conv (plaintext) equivalent to Option A padd
 
 from __future__ import annotations
 
+from typing import Literal
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -208,17 +210,7 @@ def _basic_block_silu_poly(
 
 def build_resnet20_silu_poly_graph_through_layer1(inputs: dict) -> TensorTerm:
     """Stem + layer1 (three BasicBlocks) with SiLU poly; all ops stay on 32×32."""
-    h, w = 32, 32
-    x = TensorTerm.Tensor("input", [3, 32, 32], True)
-    x = _conv_same(x, "conv1_w", inputs, 1)
-    h, w = _spatial_hw_after_conv3(h, w, 1)
-    x = _bn_affine_hw(x, "bn1", 16, h, w, inputs)
-    x = _silu_poly(x)
-
-    for i in range(3):
-        x, h, w = _basic_block_silu_poly(x, f"l1_{i}", 16, 16, 1, inputs, h, w)
-
-    return x
+    return build_resnet20_silu_poly_graph_to_depth(inputs, "l1")
 
 
 def build_resnet20_silu_poly_l2_0_block_graph(inputs: dict) -> TensorTerm:
@@ -235,25 +227,68 @@ def build_resnet20_silu_poly_l2_0_block_graph(inputs: dict) -> TensorTerm:
     return x
 
 
-def build_resnet20_silu_poly_graph(inputs: dict) -> TensorTerm:
-    """Full CIFAR ResNet-20 with ``poly_call('silu', ...)`` at each activation site."""
+def build_resnet20_silu_poly_l1_block_graph(inputs: dict, index: int) -> TensorTerm:
+    """Single layer1 BasicBlock ``l1_{index}`` (stride 1, 16→16, 32×32).
+
+    Secret activations: ``inputs[f"l1_{index}_block_in"]`` with shape ``[16, 32, 32]``.
+    ``index`` must be ``0``, ``1``, or ``2``.
+    """
+    if index not in (0, 1, 2):
+        raise ValueError(f"index must be 0, 1, or 2, got {index!r}")
+    h, w = 32, 32
+    key = f"l1_{index}_block_in"
+    x = TensorTerm.Tensor(key, [16, 32, 32], True)
+    x, _h, _w = _basic_block_silu_poly(x, f"l1_{index}", 16, 16, 1, inputs, h, w)
+    return x
+
+
+def build_resnet20_silu_poly_layer1_only_graph(inputs: dict) -> TensorTerm:
+    """All three layer1 BasicBlocks only (no stem): ``l1_0`` … ``l1_2``.
+
+    Secret activations: ``inputs["layer1_only_in"]`` with shape ``[16, 32, 32]``.
+    """
+    h, w = 32, 32
+    x = TensorTerm.Tensor("layer1_only_in", [16, 32, 32], True)
+    for i in range(3):
+        x, h, w = _basic_block_silu_poly(x, f"l1_{i}", 16, 16, 1, inputs, h, w)
+    return x
+
+
+SiluPolyDepth = Literal["stem", "l1", "l2_0", "l2", "l3", "full"]
+
+
+def build_resnet20_silu_poly_graph_to_depth(
+    inputs: dict, depth: SiluPolyDepth
+) -> TensorTerm:
+    """SiLU-poly ResNet-20 prefix: stop after ``stem``, ``l1``, ``l2_0``, ``l2``, ``l3``, or ``full`` (FC)."""
     h, w = 32, 32
     x = TensorTerm.Tensor("input", [3, 32, 32], True)
     x = _conv_same(x, "conv1_w", inputs, 1)
     h, w = _spatial_hw_after_conv3(h, w, 1)
     x = _bn_affine_hw(x, "bn1", 16, h, w, inputs)
     x = _silu_poly(x)
+    if depth == "stem":
+        return x
 
     for i in range(3):
         x, h, w = _basic_block_silu_poly(x, f"l1_{i}", 16, 16, 1, inputs, h, w)
+    if depth == "l1":
+        return x
 
     x, h, w = _basic_block_silu_poly(x, "l2_0", 16, 32, 2, inputs, h, w)
+    if depth == "l2_0":
+        return x
+
     for i in range(1, 3):
         x, h, w = _basic_block_silu_poly(x, f"l2_{i}", 32, 32, 1, inputs, h, w)
+    if depth == "l2":
+        return x
 
     x, h, w = _basic_block_silu_poly(x, "l3_0", 32, 64, 2, inputs, h, w)
     for i in range(1, 3):
         x, h, w = _basic_block_silu_poly(x, f"l3_{i}", 64, 64, 1, inputs, h, w)
+    if depth == "l3":
+        return x
 
     x = x.sum(1)
     x = x.sum(1)
@@ -261,6 +296,11 @@ def build_resnet20_silu_poly_graph(inputs: dict) -> TensorTerm:
     fc = _w_tensor(inputs, "fc")
     fb = TensorTerm.Tensor("fc_b", [1, 10], False)
     return x @ fc + fb
+
+
+def build_resnet20_silu_poly_graph(inputs: dict) -> TensorTerm:
+    """Full CIFAR ResNet-20 with ``poly_call('silu', ...)`` at each activation site."""
+    return build_resnet20_silu_poly_graph_to_depth(inputs, "full")
 
 
 @torch.no_grad()

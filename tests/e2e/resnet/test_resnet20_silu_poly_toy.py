@@ -1,18 +1,55 @@
 """ResNet-20 SiLU polynomial path on the Toy backend.
 
+Heavy end-to-end test (opt-in via ``ROTOM_RUN_HEAVY_E2E=1``) builds the **full**
+``build_resnet20_silu_poly_graph`` (stem through FC), with ``n=32768``. Runtime is
+dominated by the number of HE ops × vector width, not Python recursion: Toy’s hot
+path walks each ciphertext DAG in iterative post-order; ``Toy.eval`` may recurse
+only on occasional ``HEOp.CS`` edges when a child is missing from ``env``.
+
+**Memory:** use-count eviction lowers peak versus keeping all intermediates, but
+RSS can still grow large (many length-``n`` vectors live at once inside one DAG).
+If ``Maximum resident set size`` from ``/usr/bin/time -v`` sits at your cgroup
+``MemoryMax`` and you see ``Command terminated by signal 9``, the limit—not a
+Python leak—is the usual cause.
+
+**Progress / logging**
+
+- ``ROTOM_PROGRESS_BARS=1`` — tqdm over high-level stages in this test (layout,
+  lower, Toy, tensor eval, apply_layout) and tqdm over **Toy kernels** inside
+  ``Toy.run()``.
+- ``ROTOM_TOY_KERNEL_LOG=/path/to.log`` — append one line per kernel before it
+  runs; if the job is SIGKILL’d, the **last** line shows the last kernel reached.
+
+**Example** (26 GiB cap, save full output, enable bars + kernel log)::
+
+    LOG="$PWD/resnet20_silu_poly_toy_$(date +%Y%m%d_%H%M%S).log"
+    /usr/bin/time -v systemd-run --user --scope \\
+      -p MemoryMax=26G -p MemorySwapMax=0 -- \\
+      env ROTOM_RUN_HEAVY_E2E=1 ROTOM_PROGRESS_BARS=1 \\
+      ROTOM_TOY_KERNEL_LOG="$PWD/last_toy_kernel.log" \\
+      python -m pytest \\
+      tests/e2e/resnet/test_resnet20_silu_poly_toy.py::test_resnet20_silu_poly_toy_matches_tensor_eval \\
+      -v -s 2>&1 | tee "$LOG"
+
+Use ``Maximum resident set size`` from ``time -v`` (typically KiB on Linux).
+
+With ``ROTOM_PROFILE_RESNET20_SILU_TOY_TIMINGS=1``, stage timings also print an
+approximate ``peak_rss`` from ``getrusage`` (max RSS since process start).
+
 - **Stem** (conv + BN + SiLU poly): Toy matches ``tensor_ir.eval`` under the usual
   ``check_results`` tolerances.
-- **Layer2.0 stride-2 block** in isolation: we assert the full pipeline
-  (layout → lower → Toy) runs and returns finite packed vectors. Strict
-  ``allclose`` vs eval still fails (e.g. max abs diff ~8.5 on conv-after-poly
-  paths) starting at ``l1_0`` conv1 in the full graph—so bit-identical Toy parity
-  for deeper blocks is tracked separately from layout assignment coverage.
+- **Full-graph heavy test** below: layout → lower → Toy over the **entire** SiLU-poly
+  ResNet-20 graph; we only assert finite Toy outputs vs ``apply_layout(tensor_ir.eval)``,
+  not strict ``allclose`` (``args.skip_toy_eval_checks``). Bit-identical Toy parity
+  for conv-after-poly chains is tracked separately.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import resource
+import sys
 from pathlib import Path
 from time import perf_counter
 
@@ -46,14 +83,25 @@ _RUN_HEAVY_E2E = os.environ.get("ROTOM_RUN_HEAVY_E2E", "").strip().lower() in {
 }
 
 
+def _peak_rss_mb() -> float:
+    """Process max RSS since start (getrusage); units differ by OS."""
+    r = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    if sys.platform == "darwin":
+        return float(r) / (1024.0 * 1024.0)
+    # Linux and most Unix: KiB
+    return float(r) / 1024.0
+
+
 def _emit_stage_timings(test_name: str, stage_timings_s: dict[str, float]) -> None:
     if os.environ.get(_PROFILE_ENV, "").lower() not in {"1", "true", "yes", "on"}:
         return
 
     total = sum(stage_timings_s.values())
     parts = [f"{name}={seconds:.3f}s" for name, seconds in stage_timings_s.items()]
+    peak_mb = _peak_rss_mb()
     print(
-        f"[rotom-profile] {test_name}: total={total:.3f}s; " + "; ".join(parts),
+        f"[rotom-profile] {test_name}: total={total:.3f}s; peak_rss~{peak_mb:.1f}MiB; "
+        + "; ".join(parts),
         flush=True,
     )
 
@@ -122,11 +170,12 @@ def test_resnet20_silu_poly_stem_toy_matches_tensor_eval() -> None:
     reason="too heavy (memory/time) for default test runs; set ROTOM_RUN_HEAVY_E2E=1 to opt in",
 )
 def test_resnet20_silu_poly_toy_matches_tensor_eval() -> None:
-    """``l2_0`` stride-2 block only; activations from evaluated stem+layer1 prefix.
+    """Full SiLU-poly ResNet-20 tensor graph: layout, lower, Toy, then tensor eval.
 
-    Asserts layout assignment, lowering, and Toy complete with finite outputs
-    aligned to the chosen kernel layout (strict ``allclose`` vs eval is not met
-    yet for conv chains after SiLU poly—see module docstring).
+    ``args.benchmark`` names the l2_0 scenario for assignment heuristics, but
+    ``tensor_ir`` is the full graph from :func:`build_resnet20_silu_poly_graph`.
+    Asserts finite Toy outputs vs ``apply_layout(tensor_ir.eval)`` (strict
+    ``allclose`` is skipped via ``skip_toy_eval_checks``).
     """
     torch.manual_seed(0)
     model = resnet20(num_classes=10)
@@ -166,25 +215,51 @@ def test_resnet20_silu_poly_toy_matches_tensor_eval() -> None:
 
     stage_timings_s: dict[str, float] = {}
 
-    t0 = perf_counter()
-    kernel = LayoutAssignment(tensor_ir, args).run()
-    stage_timings_s["layout_assignment"] = perf_counter() - t0
+    _progress = os.environ.get("ROTOM_PROGRESS_BARS", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    _pbar = None
+    if _progress:
+        try:
+            from tqdm import tqdm
 
-    t0 = perf_counter()
-    circuit_ir = Lower(kernel).run()
-    stage_timings_s["lower"] = perf_counter() - t0
+            _pbar = tqdm(
+                total=5,
+                desc="resnet20 silu poly e2e",
+                unit="stage",
+                dynamic_ncols=True,
+            )
+        except ImportError:
+            _pbar = None
 
-    t0 = perf_counter()
-    backend_results = Toy(circuit_ir, inputs, args).run()
-    stage_timings_s["toy_backend"] = perf_counter() - t0
+    def _stage(name: str, run):
+        t0 = perf_counter()
+        out = run()
+        stage_timings_s[name] = perf_counter() - t0
+        if _pbar is not None:
+            _pbar.set_postfix_str(name, refresh=False)
+            _pbar.update(1)
+        return out
 
-    t0 = perf_counter()
-    dense_eval = tensor_ir.eval(inputs)
-    stage_timings_s["tensor_eval"] = perf_counter() - t0
-
-    t0 = perf_counter()
-    expected_cts = apply_layout(dense_eval, kernel.layout)
-    stage_timings_s["apply_layout"] = perf_counter() - t0
+    kernel = _stage(
+        "layout_assignment",
+        lambda: LayoutAssignment(tensor_ir, args).run(),
+    )
+    circuit_ir = _stage("lower", lambda: Lower(kernel).run())
+    backend_results = _stage(
+        "toy_backend",
+        lambda: Toy(circuit_ir, inputs, args).run(),
+    )
+    dense_eval = _stage("tensor_eval", lambda: tensor_ir.eval(inputs))
+    expected_cts = _stage(
+        "apply_layout",
+        lambda: apply_layout(dense_eval, kernel.layout),
+    )
+    if _pbar is not None:
+        _pbar.close()
 
     _emit_stage_timings(
         "test_resnet20_silu_poly_toy_matches_tensor_eval",

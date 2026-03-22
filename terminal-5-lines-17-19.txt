@@ -1,0 +1,41 @@
+# Heavy ResNet20 SiLU poly Toy e2e (20G cap, log + live stdout)
+#
+# -s / --capture=no — pytest normally captures stdout; without -s, prints and
+#   tqdm from the test do not stream to your terminal (or tee) until the end.
+# -v — list each test / failure context (drop for less pytest chatter).
+# Do NOT use --pipe or --pty with --scope (systemd rejects it).
+# PYTHONUNBUFFERED=1 — flush Python prints line-by-line.
+LOG="$PWD/resnet20_silu_poly_toy_$(date +%Y%m%d_%H%M%S).log"
+/usr/bin/time -v systemd-run --user --scope \
+  -p MemoryMax=20G -p MemorySwapMax=0 -- \
+  env PYTHONUNBUFFERED=1 ROTOM_RUN_HEAVY_E2E=1 \
+  python -m pytest \
+  tests/e2e/resnet/test_resnet20_silu_poly_toy.py::test_resnet20_silu_poly_toy_matches_tensor_eval \
+  -v -s 2>&1 | tee "$LOG"
+
+# Quieter pytest only (stdout from tests still captured until end): use -q instead of -v -s
+
+# --- If you need a real PTY (progress bars), use a transient unit *without* --scope ---
+# (MemoryMax still applies to this unit.)
+# LOG="$PWD/resnet20_silu_poly_toy_$(date +%Y%m%d_%H%M%S).log"
+# /usr/bin/time -v systemd-run --user --wait --pty \
+#   -p MemoryMax=20G -p MemorySwapMax=0 -- \
+#   env PYTHONUNBUFFERED=1 ROTOM_RUN_HEAVY_E2E=1 \
+#   python -m pytest \
+#   tests/e2e/resnet/test_resnet20_silu_poly_toy.py::test_resnet20_silu_poly_toy_matches_tensor_eval \
+#   -v -s 2>&1 | tee "$LOG"
+
+# --- Full layer benchmark (Toy + ``full`` row), n=32k, 28G cgroup ---
+# ./scripts/bench_resnet_silu_layer_full_28g.sh
+# Last completed depth if OOM: last ``[bench-depth-done]`` line in the log;
+# Toy kernel: last line of last_toy_kernel_layer_bench.log
+
+# --- Optional: 26G, progress bars, kernel log ---
+# LOG="$PWD/resnet20_silu_poly_toy_$(date +%Y%m%d_%H%M%S).log"
+# /usr/bin/time -v systemd-run --user --scope \
+#   -p MemoryMax=26G -p MemorySwapMax=0 -- \
+#   env PYTHONUNBUFFERED=1 ROTOM_RUN_HEAVY_E2E=1 ROTOM_PROGRESS_BARS=1 \
+#   ROTOM_TOY_KERNEL_LOG="$PWD/last_toy_kernel.log" \
+#   python -m pytest \
+#   tests/e2e/resnet/test_resnet20_silu_poly_toy.py::test_resnet20_silu_poly_toy_matches_tensor_eval \
+#   -v -s 2>&1 | tee "$LOG"

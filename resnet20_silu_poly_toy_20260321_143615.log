@@ -1,0 +1,32 @@
+Running as unit: run-r2b627583fbde4eb0ad552970562d2fe3.scope; invocation ID: 03a3f4a3cb164b09bd34e46a834270e5
+============================= test session starts ==============================
+platform linux -- Python 3.12.7, pytest-8.4.1, pluggy-1.6.0
+rootdir: /usr0/home/ejchen/code/packing/Rotom
+configfile: pytest.ini
+plugins: timeout-2.4.0, cov-7.0.0, anyio-4.11.0
+collected 1 item
+
+tests/e2e/resnet/test_resnet20_silu_poly_toy.py Command terminated by signal 9
+	Command being timed: "systemd-run --user --scope -p MemoryMax=20G -p MemorySwapMax=0 -- env ROTOM_RUN_HEAVY_E2E=1 python -m pytest tests/e2e/resnet/test_resnet20_silu_poly_toy.py::test_resnet20_silu_poly_toy_matches_tensor_eval -q"
+	User time (seconds): 7113.82
+	System time (seconds): 10.77
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 1:58:44
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 20939916
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 2141
+	Minor (reclaiming a frame) page faults: 9501213
+	Voluntary context switches: 3670
+	Involuntary context switches: 36603
+	Swaps: 0
+	File system inputs: 2222472
+	File system outputs: 729976
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
