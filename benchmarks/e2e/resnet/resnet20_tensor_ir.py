@@ -1,7 +1,7 @@
-"""TensorTerm IR for CIFAR ResNet-20 (SiLU polynomial activations).
+"""TensorTerm IR for CIFAR ResNet-20 (SiLU via ``poly_call('silu', ...)``).
 
-``resnet_model.resnet20`` uses ``nn.SiLU``; the TensorTerm builders approximate it with
-``poly_call('silu', ...)``. Batch norm is plaintext ``x * scale + shift``. Global pooling
+``resnet_model.resnet20`` uses ``nn.SiLU``; dense ``tensor_ir.eval`` evaluates that call as
+exact SiLU (see ``TensorEvaluator``). Batch norm is plaintext ``x * scale + shift``. Global pooling
 uses ``sum`` over H/W; ``fc`` weights are scaled by ``1/64`` so ``sum`` matches PyTorch
 ``avg_pool2d`` + ``Linear``.
 
@@ -119,8 +119,7 @@ def populate_resnet20_inputs(model: nn.Module, inputs: dict) -> None:
 
 
 def _silu_poly(x: TensorTerm) -> TensorTerm:
-    # Keep SiLU as POLY_CALL so TensorEvaluator and Toy backend share
-    # the same clipped silu_approx implementation.
+    # POLY_CALL("silu", …) for lowering; ``TensorEvaluator`` / Toy use exact SiLU for this name.
     return x.poly_call("silu", -20.0, 20.0)
 
 

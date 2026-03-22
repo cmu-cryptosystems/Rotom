@@ -310,9 +310,7 @@ class Toy:
         if poly_func == "relu_exact" or poly_func == "relu":
             return np.where(vec > 0, vec, 0.0)
         if poly_func == "silu":
-            # Plaintext exact SiLU for PolyCall("silu", ...) with clipped sigmoid input.
-            # Matches the prior implementation:
-            #   out = v * sigmoid(clip(v, -40, 40))
+            # Plaintext exact SiLU (same as ``TensorEvaluator`` for ``PolyCall("silu")``).
             x_clip = np.clip(vec, -40.0, 40.0)
             sig = 1.0 / (1.0 + np.exp(-x_clip))
             return vec * sig

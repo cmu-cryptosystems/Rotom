@@ -155,7 +155,7 @@ class TensorEvaluator:
         if func == "relu_exact" or func == "relu":
             return np.maximum(x, 0.0)
         if func == "silu":
-            # Plaintext exact SiLU for PolyCall("silu", ...).
+            # Exact SiLU for ``PolyCall("silu", ...)`` reference eval (matches PyTorch).
             x = np.asarray(x, dtype=np.float64)
             return x * (1.0 / (1.0 + np.exp(-np.clip(x, -40.0, 40.0))))
         if isinstance(func, tuple) and len(func) >= 5 and func[0] == "batchnorm":
