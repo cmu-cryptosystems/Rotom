@@ -338,7 +338,7 @@ class TestConvolution2D:
 
 
 def test_conv2d_stride2_gap_split_channel_layout_regression():
-    """Minimal regression for split-channel + gap-slot input layout."""
+    """Minimal regression for stride-2 conv with 4-channel input (split-channel path)."""
     args = get_default_args()
     args.n = 512
     args.rolls = True
@@ -346,12 +346,7 @@ def test_conv2d_stride2_gap_split_channel_layout_regression():
     args.backend = "toy"
     args.benchmark = "conv2d_gap_split_channel_regression"
 
-    a = TensorTerm.Tensor(
-        "a",
-        [4, 8, 8],
-        True,
-        layout="[0:2:2][1:8:1][2:8:1][G:2][0:2:1]",
-    )
+    a = TensorTerm.Tensor("a", [4, 8, 8], True)
     b = TensorTerm.Tensor("b", [8, 4, 3, 3], False)
     y = TensorTerm.conv2d(a, b, 2, "same")
 

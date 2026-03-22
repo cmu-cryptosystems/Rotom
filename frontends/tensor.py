@@ -91,7 +91,9 @@ class TensorTerm:
     Attributes:
         op (TensorOp): The operation this term represents
         cs (list): The children/arguments for this operation
-        layout (str, optional): Tensor layout string for this operation
+        layout (str, optional): Tensor layout string for this operation. When set,
+            layout assignment keeps only candidate kernels whose merged layout matches
+            this string (see ``Layout.from_string`` in ``ir.layout``).
 
     Example:
         >>> # Create tensor terms

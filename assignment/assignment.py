@@ -33,6 +33,7 @@ from assignment.gen.gen_strassens import gen_strassens
 from assignment.gen.gen_sum import gen_sum
 from assignment.gen.gen_tensor import gen_tensor
 from assignment.gen.gen_transpose import gen_transpose
+from assignment.frontend_layout import filter_kernels_by_frontend_layout
 from frontends.tensor import TensorOp, TensorTerm
 
 # import layout assignment components
@@ -214,6 +215,9 @@ class LayoutAssignment:
             kernels = self.shape_check(kernels)
             # kernels = self.prune_tiles(kernels)
             kernels = self.add_equivalent_kernels(kernels)
+            kernels = filter_kernels_by_frontend_layout(
+                kernels, term, self.n, self.secret.secret[term]
+            )
 
             # update kernel map
             self.update_kernels(term, kernels)
