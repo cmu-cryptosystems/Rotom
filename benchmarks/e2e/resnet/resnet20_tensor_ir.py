@@ -1,8 +1,9 @@
-"""TensorTerm IR for CIFAR ResNet-20 without activation functions.
+"""TensorTerm IR for CIFAR ResNet-20 (SiLU polynomial activations).
 
-Matches ``resnet_model.resnet20`` topology (Option-A shortcut): conv/BN only—no SiLU.
-Batch norm is plaintext ``x * scale + shift``. Global pooling uses ``sum`` over H/W;
-``fc`` weights are scaled by ``1/64`` so ``sum`` matches PyTorch ``avg_pool2d`` + ``Linear``.
+``resnet_model.resnet20`` uses ``nn.SiLU``; the TensorTerm builders approximate it with
+``poly_call('silu', ...)``. Batch norm is plaintext ``x * scale + shift``. Global pooling
+uses ``sum`` over H/W; ``fc`` weights are scaled by ``1/64`` so ``sum`` matches PyTorch
+``avg_pool2d`` + ``Linear``.
 
 Shortcuts use a fixed 1×1 stride-2 conv (plaintext) equivalent to Option A padding
 (no checkpoint weights for those tensors).
@@ -13,9 +14,7 @@ from __future__ import annotations
 from typing import Literal
 
 import numpy as np
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from frontends.tensor import TensorTerm
 
 
@@ -84,32 +83,6 @@ def _conv_same(x: TensorTerm, weight_key: str, inputs: dict, stride: int) -> Ten
     return TensorTerm.conv2d(x, w, stride, "same")
 
 
-def _basic_block_no_act(
-    x: TensorTerm,
-    block_id: str,
-    in_ch: int,
-    out_ch: int,
-    stride: int,
-    inputs: dict,
-    h: int,
-    w: int,
-) -> tuple[TensorTerm, int, int]:
-    out = _conv_same(x, f"{block_id}_conv1_w", inputs, stride)
-    h1, w1 = _spatial_hw_after_conv3(h, w, stride)
-    out = _bn_affine_hw(out, f"{block_id}_bn1", out_ch, h1, w1, inputs)
-    out = _conv_same(out, f"{block_id}_conv2_w", inputs, 1)
-    out = _bn_affine_hw(out, f"{block_id}_bn2", out_ch, h1, w1, inputs)
-
-    if stride != 1 or in_ch != out_ch:
-        sk = f"{block_id}_shortcut_w"
-        inputs[sk] = option_a_shortcut_weights(in_ch, out_ch, out_ch)
-        sw = _w_tensor(inputs, sk)
-        shortcut = TensorTerm.conv2d(x, sw, 2, "same")
-    else:
-        shortcut = x
-    return out + shortcut, h1, w1
-
-
 def _fill_basic_block(
     inputs: dict, block: nn.Module, block_id: str, out_ch: int
 ) -> None:
@@ -119,8 +92,8 @@ def _fill_basic_block(
     _fill_bn_affine(inputs, f"{block_id}_bn2", block.bn2)
 
 
-def populate_resnet20_no_activation_inputs(model: nn.Module, inputs: dict) -> None:
-    """Fill ``inputs`` with numpy weights for :func:`build_resnet20_no_activation_graph`."""
+def populate_resnet20_inputs(model: nn.Module, inputs: dict) -> None:
+    """Fill ``inputs`` with numpy weights for the ResNet-20 TensorTerm builders."""
     inputs.clear()
     _fill_conv_weights(inputs, "conv1_w", model.conv1)
     _fill_bn_affine(inputs, "bn1", model.bn1)
@@ -143,33 +116,6 @@ def populate_resnet20_no_activation_inputs(model: nn.Module, inputs: dict) -> No
     inputs["l3_0_shortcut_w"] = option_a_shortcut_weights(32, 64, 64)
     for i in range(1, 3):
         _fill_basic_block(inputs, model.layer3[i], f"l3_{i}", 64)
-
-
-def build_resnet20_no_activation_graph(inputs: dict) -> TensorTerm:
-    """Build TensorTerm graph; ``inputs`` must already be populated."""
-    h, w = 32, 32
-    x = TensorTerm.Tensor("input", [3, 32, 32], True)
-    x = _conv_same(x, "conv1_w", inputs, 1)
-    h, w = _spatial_hw_after_conv3(h, w, 1)
-    x = _bn_affine_hw(x, "bn1", 16, h, w, inputs)
-
-    for i in range(3):
-        x, h, w = _basic_block_no_act(x, f"l1_{i}", 16, 16, 1, inputs, h, w)
-
-    x, h, w = _basic_block_no_act(x, "l2_0", 16, 32, 2, inputs, h, w)
-    for i in range(1, 3):
-        x, h, w = _basic_block_no_act(x, f"l2_{i}", 32, 32, 1, inputs, h, w)
-
-    x, h, w = _basic_block_no_act(x, "l3_0", 32, 64, 2, inputs, h, w)
-    for i in range(1, 3):
-        x, h, w = _basic_block_no_act(x, f"l3_{i}", 64, 64, 1, inputs, h, w)
-
-    x = x.sum(1)
-    x = x.sum(1)
-    x = x.reshape(0, {0: 1, 1: 64})
-    fc = _w_tensor(inputs, "fc")
-    fb = TensorTerm.Tensor("fc_b", [1, 10], False)
-    return x @ fc + fb
 
 
 def _silu_poly(x: TensorTerm) -> TensorTerm:
@@ -301,31 +247,3 @@ def build_resnet20_silu_poly_graph_to_depth(
 def build_resnet20_silu_poly_graph(inputs: dict) -> TensorTerm:
     """Full CIFAR ResNet-20 with ``poly_call('silu', ...)`` at each activation site."""
     return build_resnet20_silu_poly_graph_to_depth(inputs, "full")
-
-
-@torch.no_grad()
-def resnet20_forward_no_activation(
-    model: nn.Module, x_bchw: torch.Tensor
-) -> torch.Tensor:
-    """Reference forward: same topology as the TensorTerm graph (no SiLU)."""
-    x = model.conv1(x_bchw)
-    x = model.bn1(x)
-    for i in range(3):
-        x = _basic_block_forward_no_act(model.layer1[i], x)
-    x = _basic_block_forward_no_act(model.layer2[0], x)
-    for i in range(1, 3):
-        x = _basic_block_forward_no_act(model.layer2[i], x)
-    x = _basic_block_forward_no_act(model.layer3[0], x)
-    for i in range(1, 3):
-        x = _basic_block_forward_no_act(model.layer3[i], x)
-    x = F.avg_pool2d(x, x.size()[3])
-    x = x.view(x.size(0), -1)
-    return model.linear(x)
-
-
-def _basic_block_forward_no_act(block: nn.Module, x: torch.Tensor) -> torch.Tensor:
-    out = block.conv1(x)
-    out = block.bn1(out)
-    out = block.conv2(out)
-    out = block.bn2(out)
-    return out + block.shortcut(x)

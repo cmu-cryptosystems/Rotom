@@ -32,7 +32,7 @@ from benchmarks.e2e.resnet.resnet20_tensor_ir import (
     build_resnet20_silu_poly_l1_block_graph,
     build_resnet20_silu_poly_l2_0_block_graph,
     build_resnet20_silu_poly_layer1_only_graph,
-    populate_resnet20_no_activation_inputs,
+    populate_resnet20_inputs,
 )
 from lower.lower import Lower
 from tests.test_util import get_default_args
@@ -80,7 +80,7 @@ def test_bench_isolated_silu_basic_block_timings() -> None:
     model = resnet20(num_classes=10)
     model.eval()
     inputs: dict = {}
-    populate_resnet20_no_activation_inputs(model, inputs)
+    populate_resnet20_inputs(model, inputs)
 
     n = int(os.environ.get("ROTOM_BENCH_LAYOUT_N", "4096"))
     rng = np.random.default_rng(0)

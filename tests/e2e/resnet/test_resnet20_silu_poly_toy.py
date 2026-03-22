@@ -32,7 +32,7 @@ from benchmarks.e2e.resnet.resnet_model import resnet20
 from benchmarks.e2e.resnet import resnet20_tensor_ir as R
 from benchmarks.e2e.resnet.resnet20_tensor_ir import (
     build_resnet20_silu_poly_graph,
-    populate_resnet20_no_activation_inputs,
+    populate_resnet20_inputs,
 )
 from frontends.tensor import TensorTerm
 from lower.lower import Lower
@@ -57,7 +57,7 @@ def test_resnet20_silu_poly_stem_toy_matches_tensor_eval() -> None:
     model.eval()
 
     inputs: dict = {}
-    populate_resnet20_no_activation_inputs(model, inputs)
+    populate_resnet20_inputs(model, inputs)
 
     x = torch.randn(3, 32, 32, dtype=torch.float64)
     inputs["input"] = x.numpy()
@@ -110,7 +110,7 @@ def test_resnet20_silu_poly_toy_matches_tensor_eval() -> None:
     )
 
     inputs: dict = {}
-    populate_resnet20_no_activation_inputs(model, inputs)
+    populate_resnet20_inputs(model, inputs)
 
     x = torch.randn(3, 32, 32, dtype=torch.float64)
     inputs["input"] = x.numpy()

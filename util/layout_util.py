@@ -1,8 +1,6 @@
 from copy import copy as copy
 import hashlib
 import os
-import time
-import atexit
 import pickle
 from pathlib import Path
 
@@ -12,54 +10,6 @@ from ir.dim import Dim, DimType
 from ir.layout import Layout
 from ir.roll import Roll
 from util.util import prod, split_dim
-
-_PROFILE_LAYOUT_PACK = os.environ.get(
-    "ROTOM_PROFILE_LAYOUT_PACK", ""
-).strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
-
-_layout_pack_profile: dict[str, float | int] = {
-    "apply_layout_calls": 0,
-    "apply_layout_seconds": 0.0,
-    "apply_punctured_layout_calls": 0,
-    "apply_punctured_layout_seconds": 0.0,
-    "apply_layout_plan_build_calls": 0,
-    "apply_layout_plan_build_seconds": 0.0,
-    "apply_layout_plan_disk_hits": 0,
-    "apply_layout_plan_mem_hits": 0,
-    "apply_layout_plan_misses": 0,
-}
-
-
-def _dump_layout_pack_profile() -> None:
-    # Keep formatting stable for quick scanning in CI logs.
-    calls = _layout_pack_profile["apply_layout_calls"]
-    apl_sec = _layout_pack_profile["apply_layout_seconds"]
-    pl_calls = _layout_pack_profile["apply_punctured_layout_calls"]
-    pl_sec = _layout_pack_profile["apply_punctured_layout_seconds"]
-    plan_build_calls = _layout_pack_profile["apply_layout_plan_build_calls"]
-    plan_build_sec = _layout_pack_profile["apply_layout_plan_build_seconds"]
-    mem_hits = _layout_pack_profile["apply_layout_plan_mem_hits"]
-    disk_hits = _layout_pack_profile["apply_layout_plan_disk_hits"]
-    misses = _layout_pack_profile["apply_layout_plan_misses"]
-    avg_ap = apl_sec / calls if calls else 0.0
-    avg_p = pl_sec / pl_calls if pl_calls else 0.0
-    print(
-        "[rotom-layout-profile]"
-        f" apply_layout: calls={calls} total_s={apl_sec:.3f} avg_s={avg_ap:.6f};"
-        f" apply_punctured_layout: calls={pl_calls} total_s={pl_sec:.3f} avg_s={avg_p:.6f};"
-        f" plan_build: calls={plan_build_calls} total_s={plan_build_sec:.3f};"
-        f" plan_cache: mem_hits={mem_hits} disk_hits={disk_hits} misses={misses}",
-        flush=True,
-    )
-
-
-if _PROFILE_LAYOUT_PACK:
-    atexit.register(_dump_layout_pack_profile)
 
 
 def transpose(rows):
@@ -517,7 +467,6 @@ def mul(vec, n):
 
 def apply_layout(pt_tensor, layout):
     """apply a layout to a pt tensor"""
-    t0 = time.perf_counter() if _PROFILE_LAYOUT_PACK else None
     layout_len = max(len(layout), layout.n)
     # get base_term indices
     pt_tensor_ndim = np.ndim(pt_tensor)
@@ -574,10 +523,6 @@ def apply_layout(pt_tensor, layout):
         # this places cts in row-major order
         cts.append(ct)
 
-    if _PROFILE_LAYOUT_PACK and t0 is not None:
-        _layout_pack_profile["apply_layout_calls"] += 1
-        _layout_pack_profile["apply_layout_seconds"] += time.perf_counter() - t0
-
     return cts
 
 
@@ -605,8 +550,6 @@ def _get_apply_layout_plan(layout, pt_tensor_ndim: int, *, layout_len: int) -> d
     """
     key = _apply_layout_plan_cache_key(layout, pt_tensor_ndim, layout_len=layout_len)
     if key in _APPLY_LAYOUT_PLAN_CACHE:
-        if _PROFILE_LAYOUT_PACK:
-            _layout_pack_profile["apply_layout_plan_mem_hits"] += 1
         return _APPLY_LAYOUT_PLAN_CACHE[key]
 
     disk_dir = os.environ.get("ROTOM_APPLY_LAYOUT_PLAN_CACHE_DIR", "").strip()
@@ -618,13 +561,8 @@ def _get_apply_layout_plan(layout, pt_tensor_ndim: int, *, layout_len: int) -> d
         if plan_path.exists():
             with open(plan_path, "rb") as f:
                 plan = pickle.load(f)
-            if _PROFILE_LAYOUT_PACK:
-                _layout_pack_profile["apply_layout_plan_disk_hits"] += 1
 
     if plan is None:
-        if _PROFILE_LAYOUT_PACK:
-            _layout_pack_profile["apply_layout_plan_misses"] += 1
-        plan_t0 = time.perf_counter() if _PROFILE_LAYOUT_PACK else None
         # get base_term indices
         dims = layout.get_dims()
         dim_indices = get_dim_indices(dims)
@@ -702,23 +640,11 @@ def _get_apply_layout_plan(layout, pt_tensor_ndim: int, *, layout_len: int) -> d
             os.replace(tmp_path, plan_path)
 
     _APPLY_LAYOUT_PLAN_CACHE[key] = plan
-    if (
-        _PROFILE_LAYOUT_PACK
-        and plan is not None
-        and "plan_t0" in locals()
-        and plan_t0 is not None
-    ):
-        # Only count the expensive compute path (not cache/disk hits).
-        _layout_pack_profile["apply_layout_plan_build_calls"] += 1
-        _layout_pack_profile["apply_layout_plan_build_seconds"] += (
-            time.perf_counter() - plan_t0
-        )
     return plan
 
 
 def apply_punctured_layout(pt_tensor, layout):
     """apply a layout to a pt tensor"""
-    t0 = time.perf_counter() if _PROFILE_LAYOUT_PACK else None
     cts = apply_layout(pt_tensor, layout)
     # make the punctured matrix holey!
     masks = layout.term.cs[4]
@@ -726,11 +652,6 @@ def apply_punctured_layout(pt_tensor, layout):
 
     for i in range(len(cts)):
         cts[i] = [c * m for c, m in zip(cts[i], masks[i])]
-    if _PROFILE_LAYOUT_PACK and t0 is not None:
-        _layout_pack_profile["apply_punctured_layout_calls"] += 1
-        _layout_pack_profile["apply_punctured_layout_seconds"] += (
-            time.perf_counter() - t0
-        )
     return cts
 
 
