@@ -185,6 +185,13 @@ class Toy:
             return v.astype(np.float64, copy=False)
         return np.asarray(v, dtype=np.float64)
 
+    def _as_np_vec(self, v):
+        """Ensure vectors are stored as 1D float64 numpy arrays."""
+        if isinstance(v, np.ndarray):
+            return v.astype(np.float64, copy=False)
+        # Common case: list[float] from apply_layout
+        return np.asarray(v, dtype=np.float64)
+
     def eval_mask(self, term):
         """
         Evaluate a mask operation.
@@ -259,7 +266,7 @@ class Toy:
 
         # get packing index and return packed vector
         packing_idx = int(term.metadata.split()[0])
-        return self.input_cache[(layout.term, layout)][packing_idx]
+        return self._as_np_vec(self.input_cache[(layout.term, layout)][packing_idx])
 
     def eval_cs_pack(self, term):
         layout = term.cs[1]
@@ -271,7 +278,7 @@ class Toy:
 
         # get packing index and return packed vector
         packing_idx = int(term.metadata.split()[0])
-        return self.input_cache[(layout.term, layout)][packing_idx]
+        return self._as_np_vec(self.input_cache[(layout.term, layout)][packing_idx])
 
     def eval_const(self, term):
         layout = term.cs[0]
@@ -307,46 +314,17 @@ class Toy:
         vec = self._as_np_vec(vec)
         if poly_func is None or poly_func == "identity":
             return vec
-        if poly_func == "relu_exact" or poly_func == "relu":
+        elif poly_func == "relu_exact" or poly_func == "relu":
             return np.where(vec > 0, vec, 0.0)
-        if poly_func == "silu":
+        elif poly_func == "silu":
             # Plaintext exact SiLU (same as ``TensorEvaluator`` for ``PolyCall("silu")``).
             x_clip = np.clip(vec, -40.0, 40.0)
             sig = 1.0 / (1.0 + np.exp(-x_clip))
             return vec * sig
-        if (
-            isinstance(poly_func, tuple)
-            and len(poly_func) >= 5
-            and poly_func[0] == "batchnorm"
-        ):
-            _, mean_key, var_key, gamma_key, beta_key = poly_func[:5]
-            eps = float(poly_func[5]) if len(poly_func) > 5 else 1e-5
-            mean = np.asarray(self.inputs[mean_key]).flatten()
-            var = np.asarray(self.inputs[var_key]).flatten()
-            gamma = np.asarray(self.inputs[gamma_key]).flatten()
-            beta = np.asarray(self.inputs[beta_key]).flatten()
-            # Use per-channel params when poly_channel is set (one CT per channel); else first channel
-            ch = 0 if poly_channel is None else min(int(poly_channel), len(mean) - 1)
-            m, vv, g, b = (
-                float(mean[ch]),
-                float(var[ch]),
-                float(gamma[ch]),
-                float(beta[ch]),
+        else:
+            raise NotImplementedError(
+                f"Poly func {poly_func!r} not implemented for eval"
             )
-            inv_std = 1.0 / np.sqrt(vv + eps)
-            return g * (vec - m) * inv_std + b
-        if isinstance(poly_func, (list, tuple)) and len(poly_func) > 0:
-            try:
-                coeffs = [float(c) for c in poly_func]
-            except (TypeError, ValueError):
-                return vec
-            # coeffs are in ascending power order: y = sum_i c[i] * x^i
-            out = np.zeros_like(vec, dtype=np.float64)
-            pow_x = np.ones_like(vec, dtype=np.float64)
-            for c in coeffs:
-                out += c * pow_x
-                pow_x *= vec
-            return out
 
     def eval_poly(self, term):
         """Apply the actual POLY function when term.poly_func is set (from lowering); else identity."""
@@ -430,11 +408,8 @@ class Toy:
             if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE]:
                 continue
 
-            if getattr(self.args, "skip_toy_eval_checks", False):
-                continue
-
             # Evaluate the tensor computation to get the expected result
-            eval_result = self._dense_eval_for_tensor_term(term.layout.term)
+            eval_result = term.layout.term.eval(self.inputs)
             if term.op == KernelOp.PUNCTURED_TENSOR:
                 expected = apply_punctured_layout(eval_result, term.layout)
             elif term.op == KernelOp.CONST:

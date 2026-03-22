@@ -181,6 +181,24 @@ def lower_conv2d(env, kernel):
 
     # find summing dimension for input channels
     _, slot_sum_dims = find_sum_dim(kernel.cs[0].layout, 0)
+    # Channel may be split across several slot dimensions with the same tensor dim
+    # index (e.g. [0:8:2] ... H,W ... [0:2:1]). rotate_and_sum uses the stride between
+    # adjacent indices along each dim (get_segment(...)[2]). The innermost channel
+    # sub-dimension (smallest stride) must be reduced first; list order in slot_dims
+    # follows packing construction and may list the outer channel bits before
+    # spatial dims and the inner channel bits after, so processing slot_sum_dims in
+    # discovery order is wrong for the second pass.
+    slot_dims_ref = kernel.cs[0].layout.slot_dims
+    slot_sum_dims = sorted(
+        slot_sum_dims,
+        key=lambda d: (
+            get_segment(d, slot_dims_ref)[2],
+            next(
+                (i for i, sd in enumerate(slot_dims_ref) if sd == d),
+                0,
+            ),
+        ),
+    )
 
     # sum together slot dimensions per ciphertext
     for slot_sum_dim in slot_sum_dims:
