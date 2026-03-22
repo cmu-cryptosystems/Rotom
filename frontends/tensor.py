@@ -400,6 +400,15 @@ class TensorTerm:
             layout,
         )
 
+    def silu_poly(
+        self,
+        lower_bound: float = -8.0,
+        upper_bound: float = 8.0,
+        layout: Optional[str] = None,
+    ) -> "TensorTerm":
+        """Shorthand for poly_call("silu", lower_bound, upper_bound)."""
+        return self.poly_call("silu", lower_bound, upper_bound, layout)
+
     def reshape(
         self, dim: int, shape: Dict[int, int], layout: Optional[str] = None
     ) -> "TensorTerm":
