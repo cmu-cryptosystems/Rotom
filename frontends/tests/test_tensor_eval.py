@@ -406,7 +406,7 @@ class TestConvolutionEvaluation:
         np.testing.assert_array_equal(result, expected)
 
     def test_conv2d_stride2_same_evaluation(self):
-        """Stride=2 ``same`` uses symmetric pad k//2 per side (PyTorch Conv2d style), not TF ceil-only."""
+        """Stride=2 ``same`` uses symmetric pad k//2 per side"""
         input_tensor = TensorTerm.Tensor("input", [1, 4, 4], True)
         filter_tensor = TensorTerm.Tensor("filter", [1, 1, 2, 2], False)
         conv = TensorTerm.conv2d(input_tensor, filter_tensor, 2, "same")
