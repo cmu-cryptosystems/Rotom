@@ -179,44 +179,26 @@ def lower_conv2d(env, kernel):
     )
     a_layout_cts = LayoutCiphertexts(layout=a_layout, cts=b_layout_cts.cts)
 
-    # find summing dimension for input channels
-    _, slot_sum_dims = find_sum_dim(kernel.cs[0].layout, 0)
-    # Channel may be split across several slot dimensions with the same tensor dim
-    # index (e.g. [0:8:2] ... H,W ... [0:2:1]). rotate_and_sum uses the stride between
-    # adjacent indices along each dim (get_segment(...)[2]). The innermost channel
-    # sub-dimension (smallest stride) must be reduced first; list order in slot_dims
-    # follows packing construction and may list the outer channel bits before
-    # spatial dims and the inner channel bits after, so processing slot_sum_dims in
-    # discovery order is wrong for the second pass.
-    slot_dims_ref = kernel.cs[0].layout.slot_dims
-    slot_sum_dims = sorted(
-        slot_sum_dims,
-        key=lambda d: (
-            get_segment(d, slot_dims_ref)[2],
-            next(
-                (i for i, sd in enumerate(slot_dims_ref) if sd == d),
-                0,
-            ),
-        ),
-    )
-
-    # sum together slot dimensions per ciphertext
-    for slot_sum_dim in slot_sum_dims:
-        # slot_sum_dim is from input layout; use input if not in current layout
-        slot_dims = (
-            a_layout_cts.layout.slot_dims
-            if slot_sum_dim in a_layout_cts.layout.slot_dims
-            else kernel.cs[0].layout.slot_dims
+    # Sum input-channel slot dimensions. Channel may be split across several slot
+    # dims (same tensor dim index). Re-query find_sum_dim on the layout we update
+    # after each rotate_and_sum so Dim references stay valid; pick the remaining
+    # dim with the smallest slot stride (inner radix) first so get_segment agrees
+    # with the current slot_dims list (see dim_list_index / duplicate [G:n] gaps).
+    while True:
+        _, slot_sum_dims = find_sum_dim(a_layout_cts.layout, 0)
+        if not slot_sum_dims:
+            break
+        slot_dims_cur = a_layout_cts.layout.slot_dims
+        slot_sum_dim = min(
+            slot_sum_dims,
+            key=lambda d: get_segment(d, slot_dims_cur)[2],
         )
-        if slot_sum_dim not in slot_dims:
-            continue
-        segment = get_segment(slot_sum_dim, slot_dims)
+        segment = get_segment(slot_sum_dim, slot_dims_cur)
         extent = segment[1]
         mul_offset = segment[2]
         summed_cts = {}
         for index, term in a_layout_cts.cts.items():
             summed_cts[index] = rotate_and_sum(term, extent, mul_offset)
-        # Create new layout without the summed dimension
         new_layout = create_layout_without_dims(a_layout_cts.layout, [slot_sum_dim])
         a_layout_cts = LayoutCiphertexts(layout=new_layout, cts=summed_cts)
 
