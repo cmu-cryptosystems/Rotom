@@ -37,6 +37,7 @@ def load_dacapo_checkpoint_into(model: torch.nn.Module, ckpt_path: str) -> None:
 
 
 @pytest.mark.e2e
+@pytest.mark.slow
 def test_resnet20_silu_plaintext_checkpoint_accuracy_smoke():
     """
     Smoke-test accuracy evaluation in plaintext (PyTorch).

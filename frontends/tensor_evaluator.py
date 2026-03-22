@@ -44,41 +44,67 @@ class TensorEvaluator:
             if stride == 1:
                 output_shape = [filter_shape[0], input_shape[1], input_shape[2]]
             else:
-                h_o = (input_shape[1] + stride - 1) // stride
-                w_o = (input_shape[2] + stride - 1) // stride
+                p_h = filter_shape[2] // 2
+                p_w = filter_shape[3] // 2
+                h_pad = input_shape[1] + 2 * p_h
+                w_pad = input_shape[2] + 2 * p_w
+                h_o = (h_pad - filter_shape[2]) // stride + 1
+                w_o = (w_pad - filter_shape[3]) // stride + 1
                 output_shape = [filter_shape[0], h_o, w_o]
         else:
             raise ValueError(f"Unsupported padding mode: {padding!r}")
 
         if padding == "same":
-            pad_top = max(
-                0,
-                math.floor(
-                    (stride * (output_shape[1] - 1) - input_shape[1] + filter_shape[2])
-                    / 2
-                ),
-            )
-            pad_bot = max(
-                0,
-                math.ceil(
-                    (stride * (output_shape[1] - 1) - input_shape[1] + filter_shape[2])
-                    / 2
-                ),
-            )
-            pad_left = max(
-                0,
-                math.floor(
-                    (stride * (output_shape[2] - 1) - input_shape[2] + filter_shape[3])
-                    / 2
-                ),
-            )
-            pad_right = max(
-                0,
-                math.ceil(
-                    (stride * (output_shape[2] - 1) - input_shape[2] + filter_shape[3])
-                    / 2
-                ),
-            )
+            if stride == 1:
+                pad_top = max(
+                    0,
+                    math.floor(
+                        (
+                            stride * (output_shape[1] - 1)
+                            - input_shape[1]
+                            + filter_shape[2]
+                        )
+                        / 2
+                    ),
+                )
+                pad_bot = max(
+                    0,
+                    math.ceil(
+                        (
+                            stride * (output_shape[1] - 1)
+                            - input_shape[1]
+                            + filter_shape[2]
+                        )
+                        / 2
+                    ),
+                )
+                pad_left = max(
+                    0,
+                    math.floor(
+                        (
+                            stride * (output_shape[2] - 1)
+                            - input_shape[2]
+                            + filter_shape[3]
+                        )
+                        / 2
+                    ),
+                )
+                pad_right = max(
+                    0,
+                    math.ceil(
+                        (
+                            stride * (output_shape[2] - 1)
+                            - input_shape[2]
+                            + filter_shape[3]
+                        )
+                        / 2
+                    ),
+                )
+            else:
+                p_h = filter_shape[2] // 2
+                p_w = filter_shape[3] // 2
+                pad_top = pad_bot = p_h
+                pad_left = pad_right = p_w
 
             padded_input_tensor = []
             for channel_tensor in input_tensor:
@@ -129,7 +155,9 @@ class TensorEvaluator:
         if func == "relu_exact" or func == "relu":
             return np.maximum(x, 0.0)
         if func == "silu":
-            return x * (1.0 / (1.0 + np.exp(-np.clip(x, -20, 20))))
+            # Plaintext exact SiLU for PolyCall("silu", ...).
+            x = np.asarray(x, dtype=np.float64)
+            return x * (1.0 / (1.0 + np.exp(-np.clip(x, -40.0, 40.0))))
         if isinstance(func, tuple) and len(func) >= 5 and func[0] == "batchnorm":
             _, mean_key, var_key, gamma_key, beta_key = func[:5]
             eps = float(func[5]) if len(func) > 5 else 1e-5
