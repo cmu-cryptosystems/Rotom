@@ -17,15 +17,15 @@ pip install -r requirements.txt
 
 ### Layout visualizer (web)
 
-Interactive UI for [`layout_visualizer.py`](layout_visualizer.py): Monaco editor, FastAPI backend, and a **visual preview** (tensor heatmap + packed ciphertext slot strips). With `.venv` active:
+Interactive UI for [`layout_visualizer.py`](layout_visualizer.py): Monaco editor and a **visual preview** (tensor heatmap + packed ciphertext slot strips). Runs fully client-side (no Python server).
 
 ```bash
-pip install -r website/requirements.txt
-PYTHONPATH=. python -m uvicorn website.server:app --reload --host 127.0.0.1 --port 8765
+cd website
+python3 -m http.server 8765
 ```
 
-- Landing: [http://127.0.0.1:8765/](http://127.0.0.1:8765/) (links the [IACR ePrint paper](https://eprint.iacr.org/2025/1319))
-- Layout visualizer: [http://127.0.0.1:8765/visualizer](http://127.0.0.1:8765/visualizer)
+- Landing: `http://127.0.0.1:8765/index.html` (links the [IACR ePrint paper](https://eprint.iacr.org/2025/1319))
+- Layout visualizer: `http://127.0.0.1:8765/visualizer.html`
 
 Details: [`website/README.md`](website/README.md).
 
