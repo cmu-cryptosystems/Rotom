@@ -18,14 +18,14 @@ def _visualize_core(layout_str, n=None, tensor_shape=None, secret=False):
     # `n` can be omitted: `parse_layout` will infer it from the layout string.
     layout = parse_layout(layout_str, n=n, secret=secret)
     if not tensor_shape:
-        return layout, None, None, None
+        return layout, None, None
     total_elements = 1
     for dim_size in tensor_shape:
         total_elements *= dim_size
     flat_tensor = np.array([i for i in range(total_elements)])
     tensor = flat_tensor.reshape(tensor_shape)
     packed = apply_layout(tensor, layout)
-    return layout, tensor, packed, None
+    return layout, tensor, packed
 
 
 def _emit_visualize_prints(layout_str, tensor_shape, layout, tensor, packed):
@@ -61,9 +61,7 @@ def visualize_layout(layout_str, n=None, tensor_shape=None, secret=False):
         >>> layout, packed = visualize_layout("roll(0,1) [1:4:1][0:4:1]", 16, (4, 4))
         >>> layout, packed = visualize_layout("[R:4:1];[0:4:1][1:4:1]", 16, (4, 4))
     """
-    layout, tensor, packed, _slot_maps = _visualize_core(
-        layout_str, n, tensor_shape, secret
-    )
+    layout, tensor, packed = _visualize_core(layout_str, n, tensor_shape, secret)
 
     if tensor_shape and tensor is not None:
         _emit_visualize_prints(layout_str, tensor_shape, layout, tensor, packed)

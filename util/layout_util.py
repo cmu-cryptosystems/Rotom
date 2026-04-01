@@ -320,6 +320,26 @@ def get_dim_map(dims):
     return dim_map
 
 
+def dim_list_index(dim, dims):
+    """Index of ``dim`` in ``dims`` for segment / layout math.
+
+    ``Dim.__eq__`` is hash-based on ``str(dim)``, so distinct gap dimensions like
+    two ``[G:2]`` slots compare equal and a plain ``dict`` collapses them to one
+    index. Prefer object identity, then fall back to equality only when it is
+    unambiguous.
+    """
+    for i, d in enumerate(dims):
+        if d is dim:
+            return i
+    matches = [i for i, d in enumerate(dims) if d == dim]
+    if len(matches) == 1:
+        return matches[0]
+    raise ValueError(
+        f"dim {dim!r} is missing or ambiguous in dims (eq matches={matches}); "
+        "pass the exact Dim instance from this layout's ct_dims/slot_dims list."
+    )
+
+
 def get_segments(dims):
     n = 1
     for dim in dims:
@@ -336,8 +356,8 @@ def get_segments(dims):
 
 def get_segment(dim, dims):
     segments = get_segments(dims)
-    dim_map = get_dim_map(dims)
-    return segments[dim_map[dim]]
+    idx = dim_list_index(dim, dims)
+    return segments[idx]
 
 
 def get_cts_by_dim(layout_cts, dim):
@@ -353,8 +373,7 @@ def get_cts_by_dim(layout_cts, dim):
     cts = layout_cts.cts
     ct_dims = layout_cts.layout.ct_dims
     assert dim in ct_dims
-    ct_dim_map = get_dim_map(ct_dims)
-    ct_dim_index = ct_dim_map[dim]
+    ct_dim_index = dim_list_index(dim, ct_dims)
 
     groups = []
     dim_indices = get_dim_indices(ct_dims)
@@ -380,8 +399,7 @@ def get_cts_by_dim(layout_cts, dim):
 
 def get_ct_idxs_by_dim(ct_dims, dim):
     assert dim in ct_dims
-    ct_dim_map = get_dim_map(ct_dims)
-    ct_dim_index = ct_dim_map[dim]
+    ct_dim_index = dim_list_index(dim, ct_dims)
 
     dim_indices = get_dim_indices(ct_dims)
     indices = list(dim_indices[ct_dim_index])
