@@ -1,4 +1,8 @@
 from copy import copy as copy
+import hashlib
+import os
+import pickle
+from pathlib import Path
 
 import numpy as np
 
@@ -324,9 +328,10 @@ def dim_list_index(dim, dims):
     """Index of ``dim`` in ``dims`` for segment / layout math.
 
     ``Dim.__eq__`` is hash-based on ``str(dim)``, so distinct gap dimensions like
-    two ``[G:2]`` slots compare equal and a plain ``dict`` collapses them to one
-    index. Prefer object identity, then fall back to equality only when it is
-    unambiguous.
+    two ``[G:2]`` slots compare equal and a plain ``dict`` from :func:`get_dim_map`
+    collapses them to one index. That breaks :func:`get_segment` and any pass that
+    needs the correct physical position in ``dims``. Prefer object identity, then
+    fall back to equality only when it is unambiguous.
     """
     for i, d in enumerate(dims):
         if d is dim:
@@ -483,82 +488,15 @@ def apply_layout(pt_tensor, layout):
     """apply a layout to a pt tensor"""
     layout_len = max(len(layout), layout.n)
     # get base_term indices
-    dims = layout.get_dims()
-    dim_indices = get_dim_indices(dims)
-
-    # apply any base term rolls
-    for roll in layout.rolls:
-        roll_index = roll.roll_index(dims)
-        dim_indices[roll_index[0]] = [
-            (dim_indices[roll_index[0]][i] + dim_indices[roll_index[1]][i])
-            % roll.dim_to_roll.extent
-            for i in range(layout_len)
-        ]
-
-    # update dim with strides
-    for i in range(len(dim_indices)):
-        dim_indices[i] = mul(dim_indices[i], dims[i].stride)
-
-    # update dims
-    for i in range(len(dims)):
-        if dims[i].dim_type == DimType.EMPTY:
-            dim_indices[i] = [j if not j else None for j in dim_indices[i]]
-
-    # split indices by dimensions:
-    indices_map = {}
-    for i, dim in enumerate(dims):
-        if dim.dim is not None:
-            if dim.dim in indices_map:
-                indices_map[dim.dim] = add_vec(indices_map[dim.dim], dim_indices[i])
-            else:
-                indices_map[dim.dim] = dim_indices[i]
-
-    for i, dim in enumerate(dims):
-        # used for adding gap slots into layout
-        if dim.dim is None and dim.dim_type == DimType.EMPTY:
-            for pertinent_dim in indices_map:
-                indices_map[pertinent_dim] = add_vec(
-                    indices_map[pertinent_dim], dim_indices[i]
-                )
-
-    # map to pertinent dimensions
-    base_indices = [[0] * (max(indices_map) + 1) for _ in range(layout_len)]
-    for dim, indices in indices_map.items():
-        for i, index in enumerate(indices):
-            base_indices[i][dim] = index
-
-    # split by cts
-    base_indices_by_cts = [
-        base_indices[i * layout.n : (i + 1) * layout.n]
-        for i in range((layout_len // layout.n))
-    ]
-
-    # combine cts if ct_dim is a gap dimension
-    combined_cts = copy(base_indices_by_cts)
-    ct_dims = copy(layout.ct_dims)
-    for ct_dim in layout.ct_dims:
-        if ct_dim.dim_type == DimType.EMPTY:
-            new_combined_cts = []
-            ct_indices = get_ct_idxs_by_dim(ct_dims, ct_dim)
-            for indices in ct_indices:
-                base = base_indices_by_cts[indices[0]]
-                for index in indices[1:]:
-                    base = add_vecs_of_vecs(base, base_indices_by_cts[index])
-                new_combined_cts.append(base)
-            ct_dims.remove(ct_dim)
-            combined_cts = new_combined_cts
-    base_indices_by_cts = combined_cts
-
-    # Get the actual tensor dimensionality
     pt_tensor_ndim = np.ndim(pt_tensor)
+    plan = _get_apply_layout_plan(layout, pt_tensor_ndim, layout_len=layout_len)
+    base_indices_by_cts = plan["base_indices_by_cts"]
 
     cts = []
-    for ct_index in range(len(base_indices_by_cts)):
-        ct_indices = base_indices_by_cts[ct_index]
+    for ct_indices in base_indices_by_cts:
         ct = []
-
         for index in ct_indices:
-            # Pad index with 0 for dimensions not covered by layout (e.g. G group dim)
+            # Preserve original behavior: only pad (no truncation).
             effective_index = list(index)
             while len(effective_index) < pt_tensor_ndim:
                 effective_index.append(0)
@@ -605,6 +543,123 @@ def apply_layout(pt_tensor, layout):
         cts.append(ct)
 
     return cts
+
+
+_APPLY_LAYOUT_PLAN_CACHE: dict[str, dict] = {}
+_APPLY_LAYOUT_PLAN_CACHE_VERSION = "3"
+
+
+def _apply_layout_plan_cache_key(layout, pt_tensor_ndim: int, layout_len: int) -> str:
+    # The apply-layout plan depends on the *packing geometry* (dims/rolls/ct layout),
+    # not on the specific tensor term attached to the layout. `str(layout)` includes
+    # `layout.term` (see `Layout.__repr__`), which would cause cache misses for
+    # identical geometry across different intermediate tensors.
+    payload = (
+        f"{_APPLY_LAYOUT_PLAN_CACHE_VERSION}|layout_geom={layout.layout_str()}|ndim={pt_tensor_ndim}|layout_len={layout_len}|n={layout.n}"
+    ).encode("utf-8", errors="replace")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _get_apply_layout_plan(layout, pt_tensor_ndim: int, *, layout_len: int) -> dict:
+    """Precompute the expensive layout -> indices mapping.
+
+    This avoids rebuilding the large `get_dim_indices` / `base_indices_by_cts`
+    structures on every call. The hot-loop semantics are intentionally kept
+    identical to the original `apply_layout` (including padding behavior).
+    """
+    key = _apply_layout_plan_cache_key(layout, pt_tensor_ndim, layout_len=layout_len)
+    if key in _APPLY_LAYOUT_PLAN_CACHE:
+        return _APPLY_LAYOUT_PLAN_CACHE[key]
+
+    disk_dir = os.environ.get("ROTOM_APPLY_LAYOUT_PLAN_CACHE_DIR", "").strip()
+    plan = None
+    if disk_dir:
+        out_dir = Path(disk_dir).expanduser()
+        out_dir.mkdir(parents=True, exist_ok=True)
+        plan_path = out_dir / f"{key}.pkl"
+        if plan_path.exists():
+            with open(plan_path, "rb") as f:
+                plan = pickle.load(f)
+
+    if plan is None:
+        # get base_term indices
+        dims = layout.get_dims()
+        dim_indices = get_dim_indices(dims)
+
+        # apply any base term rolls
+        for roll in layout.rolls:
+            roll_index = roll.roll_index(dims)
+            dim_indices[roll_index[0]] = [
+                (dim_indices[roll_index[0]][i] + dim_indices[roll_index[1]][i])
+                % roll.dim_to_roll.extent
+                for i in range(layout_len)
+            ]
+
+        # update dim with strides
+        for i in range(len(dim_indices)):
+            dim_indices[i] = mul(dim_indices[i], dims[i].stride)
+
+        # update dims
+        for i in range(len(dims)):
+            if dims[i].dim_type == DimType.EMPTY:
+                dim_indices[i] = [j if not j else None for j in dim_indices[i]]
+
+        # split indices by dimensions:
+        indices_map = {}
+        for i, dim in enumerate(dims):
+            if dim.dim is not None:
+                if dim.dim in indices_map:
+                    indices_map[dim.dim] = add_vec(indices_map[dim.dim], dim_indices[i])
+                else:
+                    indices_map[dim.dim] = dim_indices[i]
+
+        for i, dim in enumerate(dims):
+            # used for adding gap slots into layout
+            if dim.dim is None and dim.dim_type == DimType.EMPTY:
+                for pertinent_dim in indices_map:
+                    indices_map[pertinent_dim] = add_vec(
+                        indices_map[pertinent_dim], dim_indices[i]
+                    )
+
+        # map to pertinent dimensions
+        base_indices = [[0] * (max(indices_map) + 1) for _ in range(layout_len)]
+        for dim, indices in indices_map.items():
+            for i, index in enumerate(indices):
+                base_indices[i][dim] = index
+
+        # split by cts
+        base_indices_by_cts = [
+            base_indices[i * layout.n : (i + 1) * layout.n]
+            for i in range((layout_len // layout.n))
+        ]
+
+        # combine cts if ct_dim is a gap dimension
+        combined_cts = copy(base_indices_by_cts)
+        ct_dims = copy(layout.ct_dims)
+        for ct_dim in layout.ct_dims:
+            if ct_dim.dim_type == DimType.EMPTY:
+                new_combined_cts = []
+                ct_indices = get_ct_idxs_by_dim(ct_dims, ct_dim)
+                for indices in ct_indices:
+                    base = base_indices_by_cts[indices[0]]
+                    for index in indices[1:]:
+                        base = add_vecs_of_vecs(base, base_indices_by_cts[index])
+                    new_combined_cts.append(base)
+                ct_dims.remove(ct_dim)
+                combined_cts = new_combined_cts
+        base_indices_by_cts = combined_cts
+
+        plan = {"base_indices_by_cts": base_indices_by_cts}
+
+        if disk_dir:
+            plan_path = Path(disk_dir).expanduser() / f"{key}.pkl"
+            tmp_path = plan_path.with_suffix(".pkl.tmp")
+            with open(tmp_path, "wb") as f:
+                pickle.dump(plan, f, protocol=pickle.HIGHEST_PROTOCOL)
+            os.replace(tmp_path, plan_path)
+
+    _APPLY_LAYOUT_PLAN_CACHE[key] = plan
+    return plan
 
 
 def apply_punctured_layout(pt_tensor, layout):
