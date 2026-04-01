@@ -60,6 +60,36 @@ class Conv2dArgs:
 
 
 @dataclass(frozen=True)
+class Conv3dArgs:
+    """Structured view of a CONV3D term (term.cs = [input, filter, stride, padding]).
+
+    After assignment, term.cs may have computed padding at index 4; for Conv3D this is
+    `[pad_front, pad_back, pad_top, pad_bottom, pad_left, pad_right]`.
+    """
+
+    input: Any
+    filter: Any  # noqa: A003
+    stride: int
+    padding: str
+
+    @classmethod
+    def from_term(cls, term: Any) -> "Conv3dArgs":
+        return cls(
+            input=term.cs[0],
+            filter=term.cs[1],
+            stride=term.cs[2],
+            padding=term.cs[3],
+        )
+
+    @staticmethod
+    def get_computed_padding(term: Any) -> Optional[List[int]]:
+        """Return [pf, pb, pt, pbot, pl, pr] if set by assignment (term.cs[4])."""
+        if len(term.cs) > 4:
+            return term.cs[4]
+        return None
+
+
+@dataclass(frozen=True)
 class ReshapeArgs:
     """Structured view of a RESHAPE term (term.cs = [input, dim, shape])."""
 

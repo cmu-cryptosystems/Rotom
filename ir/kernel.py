@@ -54,6 +54,7 @@ class KernelOp(Enum):
     STRASSEN_MATMUL = "STRASSENS"
     CONV2D = "CONV2D"
     CONV2D_ROLL = "CONV2D_ROLL"
+    CONV3D = "CONV3D"
     # poly
     POLY = "POLY"
     POLY_CALL = "POLY_CALL"

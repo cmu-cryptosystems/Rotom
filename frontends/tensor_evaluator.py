@@ -143,6 +143,86 @@ class TensorEvaluator:
 
         return output_tensor
 
+    @staticmethod
+    def _eval_conv3d(
+        input_tensor: np.ndarray,
+        filter_tensor: np.ndarray,
+        stride: int,
+        padding: str,
+    ) -> np.ndarray:
+        # Input: [C_in, D, H, W]
+        # Filter: [C_out, C_in, Kd, Kh, Kw]
+        in_shape = input_tensor.shape
+        f_shape = filter_tensor.shape
+        if len(in_shape) != 4:
+            raise ValueError(f"Conv3D expects input rank 4 [C,D,H,W], got {in_shape}")
+        if len(f_shape) != 5:
+            raise ValueError(
+                f"Conv3D expects filter rank 5 [Cout,Cin,Kd,Kh,Kw], got {f_shape}"
+            )
+
+        c_in, d_in, h_in, w_in = in_shape
+        c_out, _c_in_f, k_d, k_h, k_w = f_shape
+        if padding == "valid":
+            d_o = (d_in - k_d) // stride + 1
+            h_o = (h_in - k_h) // stride + 1
+            w_o = (w_in - k_w) // stride + 1
+            pad = (0, 0, 0, 0, 0, 0)
+        elif padding == "same":
+            if stride == 1:
+                d_o, h_o, w_o = d_in, h_in, w_in
+                total_pd = max(0, (d_o - 1) * stride + k_d - d_in)
+                total_ph = max(0, (h_o - 1) * stride + k_h - h_in)
+                total_pw = max(0, (w_o - 1) * stride + k_w - w_in)
+                pf = total_pd // 2
+                pb = total_pd - pf
+                pt = total_ph // 2
+                pbot = total_ph - pt
+                pl = total_pw // 2
+                pr = total_pw - pl
+                pad = (pf, pb, pt, pbot, pl, pr)
+            else:
+                # Match the Conv2D evaluator convention: symmetric k//2 when stride>1.
+                pf = pb = k_d // 2
+                pt = pbot = k_h // 2
+                pl = pr = k_w // 2
+                d_pad = d_in + 2 * pf
+                h_pad = h_in + 2 * pt
+                w_pad = w_in + 2 * pl
+                d_o = (d_pad - k_d) // stride + 1
+                h_o = (h_pad - k_h) // stride + 1
+                w_o = (w_pad - k_w) // stride + 1
+                pad = (pf, pb, pt, pbot, pl, pr)
+        else:
+            raise ValueError(f"Unsupported padding mode: {padding!r}")
+
+        pf, pb, pt, pbot, pl, pr = pad
+        if any(x != 0 for x in pad):
+            padded = np.zeros((c_in, d_in + pf + pb, h_in + pt + pbot, w_in + pl + pr))
+            padded[:, pf : pf + d_in, pt : pt + h_in, pl : pl + w_in] = input_tensor
+            input_tensor = padded
+
+        out = np.zeros((c_out, d_o, h_o, w_o))
+        for in_c in range(c_in):
+            for out_c in range(c_out):
+                f_in_idx = min(in_c, f_shape[1] - 1)
+                for od in range(d_o):
+                    d_start = od * stride
+                    d_end = d_start + k_d
+                    for oh in range(h_o):
+                        h_start = oh * stride
+                        h_end = h_start + k_h
+                        for ow in range(w_o):
+                            w_start = ow * stride
+                            w_end = w_start + k_w
+                            patch = input_tensor[
+                                in_c, d_start:d_end, h_start:h_end, w_start:w_end
+                            ]
+                            out[out_c, od, oh, ow] += float(
+                                np.sum(patch * filter_tensor[out_c, f_in_idx])
+                            )
+        return out
+
     def _eval_poly(
         self, x: np.ndarray, func: Any, inputs: Dict[str, Any]
     ) -> np.ndarray:
@@ -244,6 +324,13 @@ class TensorEvaluator:
 
                 args = Conv2dArgs.from_term(term)
                 return self._eval_conv2d(
+                    env[args.input], env[args.filter], args.stride, args.padding
+                )
+            case "Conv3D":
+                from .tensor_args import Conv3dArgs
+
+                args = Conv3dArgs.from_term(term)
+                return self._eval_conv3d(
                     env[args.input], env[args.filter], args.stride, args.padding
                 )
             case "Const":
