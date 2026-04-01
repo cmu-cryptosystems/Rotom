@@ -674,32 +674,59 @@ def apply_punctured_layout(pt_tensor, layout):
     return cts
 
 
-def parse_layout(layout_str, n, secret):
+def infer_n_from_layout_str(layout_str: str) -> int | None:
+    """
+    Infer HE vector slot count `n` from a layout string.
+
+    Rule:
+      - If there is a `;`, compute the product of extents of bracket terms after `;`.
+      - Otherwise, compute the product of extents of all bracket terms.
+
+    Extent extraction supports the layout syntax used by `Dim.parse`, including:
+      - `[i:n:s]` / `[R:n:s]` -> extent is the middle `n`
+      - `[R:n]` / `[G:n]` / `[i:n]` -> extent is the second `n`
+      - `[n]` -> extent is the only `n`
+    """
     import re
 
-    result = {"roll": None, "dims": []}
+    traversal = layout_str.split(";", 1)[1] if ";" in layout_str else layout_str
 
-    # Extract roll numbers if present
-    roll_match = re.search(r"roll\((\d+),(\d+)\)", layout_str)
-    if roll_match:
-        result["roll"] = {
-            "to": int(roll_match.group(1)),
-            "from": int(roll_match.group(2)),
-        }
+    extents: list[int] = []
+    for token in re.findall(r"\[([^\]]+)\]", traversal):
+        parts = [p.strip() for p in token.split(":")]
+        if not parts:
+            continue
 
-    # Extract all bracket terms [number:number:number] or [number:number]
-    dim_matches = re.findall(r"\[\d+:\d+(?::\d+)?\]", layout_str)
-    if dim_matches:
-        for dim in dim_matches:
-            # Remove the brackets and split by colon
-            result["dims"].append(dim)
+        extent: int | None = None
+        try:
+            if len(parts) == 1:
+                extent = int(parts[0])
+            elif len(parts) == 2:
+                extent = int(parts[1])
+            elif len(parts) == 3:
+                extent = int(parts[1])
+        except ValueError:
+            continue
 
-    # transform rolls
-    rolls = []
-    for roll in result["roll"]:
-        rolls.append(Roll(roll["to"], roll["from"]))
-    dims = []
-    for dim in result["dims"]:
-        dims.append(Dim.parse(dim))
+        if extent is not None and extent >= 1:
+            extents.append(int(extent))
 
-    return Layout(None, rolls, dims, n, secret)
+    if not extents:
+        return None
+
+    out = 1
+    for e in extents:
+        out *= e
+    return out
+
+
+def parse_layout(layout_str: str, n: int | None = None, secret: bool = False):
+    """
+    Parse a layout string into a `Layout` object.
+
+    If `n` is omitted, infer it from the layout string (falling back to 16).
+    """
+    if n is None:
+        inferred = infer_n_from_layout_str(layout_str)
+        n = inferred if inferred is not None else 16
+    return Layout.from_string(layout_str, n, secret)

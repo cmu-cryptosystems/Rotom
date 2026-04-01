@@ -1,8 +1,8 @@
 """
 Layout Visualizer
 
-This module provides utilities for visualizing tensor layouts and their effects
-on data packing in homomorphic encryption vectors.
+Utilities for visualizing tensor layouts and their effects on data packing in
+homomorphic encryption vectors.
 
 Key Functions:
     visualize_layout: Create test tensors and visualize how layouts pack them
@@ -10,11 +10,40 @@ Key Functions:
 
 import numpy as np
 
-from ir.layout import Layout
-from util.layout_util import apply_layout
+from util.layout_util import apply_layout, parse_layout
 
 
-def visualize_layout(layout_str, n, tensor_shape=None, secret=False):
+def _visualize_core(layout_str, n=None, tensor_shape=None, secret=False):
+    """Parse layout, optionally build test tensor and packed ciphertexts."""
+    # `n` can be omitted: `parse_layout` will infer it from the layout string.
+    layout = parse_layout(layout_str, n=n, secret=secret)
+    if not tensor_shape:
+        return layout, None, None
+    total_elements = 1
+    for dim_size in tensor_shape:
+        total_elements *= dim_size
+    flat_tensor = np.array([i for i in range(total_elements)])
+    tensor = flat_tensor.reshape(tensor_shape)
+    packed = apply_layout(tensor, layout)
+    return layout, tensor, packed
+
+
+def _emit_visualize_prints(layout_str, tensor_shape, layout, tensor, packed):
+    print(f"=== Layout: {layout_str} ===")
+    print(f"Test tensor shape: {tensor_shape}")
+    print("Original tensor:")
+    print(tensor)
+    print(f"Layout: {layout.layout_str()}")
+    print("Packed vector:")
+    if isinstance(packed, list) and len(packed) > 1:
+        for i, ct in enumerate(packed):
+            print(f"Ciphertext {i}: {ct}")
+    else:
+        print(packed)
+    print()
+
+
+def visualize_layout(layout_str, n=None, tensor_shape=None, secret=False):
     """
     Visualize a layout by creating a test tensor and showing the packed result.
 
@@ -32,37 +61,11 @@ def visualize_layout(layout_str, n, tensor_shape=None, secret=False):
         >>> layout, packed = visualize_layout("roll(0,1) [1:4:1][0:4:1]", 16, (4, 4))
         >>> layout, packed = visualize_layout("[R:4:1];[0:4:1][1:4:1]", 16, (4, 4))
     """
-    # Create layout from string using the Layout.from_string method
-    layout = Layout.from_string(layout_str, n, secret)
+    layout, tensor, packed = _visualize_core(layout_str, n, tensor_shape, secret)
 
-    # Create test tensor if shape provided
-    if tensor_shape:
-        # Create a tensor with sequential values
-        total_elements = 1
-        for dim_size in tensor_shape:
-            total_elements *= dim_size
-
-        # Create flat array and reshape
-        flat_tensor = np.array([i for i in range(total_elements)])
-        tensor = flat_tensor.reshape(tensor_shape)
-
-        print(f"=== Layout: {layout_str} ===")
-        print(f"Test tensor shape: {tensor_shape}")
-        print("Original tensor:")
-        print(tensor)
-        print(f"Layout: {layout.layout_str()}")
-
-        # Apply layout and show result
-        layout_tensor = apply_layout(tensor, layout)
-        print("Packed vector:")
-        if isinstance(layout_tensor, list) and len(layout_tensor) > 1:
-            for i, ct in enumerate(layout_tensor):
-                print(f"Ciphertext {i}: {ct}")
-        else:
-            print(layout_tensor)
-        print()
-
-        return layout, layout_tensor
+    if tensor_shape and tensor is not None:
+        _emit_visualize_prints(layout_str, tensor_shape, layout, tensor, packed)
+        return layout, packed
 
     return layout, None
 

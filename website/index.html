@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rotom — Tensor compiler for HE</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #030712;
+      --bg-elevated: #0f172a;
+      --border: rgba(148, 163, 184, 0.12);
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --blue: #38bdf8;
+      --orange: #fb923c;
+      --font: "DM Sans", system-ui, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+      overflow-x: hidden;
+    }
+
+    .bg-grid {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background-image:
+        linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, black 20%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .glow {
+      position: fixed;
+      width: min(90vw, 720px);
+      height: min(90vw, 720px);
+      left: 50%;
+      top: -20%;
+      transform: translateX(-50%);
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.18) 0%, transparent 55%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .shell {
+      position: relative;
+      z-index: 1;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 1.25rem 4rem;
+    }
+
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1.1rem 0 2.5rem;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-weight: 800;
+      font-size: 1.15rem;
+      letter-spacing: -0.04em;
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--blue), var(--orange));
+      box-shadow: 0 4px 20px rgba(56, 189, 248, 0.25);
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+    }
+
+    .nav-links a {
+      padding: 0.45rem 0.85rem;
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: var(--muted);
+      text-decoration: none;
+      border-radius: 8px;
+    }
+
+    .nav-links a:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .hero {
+      text-align: center;
+      padding: 0 0 3.5rem;
+    }
+
+    .hero h1 {
+      margin: 0 auto 1.1rem;
+      max-width: 14ch;
+      font-size: clamp(2.4rem, 7vw, 3.65rem);
+      font-weight: 800;
+      letter-spacing: -0.045em;
+      line-height: 1.05;
+    }
+
+    .hero h1 em {
+      font-style: normal;
+      background: linear-gradient(105deg, #7dd3fc 0%, #38bdf8 35%, #fb923c 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .hero-sub {
+      margin: 0 auto 2rem;
+      max-width: 36rem;
+      font-size: clamp(1.05rem, 2.5vw, 1.2rem);
+      color: var(--muted);
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      justify-content: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      padding: 0.85rem 1.35rem;
+      font-family: var(--font);
+      font-size: 0.95rem;
+      font-weight: 700;
+      text-decoration: none;
+      border-radius: 12px;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.12s, filter 0.12s;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn-primary {
+      background: var(--blue);
+      color: #020617;
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4), 0 12px 40px rgba(56, 189, 248, 0.2);
+    }
+
+    .btn-primary:hover {
+      filter: brightness(1.08);
+    }
+
+    .btn-ghost {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-ghost:hover {
+      border-color: rgba(56, 189, 248, 0.4);
+      color: var(--blue);
+    }
+
+    .trust {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      justify-content: center;
+      align-items: center;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .trust strong {
+      color: #cbd5e1;
+      font-weight: 600;
+    }
+
+    .trust a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .trust a:hover {
+      color: var(--blue);
+      text-decoration: underline;
+    }
+
+    .mock {
+      margin: 3rem auto 0;
+      max-width: 820px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(3, 7, 18, 0.98) 100%);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+      overflow: hidden;
+    }
+
+    .mock-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.65rem 1rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.35);
+    }
+
+    .mock-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #475569;
+    }
+
+    .mock-dot:nth-child(1) {
+      background: #f87171;
+    }
+
+    .mock-dot:nth-child(2) {
+      background: #fbbf24;
+    }
+
+    .mock-dot:nth-child(3) {
+      background: #4ade80;
+    }
+
+    .mock-title {
+      margin-left: 0.5rem;
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--muted);
+    }
+
+    .mock-body {
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 0;
+      min-height: 200px;
+    }
+
+    @media (max-width: 640px) {
+      .mock-body {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .mock-pane {
+      padding: 1rem 1.1rem;
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      line-height: 1.5;
+      color: #94a3b8;
+    }
+
+    .mock-pane:first-child {
+      border-right: 1px solid var(--border);
+    }
+
+    @media (max-width: 640px) {
+      .mock-pane:first-child {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+    }
+
+    .mock-pane .hl {
+      color: var(--blue);
+    }
+
+    .mock-pane .hl2 {
+      color: var(--orange);
+    }
+
+    section {
+      padding: 3.5rem 0;
+      border-top: 1px solid var(--border);
+    }
+
+    section h2 {
+      margin: 0 0 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .section-title {
+      margin: 0 0 2.25rem;
+      font-size: clamp(1.5rem, 4vw, 2rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      text-align: center;
+    }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.25rem;
+    }
+
+    @media (max-width: 768px) {
+      .features {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .feature {
+      padding: 1.5rem 1.35rem;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(15, 23, 42, 0.5);
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .feature:hover {
+      border-color: rgba(56, 189, 248, 0.25);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+    }
+
+    .feature h3 {
+      margin: 0 0 0.5rem;
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    .feature p {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    .paper-card {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 1.75rem 1.5rem;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(15, 23, 42, 0.6);
+    }
+
+    .paper-card p {
+      margin: 0 0 1rem;
+      font-size: 0.95rem;
+      color: #cbd5e1;
+    }
+
+    .paper-card a {
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .paper-card a:hover {
+      text-decoration: underline;
+    }
+
+    .paper-card a.btn {
+      color: #020617 !important;
+      text-decoration: none !important;
+      display: inline-flex;
+    }
+
+    .paper-card a.btn:hover {
+      text-decoration: none !important;
+      filter: brightness(1.08);
+    }
+
+    .dev-cta-wrap {
+      text-align: center;
+      margin-top: 1.25rem;
+    }
+
+    .bibtex-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin: 1.25rem 0 0.5rem;
+    }
+
+    .bibtex-head span {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    button.copy-bib {
+      font-family: var(--font);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.4rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    button.copy-bib:hover {
+      border-color: var(--blue);
+      color: var(--blue);
+    }
+
+    pre.bibtex {
+      margin: 0;
+      padding: 1rem 1.1rem;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      line-height: 1.45;
+      color: #cbd5e1;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow-x: auto;
+    }
+
+    footer {
+      padding: 2rem 0 1rem;
+      text-align: center;
+      font-size: 0.82rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+
+    footer a {
+      color: var(--orange);
+      text-decoration: none;
+      margin: 0 0.5rem;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.88em;
+      color: var(--blue);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="glow" aria-hidden="true"></div>
+
+  <div class="shell">
+    <nav>
+      <a class="brand" href="./index.html">
+        <span class="brand-mark" aria-hidden="true"></span>
+        Rotom
+      </a>
+      <div class="nav-links">
+        <a href="#features">Product</a>
+        <a href="#developers">Contribute</a>
+        <a href="#paper">Research</a>
+        <a href="https://github.com/cmu-cryptosystems" target="_blank" rel="noopener noreferrer">Organization</a>
+        <a href="https://github.com/cmu-cryptosystems/Rotom" target="_blank" rel="noopener noreferrer">Repository</a>
+        <a href="https://eprint.iacr.org/2025/1319" target="_blank" rel="noopener noreferrer">Paper</a>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <h1>Write <em>HE</em> tensor programs with optimized layouts.</h1>
+      <p class="hero-sub">
+        Rotom is a tensor compiler that autovectorizes high-level programs into optimized homomorphic encryption
+        circuits—searching
+        layouts, applying rolls and rewrites, and cutting rotation cost.
+      </p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="./visualizer.html">Try the layout visualizer</a>
+        <a class="btn btn-ghost" href="https://eprint.iacr.org/2025/1319" target="_blank" rel="noopener noreferrer">Read
+          the paper</a>
+      </div>
+      <div class="trust">
+        <a href="https://github.com/cmu-cryptosystems" target="_blank" rel="noopener noreferrer"><strong>CMU</strong>
+          Cryptosystems</a>
+        <span>·</span>
+        <a href="https://github.com/cmu-cryptosystems/Rotom" target="_blank" rel="noopener noreferrer">Open source</a>
+        <span>·</span>
+        <span>Usenix Security 2026</span>
+      </div>
+
+      <div class="mock" aria-hidden="true">
+        <div class="mock-bar">
+          <span class="mock-dot"></span>
+          <span class="mock-dot"></span>
+          <span class="mock-dot"></span>
+          <span class="mock-title">Rotom — Layout Visualizer</span>
+        </div>
+        <div class="mock-body">
+          <div class="mock-pane">
+            <span class="hl">roll(0,1)</span> <span class="hl2">[0:4:1][1:4:1]</span><br /><br />
+            tensor <span class="hl">4×4</span><br />
+            n = <span class="hl2">16</span> slots
+          </div>
+          <div class="mock-pane">
+            Starting tensor → ciphertext packing<br />
+            Hover to trace <span class="hl">T[i,j]</span> ↔ slots<br />
+            <span class="hl2">···</span> visualize_layout <span class="hl">···</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section id="features">
+      <h2>Why Rotom</h2>
+      <p class="section-title">Built for automatic layout assignment</p>
+      <div class="features">
+        <div class="feature">
+          <h3>Autovectorization</h3>
+          <p>Turn tensor programs into HE-friendly packed vectors automatically instead of hand-packing every operand.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>Layout search</h3>
+          <p>Explore assignments and lightweight layout transforms—including roll-style operators—to unlock better
+            protocols.</p>
+        </div>
+        <div class="feature">
+          <h3>Optimized performance</h3>
+          <p>Optimize toward practical circuits: evaluations show large wins vs prior autovectorization and hand-tuned
+            baselines.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="paper">
+      <h2>Citation</h2>
+      <p class="section-title">Peer-reviewed research</p>
+      <div class="paper-card">
+        <p>
+          <strong>Edward Chen</strong>, <strong>Fraser Brown</strong>, <strong>Wenting Zheng</strong>.<br />
+          <em>Bridging Usability and Performance: A Tensor Compiler for Autovectorizing Homomorphic
+            Encryption.</em><br />
+          IACR ePrint 2025/1319 · Published elsewhere: Usenix Security 2026.
+        </p>
+        <p>
+          <a href="https://eprint.iacr.org/2025/1319" target="_blank"
+            rel="noopener noreferrer">eprint.iacr.org/2025/1319 →</a>
+        </p>
+        <div class="bibtex-head">
+          <span>BibTeX</span>
+          <button type="button" class="copy-bib" id="copy-bibtex">Copy</button>
+        </div>
+        <pre class="bibtex" id="bibtex-content">@misc{cryptoeprint:2025/1319,
+    author = {Edward Chen and Fraser Brown and Wenting Zheng},
+    title = {Bridging Usability and Performance: A Tensor Compiler for Autovectorizing Homomorphic Encryption},
+    howpublished = {Cryptology {ePrint} Archive, Paper 2025/1319},
+    year = {2025},
+    url = {https://eprint.iacr.org/2025/1319}
+}</pre>
+      </div>
+    </section>
+
+    <section id="developers">
+      <h2>Developers</h2>
+      <p class="section-title">Open source — contributions welcome</p>
+      <div class="paper-card">
+        <p style="margin: 0 0 0.25rem">
+          Rotom lives on GitHub under a
+          <strong>BSD-3-Clause</strong> license. We encourage the community to experiment, file issues, share
+          benchmarks, and send
+          <strong>pull requests</strong>—whether you’re extending frontends or backends, tightening layout assignment,
+          improving
+          docs, or polishing the web visualizer.
+        </p>
+        <div class="dev-cta-wrap">
+          <a class="btn btn-primary" href="https://github.com/cmu-cryptosystems/Rotom" target="_blank"
+            rel="noopener noreferrer">View repository on GitHub →</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <a href="./visualizer.html">Layout visualizer</a>
+      <a href="https://github.com/cmu-cryptosystems" target="_blank" rel="noopener noreferrer">CMU Cryptosystems</a>
+      <a href="https://github.com/cmu-cryptosystems/Rotom" target="_blank" rel="noopener noreferrer">Rotom
+        repository</a>
+      <a href="https://eprint.iacr.org/2025/1319" target="_blank" rel="noopener noreferrer">Paper</a>
+      <p style="margin-top: 1rem">© Rotom · Carnegie Mellon University</p>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      var btn = document.getElementById("copy-bibtex");
+      var pre = document.getElementById("bibtex-content");
+      if (!btn || !pre) return;
+      btn.addEventListener("click", function () {
+        var text = pre.textContent;
+        function ok() {
+          var t = btn.textContent;
+          btn.textContent = "Copied!";
+          setTimeout(function () {
+            btn.textContent = t;
+          }, 2000);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(ok).catch(function () {
+            fallbackCopy(text, ok);
+          });
+        } else {
+          fallbackCopy(text, ok);
+        }
+      });
+      function fallbackCopy(text, done) {
+        var ta = document.createElement("textarea");
+        ta.value = text;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand("copy");
+          done();
+        } finally {
+          document.body.removeChild(ta);
+        }
+      }
+    })();
+  </script>
+</body>
+
+</html>

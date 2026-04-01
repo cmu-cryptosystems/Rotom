@@ -136,7 +136,7 @@ def test_resnet20_silu_poly_stem_ckpt_matches_tensor_eval_and_pytorch() -> None:
 
     dense = t.eval(inputs)
     with torch.no_grad():
-        pt_stem = model.act(model.bn1(model.conv1(x)))[0].cpu().numpy()
+        pt_stem = model.act_conv1(model.bn1(model.conv1(x)))[0].cpu().numpy()
     assert dense.shape == pt_stem.shape
     assert np.allclose(dense, pt_stem, rtol=1e-9, atol=1e-7)
 
