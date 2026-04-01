@@ -13,6 +13,9 @@ source .venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
+
+# [Optional] Install pre-commit
+pre-commit install 
 ```
 
 ### Layout visualizer (web)

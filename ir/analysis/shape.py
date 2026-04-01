@@ -172,17 +172,18 @@ class Shape:
                 args = Conv2dArgs.from_term(term)
                 a_shape = copy(self.padded_shapes[args.input])
                 b_shape = copy(self.padded_shapes[args.filter])
+                logical_b = self.get_shape(args.filter)
 
                 _c_i = a_shape[0]
                 h_i = a_shape[1]
                 w_i = a_shape[2]
 
                 c_o = b_shape[0]
-                # Filter: 4D [c_out, c_in, f_h, f_w] or 3D [c_out, f_h, f_w] (assume c_in=1)
-                if len(b_shape) == 4:
-                    f_h, f_w = b_shape[2], b_shape[3]
+                # Use logical filter spatial sizes (declared shape), not power-of-2-padded filter.
+                if len(logical_b) == 4:
+                    f_h, f_w = logical_b[2], logical_b[3]
                 else:
-                    f_h, f_w = b_shape[1], b_shape[2]  # 3D: assume c_in=1
+                    f_h, f_w = logical_b[1], logical_b[2]  # 3D: assume c_in=1
 
                 stride = args.stride
                 padding = args.padding
@@ -191,12 +192,12 @@ class Shape:
                     h_o = (h_i - f_h) // stride + 1
                     w_o = (w_i - f_w) // stride + 1
                 elif padding == "same":
-                    # Same padding: stride 1 -> input size; stride > 1 -> ceil(H/stride) x ceil(W/stride)
                     if stride == 1:
                         h_o, w_o = h_i, w_i
                     else:
-                        h_o = (h_i + stride - 1) // stride
-                        w_o = (w_i + stride - 1) // stride
+                        p_h, p_w = f_h // 2, f_w // 2
+                        h_o = (h_i + 2 * p_h - f_h) // stride + 1
+                        w_o = (w_i + 2 * p_w - f_w) // stride + 1
                 else:
                     raise NotImplementedError(f"unknown padding: {padding}")
                 # Round to power of 2 for layout compatibility
@@ -290,7 +291,6 @@ class Shape:
                 b_shape = copy(self.get_shape(b))
 
                 c_o = b_shape[0]
-                # Filter: 4D [c_out, c_in, f_h, f_w] or 3D [c_out, f_h, f_w] (assume c_in=1)
                 if len(b_shape) == 4:
                     f_h, f_w = b_shape[2], b_shape[3]
                 else:
@@ -305,12 +305,12 @@ class Shape:
                     h_o = (h_i - f_h) // stride + 1
                     w_o = (w_i - f_w) // stride + 1
                 elif padding == "same":
-                    # Same padding: stride 1 -> input size; stride > 1 -> ceil(H/stride) x ceil(W/stride)
                     if stride == 1:
                         h_o, w_o = h_i, w_i
                     else:
-                        h_o = (h_i + stride - 1) // stride
-                        w_o = (w_i + stride - 1) // stride
+                        p_h, p_w = f_h // 2, f_w // 2
+                        h_o = (h_i + 2 * p_h - f_h) // stride + 1
+                        w_o = (w_i + 2 * p_w - f_w) // stride + 1
                 else:
                     raise NotImplementedError(f"unknown padding: {padding}")
                 c_shape = [c_o, h_o, w_o]

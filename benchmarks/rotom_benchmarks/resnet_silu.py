@@ -7,6 +7,11 @@ import numpy as np
 from frontends.tensor import TensorTerm
 
 
+def _silu_poly_call(x: TensorTerm) -> TensorTerm:
+    """Same ``PolyCall`` as CIFAR ResNet tensor IR (see ``resnet20_tensor_ir._silu_poly``)."""
+    return x.poly_call("silu", -20.0, 20.0)
+
+
 def _conv2d_term(name, in_ch, out_ch, k, inputs, stride=1, padding="same"):
     """Create conv2d term and register its weights in inputs."""
     w_name = f"{name}_w"
@@ -45,7 +50,7 @@ def _basic_block(x, name, in_ch, out_ch, stride, inputs):
 
     out = conv1(x)
     out = _batchnorm_term(out, f"{name}_conv1_bn", out_ch, inputs)
-    out = out.silu_poly()
+    out = _silu_poly_call(out)
     out = conv2(out)
     out = _batchnorm_term(out, f"{name}_conv2_bn", out_ch, inputs)
 
@@ -59,7 +64,7 @@ def _basic_block(x, name, in_ch, out_ch, stride, inputs):
         shortcut = x
 
     out = out + shortcut
-    out = out.silu_poly()
+    out = _silu_poly_call(out)
     return out
 
 
@@ -91,7 +96,7 @@ def resnet_silu():
     conv1 = _conv2d_term("conv1", 3, 16, 3, inputs, stride=1, padding="same")
     x = conv1(x)
     x = _batchnorm_term(x, "conv1_bn", 16, inputs)
-    x = x.silu_poly()
+    x = _silu_poly_call(x)
 
     # layer1: 3 blocks, 16 channels, stride 1
     for i in range(3):
@@ -147,7 +152,7 @@ def resnet_silu_one_layer():
     conv = _conv2d_term("conv1", C_in, C_out, 3, inputs, stride=1, padding="same")
     x = conv(x)
     x = _batchnorm_term(x, "conv1_bn", C_out, inputs)
-    x = x.silu_poly()
+    x = _silu_poly_call(x)
     tensor_ir = x
     n = 4096
     return tensor_ir, inputs, n

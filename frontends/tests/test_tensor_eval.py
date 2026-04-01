@@ -406,7 +406,7 @@ class TestConvolutionEvaluation:
         np.testing.assert_array_equal(result, expected)
 
     def test_conv2d_stride2_same_evaluation(self):
-        """Test 2D convolution evaluation with stride=2 and same padding (output size = ceil(H/stride) x ceil(W/stride))."""
+        """Stride=2 ``same`` uses symmetric pad k//2 per side"""
         input_tensor = TensorTerm.Tensor("input", [1, 4, 4], True)
         filter_tensor = TensorTerm.Tensor("filter", [1, 1, 2, 2], False)
         conv = TensorTerm.conv2d(input_tensor, filter_tensor, 2, "same")
@@ -425,9 +425,16 @@ class TestConvolutionEvaluation:
             "filter": np.array([[[[1, 0], [0, 0]]]]),
         }
         result = conv.eval(inputs)
-        # same padding with stride 2: output ceil(4/2)xceil(4/2) = 2x2
-        # i=0,j=0: patch (0,0)-(2,2) -> 1; i=0,j=1: (0,2)-(2,4) -> 3; i=1,j=0: (2,0)-(4,2) -> 9; i=1,j=1: (2,2)-(4,4) -> 11
-        expected = np.array([[[1, 3], [9, 11]]])
+        # Pad 1 per side -> 6x6; k=2,s=2 -> 3x3 out; filter only hits top-left of each 2x2 patch.
+        expected = np.array(
+            [
+                [
+                    [0.0, 0.0, 0.0],
+                    [0.0, 6.0, 8.0],
+                    [0.0, 14.0, 16.0],
+                ]
+            ]
+        )
         np.testing.assert_array_equal(result, expected)
 
 

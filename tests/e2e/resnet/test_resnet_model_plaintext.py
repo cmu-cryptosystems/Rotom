@@ -11,9 +11,14 @@ from benchmarks.e2e.resnet.resnet_data import (
     CKPT_FILE,
     accuracy_top1,
     cifar10_test_loader,
+    cifar10_train_loader,
     load_checkpoint,
 )
 from benchmarks.e2e.resnet.resnet_model import resnet20
+from benchmarks.e2e.resnet.silu_poly_calibration import (
+    calibrate_silu_input_bounds,
+    replace_resnet20_silu_with_poly,
+)
 
 
 def _device() -> str:
@@ -37,6 +42,7 @@ def load_dacapo_checkpoint_into(model: torch.nn.Module, ckpt_path: str) -> None:
 
 
 @pytest.mark.e2e
+@pytest.mark.slow
 def test_resnet20_silu_plaintext_checkpoint_accuracy_smoke():
     """
     Smoke-test accuracy evaluation in plaintext (PyTorch).
@@ -61,3 +67,30 @@ def test_resnet20_silu_plaintext_checkpoint_accuracy_smoke():
     assert 0.0 <= acc <= 1.0
     min_acc = float(os.environ.get("ROTOM_RESNET_MIN_ACC", "0.70"))
     assert acc >= min_acc
+
+
+@pytest.mark.e2e
+@pytest.mark.slow
+def test_resnet20_poly_silu_with_calibrated_avg_bounds():
+    if not os.path.exists(CKPT_FILE):
+        pytest.skip(f"Missing checkpoint at {CKPT_FILE}")
+    device = _device()
+    model = resnet20(num_classes=10)
+    load_dacapo_checkpoint_into(model, CKPT_FILE)
+    model.to(device)
+    try:
+        cal_loader = cifar10_train_loader(batch_size=256, num_workers=0, shuffle=True)
+        test_loader = cifar10_test_loader(batch_size=256, num_workers=0)
+    except FileNotFoundError as e:
+        pytest.skip(str(e))
+    bounds, n_batches = calibrate_silu_input_bounds(
+        model, cal_loader, device=device, max_batches=16
+    )
+    assert len(bounds) == 19
+    assert n_batches == 16
+    replace_resnet20_silu_with_poly(model, bounds, degree=11, n_nodes=80)
+    model.to(device)
+    acc = accuracy_top1(model, test_loader, device=device)
+    assert 0.0 <= acc <= 1.0
+    min_poly = float(os.environ.get("ROTOM_RESNET_POLY_MIN_ACC", "0.50"))
+    assert acc >= min_poly, f"poly-SiLU accuracy {acc:.4f} < {min_poly}"

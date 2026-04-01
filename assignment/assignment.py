@@ -558,13 +558,27 @@ class LayoutAssignment:
                 # In this case, the kernel represents a broadcast/elementwise operation
                 kernel_shape = [1] * len(shape)
 
-            for i, k in enumerate(kernel_shape):
-                if not shape:
-                    continue  # if shape is None, then the kernel is a constant
-                if k != shape[i]:
-                    raise ValueError(
-                        f"kernel shape {kernel_shape} does not match expected shape {shape}"
-                    )
+            # Shape ranks can differ when layouts track non-dense dim indices
+            # (e.g. INDEX/RESHAPE). In those cases, extent-1 axes should be
+            # considered removable for the purposes of shape compatibility.
+            if not shape:
+                # shape is None / empty => kernel represents a constant/broadcast
+                new_kernels.append(kernel)
+                continue
+
+            norm_kernel = [k for k in kernel_shape if k != 1]
+            norm_shape = [s for s in shape if s != 1]
+            if norm_kernel != norm_shape:
+                # Helpful context when this trips (e.g. extents-1 axes / non-dense dim indices).
+                layout_dims = [
+                    (d.dim, d.extent, getattr(d, "dim_type", None))
+                    for d in kernel.layout.get_dims()
+                ]
+                raise ValueError(
+                    f"kernel shape {kernel_shape} does not match expected shape {shape}; "
+                    f"term_op={kernel.layout.term.op}; layout_dims={layout_dims}"
+                )
+
             new_kernels.append(kernel)
         assert new_kernels
         return new_kernels

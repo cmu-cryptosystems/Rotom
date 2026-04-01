@@ -2,10 +2,95 @@ import numpy as np
 
 np.set_printoptions(legacy="1.25")
 
+from typing import Any, Literal
+
 from frontends.tensor import TensorOp
-from ir.he import HEOp
+from ir.he import HEOp, HETerm
 from ir.kernel import KernelOp
 from util.layout_util import *
+
+
+def _collect_het_nodes(root: HETerm) -> set[HETerm]:
+    """All ``HETerm`` nodes reachable from ``root`` (follows every ``cs`` edge)."""
+    nodes: set[HETerm] = set()
+    stack: list[HETerm] = [root]
+    while stack:
+        t = stack.pop()
+        if t in nodes:
+            continue
+        nodes.add(t)
+        for c in t.cs:
+            if isinstance(c, HETerm):
+                stack.append(c)
+    return nodes
+
+
+def _build_remaining_uses(root: HETerm) -> dict[HETerm, int]:
+    """Incoming-use counts: how many parent terms reference each node as an operand."""
+    nodes = _collect_het_nodes(root)
+    rem = {t: 0 for t in nodes}
+    for t in nodes:
+        for c in t.cs:
+            if isinstance(c, HETerm):
+                rem[c] += 1
+    return rem
+
+
+def _toy_post_order(root: HETerm) -> list[HETerm]:
+    """Post-order like ``HETerm.helper_post_order``, but recurses through ``HEOp.CS``.
+
+    The stock ``post_order`` omits nodes only reachable under ``CS``, which forced
+    coarse ``env.clear()`` per ciphertext. Including ``CS`` children yields a full
+    topological order so we can drop ``env`` entries when uses hit zero (same idea
+    as ``OpenFHE.update_dependencies``).
+
+    Implemented with an explicit stack so very deep DAGs (e.g. large ResNet HE IR)
+    do not hit Python's recursion limit.
+    """
+    order: list[HETerm] = []
+    seen: set[HETerm] = set()
+    stack: list[tuple[HETerm, Literal["enter", "exit"]]] = [(root, "enter")]
+
+    while stack:
+        term, phase = stack.pop()
+        if phase == "enter":
+            if term in seen:
+                continue
+            seen.add(term)
+            stack.append((term, "exit"))
+            match term.op:
+                case HEOp.CS:
+                    if isinstance(term.cs[0], HETerm):
+                        stack.append((term.cs[0], "enter"))
+                case (
+                    HEOp.PACK
+                    | HEOp.PUNCTURED_PACK
+                    | HEOp.INDICES
+                    | HEOp.CS_PACK
+                    | HEOp.CONST
+                ):
+                    pass
+                case HEOp.ADD | HEOp.SUB | HEOp.MUL:
+                    stack.append((term.cs[1], "enter"))
+                    stack.append((term.cs[0], "enter"))
+                case HEOp.ROT | HEOp.POLY_CALL | HEOp.RESCALE:
+                    stack.append((term.cs[0], "enter"))
+                case HEOp.MASK | HEOp.ZERO_MASK:
+                    pass
+                case _:
+                    raise NotImplementedError(term.op)
+        else:
+            order.append(term)
+
+    return order
+
+
+def _packed_ct_lists_to_float64(packed_cts: list) -> np.ndarray:
+    """One allocation: ``apply_layout`` / ``apply_punctured_layout`` output (list of slot lists) → ``float64``.
+
+    Rows must be rectangular (same slot count per ciphertext); that matches layout packing invariants.
+    """
+    return np.asarray(packed_cts, dtype=np.float64)
 
 
 class Toy:
@@ -40,6 +125,44 @@ class Toy:
         self.n = args.n
         self.env = {}
         self.input_cache = {}
+        # id(TensorTerm) -> dense result of TensorTerm.eval(inputs).  Keyed by
+        # object identity (not TensorTerm.__hash__), since __eq__ is hash-based.
+        self._tensor_term_dense_by_id: dict[int, Any] = {}
+
+    def _dense_eval_for_tensor_term(self, tensor_term):
+        """Run ``tensor_term.eval(self.inputs)`` at most once per IR node object."""
+        tid = id(tensor_term)
+        if tid in self._tensor_term_dense_by_id:
+            return self._tensor_term_dense_by_id[tid]
+        dense = tensor_term.eval(self.inputs)
+        self._tensor_term_dense_by_id[tid] = dense
+        return dense
+
+    def _eval_ct_root_with_use_counts(self, ct_term: HETerm):
+        """Evaluate one ciphertext DAG and free ``env`` entries as operands go dead."""
+        remaining = _build_remaining_uses(ct_term)
+        for t in _toy_post_order(ct_term):
+            self.env[t] = self.eval(t)
+            for c in t.cs:
+                if isinstance(c, HETerm):
+                    remaining[c] -= 1
+                    if remaining[c] == 0:
+                        self.env.pop(c, None)
+
+    def _as_np_vec(self, v):
+        """Return a 1-D ``float64`` vector; avoid ``astype`` when already ``float64``."""
+        if isinstance(v, np.ndarray):
+            if v.dtype == np.float64:
+                return v
+            return v.astype(np.float64, copy=False)
+        return np.asarray(v, dtype=np.float64)
+
+    def _as_np_vec(self, v):
+        """Ensure vectors are stored as 1D float64 numpy arrays."""
+        if isinstance(v, np.ndarray):
+            return v.astype(np.float64, copy=False)
+        # Common case: list[float] from apply_layout
+        return np.asarray(v, dtype=np.float64)
 
     def eval_mask(self, term):
         """
@@ -68,10 +191,10 @@ class Toy:
         """
         layout = term.cs[0]
         if (layout.term, layout) not in self.input_cache:
-            tensor = layout.term.eval(self.inputs)
-            # apply layout to tensor
-            packed_tensor = apply_layout(tensor, layout)
-            self.input_cache[(layout.term, layout)] = packed_tensor
+            tensor = self._dense_eval_for_tensor_term(layout.term)
+            self.input_cache[(layout.term, layout)] = _packed_ct_lists_to_float64(
+                apply_layout(tensor, layout)
+            )
 
         # get packing index and return packed vector
         # Parse metadata: "packing_idx rot:rot_amt" or just "packing_idx"
@@ -88,11 +211,9 @@ class Toy:
 
         # Apply rotation during packing if specified (cheaper than homomorphic rotation)
         if rot_amt is not None:
-            # Rotate the vector: positive rot_amt means left rotate (same as eval_rot)
-            # rotated[i] = original[(rot_amt + i) % n]
-            n = len(vector)
-            vector = [vector[(rot_amt + i) % n] for i in range(n)]
-
+            # positive rot_amt means left rotate (same as eval_rot):
+            # out[i] = vec[(rot_amt + i) % n] == np.roll(vec, -rot_amt)
+            return np.roll(vector, -rot_amt)
         return vector
 
     def eval_pack_punctured(self, term):
@@ -110,36 +231,36 @@ class Toy:
         """
         layout = term.cs[0]
         if (layout.term, layout) not in self.input_cache:
-            tensor = layout.term.eval(self.inputs)
-            # apply layout to tensor
-            packed_tensor = apply_punctured_layout(tensor, layout)
-            self.input_cache[(layout.term, layout)] = packed_tensor
+            tensor = self._dense_eval_for_tensor_term(layout.term)
+            self.input_cache[(layout.term, layout)] = _packed_ct_lists_to_float64(
+                apply_punctured_layout(tensor, layout)
+            )
 
         # get packing index and return packed vector
         packing_idx = int(term.metadata.split()[0])
-        return self.input_cache[(layout.term, layout)][packing_idx]
+        return self._as_np_vec(self.input_cache[(layout.term, layout)][packing_idx])
 
     def eval_cs_pack(self, term):
         layout = term.cs[1]
         if (layout.term, layout) not in self.input_cache:
             tensor = self.inputs[term.cs[0]]
-            # apply layout to tensor
-            packed_tensor = apply_layout(tensor, layout)
-            self.input_cache[(layout.term, layout)] = packed_tensor
+            self.input_cache[(layout.term, layout)] = _packed_ct_lists_to_float64(
+                apply_layout(tensor, layout)
+            )
 
         # get packing index and return packed vector
         packing_idx = int(term.metadata.split()[0])
-        return self.input_cache[(layout.term, layout)][packing_idx]
+        return self._as_np_vec(self.input_cache[(layout.term, layout)][packing_idx])
 
     def eval_const(self, term):
         layout = term.cs[0]
-        vector = np.array([term.cs[1]] * self.n)
-        packed_tensor = apply_layout(vector, layout)
-        return packed_tensor[0]
+        vector = np.full(self.n, term.cs[1], dtype=np.float64)
+        packed = _packed_ct_lists_to_float64(apply_layout(vector, layout))
+        return packed[0]
 
     def eval_indices(self, term):
         tensor = self.inputs[term.cs[0].cs[0]]
-        vector = [0] * self.n
+        vector = np.zeros(self.n, dtype=np.float64)
         for filter_index, position, _ in term.cs[1]:
             vector[position[0]] = tensor[
                 filter_index[0], filter_index[1], filter_index[2]
@@ -148,62 +269,34 @@ class Toy:
 
     def eval_rot(self, term):
         """positive == left rotate"""
-        vector = self.env[term.cs[0]].copy()
-        return [vector[(term.cs[1] + i) % len(vector)] for i in range(len(vector))]
+        vector = self.env[term.cs[0]]
+        return np.roll(vector, -int(term.cs[1]))
 
     def eval_add(self, term):
-        return [a + b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
+        return self.env[term.cs[0]] + self.env[term.cs[1]]
 
     def eval_sub(self, term):
-        return [a - b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
+        return self.env[term.cs[0]] - self.env[term.cs[1]]
 
     def eval_mul(self, term):
-        return [a * b for a, b in zip(self.env[term.cs[0]], self.env[term.cs[1]])]
+        return self.env[term.cs[0]] * self.env[term.cs[1]]
 
     def _apply_poly_to_vector(self, vec, poly_func, poly_channel=None):
-        """Apply polynomial descriptor element-wise to a list of values. Uses self.inputs for batchnorm."""
+        """Apply POLY_* element-wise to a 1D vector. Uses self.inputs for batchnorm."""
+        vec = self._as_np_vec(vec)
         if poly_func is None or poly_func == "identity":
-            return list(vec)
-        if poly_func == "relu_exact" or poly_func == "relu":
-            return [float(v) if v > 0 else 0.0 for v in vec]
-        if poly_func == "silu":
-            return [
-                float(v * (1.0 / (1.0 + np.exp(-np.clip(v, -20, 20))))) for v in vec
-            ]
-        if (
-            isinstance(poly_func, tuple)
-            and len(poly_func) >= 5
-            and poly_func[0] == "batchnorm"
-        ):
-            _, mean_key, var_key, gamma_key, beta_key = poly_func[:5]
-            eps = float(poly_func[5]) if len(poly_func) > 5 else 1e-5
-            mean = np.asarray(self.inputs[mean_key]).flatten()
-            var = np.asarray(self.inputs[var_key]).flatten()
-            gamma = np.asarray(self.inputs[gamma_key]).flatten()
-            beta = np.asarray(self.inputs[beta_key]).flatten()
-            # Use per-channel params when poly_channel is set (one CT per channel); else first channel
-            ch = 0 if poly_channel is None else min(int(poly_channel), len(mean) - 1)
-            m, vv, g, b = (
-                float(mean[ch]),
-                float(var[ch]),
-                float(gamma[ch]),
-                float(beta[ch]),
+            return vec
+        elif poly_func == "relu_exact" or poly_func == "relu":
+            return np.where(vec > 0, vec, 0.0)
+        elif poly_func == "silu":
+            # Plaintext exact SiLU (same as ``TensorEvaluator`` for ``PolyCall("silu")``).
+            x_clip = np.clip(vec, -40.0, 40.0)
+            sig = 1.0 / (1.0 + np.exp(-x_clip))
+            return vec * sig
+        else:
+            raise NotImplementedError(
+                f"Poly func {poly_func!r} not implemented for eval"
             )
-            inv_std = 1.0 / np.sqrt(vv + eps)
-            return [float(g * (x - m) * inv_std + b) for x in vec]
-        if isinstance(poly_func, (list, tuple)) and len(poly_func) > 0:
-            try:
-                coeffs = [float(c) for c in poly_func]
-            except (TypeError, ValueError):
-                return list(vec)
-            out = []
-            for x in vec:
-                y = 0.0
-                for i, c in enumerate(coeffs):
-                    y += c * (float(x) ** i)
-                out.append(y)
-            return out
-        return list(vec)
 
     def eval_poly(self, term):
         """Apply the actual POLY function when term.poly_func is set (from lowering); else identity."""
@@ -225,7 +318,7 @@ class Toy:
         vector = self.env[term.cs[0]]
         scale_exp = term.cs[1]  # The exponent (e.g., 14 for 2^14)
         scale_value = 2**scale_exp  # Compute 2^scale_exp
-        return [v / scale_value for v in vector]
+        return vector / scale_value
 
     def eval(self, term):
         match term.op:
@@ -263,7 +356,7 @@ class Toy:
             case HEOp.RESCALE:
                 return self.eval_rescale(term)
             case HEOp.ZERO_MASK:
-                return [0] * self.n
+                return np.zeros(self.n, dtype=np.float64)
             case _:
                 raise NotImplementedError(term.op)
 
@@ -276,13 +369,19 @@ class Toy:
                 ct = cts[ct_idx]
                 if isinstance(ct, list):
                     for c in ct:
-                        for ct_term in c.post_order():
-                            self.env[ct_term] = self.eval(ct_term)
-                        results.append(self.env[ct_term])
+                        self._eval_ct_root_with_use_counts(c)
+                        results.append(self.env.pop(c))
                 else:
-                    for ct_term in ct.post_order():
-                        self.env[ct_term] = self.eval(ct_term)
-                    results.append(self.env[ct_term])
+                    self._eval_ct_root_with_use_counts(ct)
+                    results.append(self.env.pop(ct))
+
+            # Evaluate the tensor computation to get the expected result
+            # skip checks for split rolls, replicate
+            if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE]:
+                continue
+
+            if getattr(self.args, "skip_toy_eval_checks", False):
+                continue
 
             # Evaluate the tensor computation to get the expected result
             eval_result = term.layout.term.eval(self.inputs)
@@ -293,10 +392,6 @@ class Toy:
                 expected = apply_layout(vector, term.layout)
             else:
                 expected = apply_layout(eval_result, term.layout)
-
-            # skip checks for split rolls, replicate
-            if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE]:
-                continue
 
             # Check if values are close instead of exact equality
             all_close = True
@@ -338,15 +433,15 @@ class Toy:
                 ct = cts[ct_idx]
                 if isinstance(ct, list):
                     for c in ct:
-                        for ct_term in c.post_order():
-                            self.env[ct_term] = self.eval(ct_term)
-                        results.append(self.env[ct_term])
+                        self._eval_ct_root_with_use_counts(c)
+                        results.append(self.env.pop(c))
                 else:
-                    for ct_term in ct.post_order():
-                        self.env[ct_term] = self.eval(ct_term)
-                    results.append(self.env[ct_term])
+                    self._eval_ct_root_with_use_counts(ct)
+                    results.append(self.env.pop(ct))
 
-            expected = apply_layout(term.layout.term.eval(self.inputs), term.layout)
+            expected = apply_layout(
+                self._dense_eval_for_tensor_term(term.layout.term), term.layout
+            )
             assert results == expected
 
             # check that results match up
@@ -356,7 +451,9 @@ class Toy:
                 )
                 assert results[: len(expected)] == expected
             else:
-                expected = apply_layout(term.layout.term.eval(self.inputs), term.layout)
+                expected = apply_layout(
+                    self._dense_eval_for_tensor_term(term.layout.term), term.layout
+                )
                 assert results == expected
             print("check passed:", term)
             print()
