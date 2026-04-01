@@ -5,6 +5,7 @@ from ir.layout import Layout
 from lower.layout_cts import LayoutCiphertexts, create_layout_without_dims
 from lower.lower_util import find_sum_dim, rotate_and_sum
 from util.layout_util import (
+    _get_apply_layout_plan,
     convert_layout_to_mask,
     get_cts_by_dim,
     get_dim_indices,
@@ -12,6 +13,50 @@ from util.layout_util import (
     get_segment,
 )
 from util.shape_util import get_term_shape
+
+
+def _slot_mask_conv2d_same_stride1(
+    *,
+    base_indices_ct: list,
+    rot_amt: int,
+    fh: int,
+    fw: int,
+    pad_top: int,
+    pad_left: int,
+    hin: int,
+    win: int,
+    n: int,
+) -> list[int]:
+    """One ciphertext: mask post-rotation slots for ``same`` conv, stride 1, 3×3.
+
+    Toy rotation matches ``np.roll(vec, -rot_amt)`` → ``out[s] = vec[(s + rot_amt) % n]``.
+    Zero slots where the source slot would supply an out-of-bounds (implicit) neighbor
+    for some output cell, including across gap dims where packing wraps incorrectly.
+    """
+    mask: list[int] = [1] * n
+    for s in range(n):
+        src = (s + int(rot_amt)) % n
+        if src < 0 or src >= len(base_indices_ct):
+            mask[s] = 0
+            continue
+        idx = base_indices_ct[src]
+        if not isinstance(idx, (list, tuple)) or len(idx) < 3:
+            mask[s] = 0
+            continue
+        if any(idx[i] is None for i in range(3)):
+            mask[s] = 0
+            continue
+        hu, wu = int(idx[1]), int(idx[2])
+        if hu < 0 or hu >= hin or wu < 0 or wu >= win:
+            mask[s] = 0
+            continue
+        o_h = hu + pad_top - fh
+        o_w = wu + pad_left - fw
+        if o_h < 0 or o_h >= hin or o_w < 0 or o_w >= win:
+            mask[s] = 0
+        else:
+            mask[s] = 1
+    return mask
 
 
 def lower_conv2d(env, kernel):
@@ -68,27 +113,7 @@ def lower_conv2d(env, kernel):
             rot_1 = j * w_stride
             rot_amts.append(rot_0 + rot_1 + rot_offset)
 
-    filter_masks = []
-    for i in range(b_shape[2]):
-        for j in range(b_shape[3]):
-            rot_0 = i * h_stride
-            rot_1 = j * w_stride
-            segment_0 = h_extent * h_stride
-            segment_1 = w_extent * w_stride
-            mask = [1] * kernel.cs[0].layout.n
-            for k in range(kernel.cs[0].layout.n // segment_0):
-                for idx in range(segment_0):
-                    if not 0 <= idx + rot_0 - (pad_top * h_stride) < segment_0:
-                        mask[k * segment_0 + idx] = 0
-
-            for k in range(kernel.cs[0].layout.n // segment_1):
-                for idx in range(segment_1):
-                    if not 0 <= idx + rot_1 - (pad_left * w_stride) < segment_1:
-                        mask[k * segment_1 + idx] = 0
-            filter_masks.append(mask)
-
     # Replicate filter masks for each CT in b layout - use layout to get filter position per ct_idx
-    # num_filter_positions = b_shape[2] * b_shape[3]
     b_num_cts = kernel.cs[1].layout.num_ct()
     b_ct_dims = kernel.cs[1].layout.ct_dims
     _inner_stride = 1
@@ -100,7 +125,36 @@ def lower_conv2d(env, kernel):
         dim.dim: dim_map_masks[dim] for dim in b_ct_dims if dim.dim is not None
     }
     f_w_extent_masks = b_shape[3]
-    masks = []
+
+    filter_masks: list[list[int]] = []
+    base_by_ct: list | None = None
+    hin = win = 0
+    if int(_stride) != 1:
+        for i in range(b_shape[2]):
+            for j in range(b_shape[3]):
+                rot_0 = i * h_stride
+                rot_1 = j * w_stride
+                segment_0 = h_extent * h_stride
+                segment_1 = w_extent * w_stride
+                mask = [1] * kernel.cs[0].layout.n
+                for k in range(kernel.cs[0].layout.n // segment_0):
+                    for idx in range(segment_0):
+                        if not 0 <= idx + rot_0 - (pad_top * h_stride) < segment_0:
+                            mask[k * segment_0 + idx] = 0
+
+                for k in range(kernel.cs[0].layout.n // segment_1):
+                    for idx in range(segment_1):
+                        if not 0 <= idx + rot_1 - (pad_left * w_stride) < segment_1:
+                            mask[k * segment_1 + idx] = 0
+                filter_masks.append(mask)
+    else:
+        layout_a = kernel.cs[0].layout
+        layout_len = max(len(layout_a), layout_a.n)
+        plan = _get_apply_layout_plan(layout_a, 3, layout_len=layout_len)
+        base_by_ct = plan["base_indices_by_cts"]
+        hin, win = int(_a_shape[1]), int(_a_shape[2])
+
+    masks: list[list[int]] = []
     for ct_idx in range(b_num_cts):
         f_h = (
             dim_indices_masks[dim_to_pos_masks[2]][ct_idx]
@@ -113,10 +167,39 @@ def lower_conv2d(env, kernel):
             else 0
         )
         filter_idx = f_h * f_w_extent_masks + f_w
-        masks.append(filter_masks[filter_idx])
+        rot_amt = rot_amts[filter_idx]
+        a_idx = min(ct_idx, len(a_cs) - 1)
+        if int(_stride) == 1:
+            assert base_by_ct is not None
+            m = _slot_mask_conv2d_same_stride1(
+                base_indices_ct=base_by_ct[a_idx],
+                rot_amt=rot_amt,
+                fh=int(f_h),
+                fw=int(f_w),
+                pad_top=int(pad_top),
+                pad_left=int(pad_left),
+                hin=hin,
+                win=win,
+                n=kernel.cs[0].layout.n,
+            )
+        else:
+            m = filter_masks[filter_idx]
+        masks.append(m)
 
-    kernel.cs[1].layout.term.cs.append(masks)
-    kernel.cs[1].layout.term.cs.append(rot_amts)
+    # Some downstream helpers (e.g. punctured layout application in Toy checks) read
+    # precomputed conv masks from `layout.term.cs[4]`. Preserve that convention.
+    # Only attach if not already present to avoid unbounded growth when lowering
+    # is invoked multiple times in the same process.
+    if len(kernel.cs[1].layout.term.cs) <= 4:
+        kernel.cs[1].layout.term.cs.append(masks)
+    if len(kernel.cs[1].layout.term.cs) <= 5:
+        kernel.cs[1].layout.term.cs.append(rot_amts)
+
+    # Apply per-filter padding masks during conv lowering.
+    # Without this, rotations wrap around in the packed HE vector and leak values
+    # from outside the valid padded region, which becomes visible for some layouts
+    # (notably when H/W are separated by gap slot dims).
+    mask_terms = [HETerm.mask([m]) for m in masks]
 
     # calculate the multiplications between ct
     # For each b_idx, use the already-aligned a_idx (same ct index) and rotate only
@@ -135,7 +218,9 @@ def lower_conv2d(env, kernel):
         filter_idx = f_h * f_w_extent + f_w
         rot_amt = rot_amts[filter_idx]
         a_idx = min(b_idx, len(a_cs) - 1)
-        cts[b_idx] = (a_cs[a_idx] << rot_amt) * b_ct
+        a_rot = a_cs[a_idx] << rot_amt
+        a_masked = a_rot * mask_terms[b_idx]
+        cts[b_idx] = a_masked * b_ct
 
     # find summation dimensions from b layout
     b_layout_cts = LayoutCiphertexts(layout=kernel.cs[1].layout, cts=cts)
