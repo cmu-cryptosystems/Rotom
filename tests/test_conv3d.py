@@ -89,7 +89,10 @@ class TestConvolution3D:
         [
             None,  # default (assignment chooses)
             "[0:1:1][1:4:1][2:4:1][3:4:1]",  # explicit dense
-            "[G:8][0:1:1][1:4:1][2:4:1][3:4:1]",  # extra leading gap
+            "[G:2][0:1:1][1:4:1][2:4:1][3:4:1]",  # small leading gap
+            "[G:8][0:1:1][1:4:1][2:4:1][3:4:1]",  # medium leading gap
+            "[G:32][0:1:1][1:4:1][2:4:1][3:4:1]",  # large leading gap
+            "[0:1:1][G:4][1:4:1][2:4:1][3:4:1]",  # gap after channel
             "[0:1:1][2:4:1][1:4:1][3:4:1]",  # swap D/H physical order
         ],
     )
@@ -112,6 +115,40 @@ class TestConvolution3D:
         inputs = {
             "a": rng.normal(size=(c_in, d, h, w)).astype(np.float64),
             "b": np.random.default_rng(999)
+            .normal(size=(c_out, c_in, k, k, k))
+            .astype(np.float64),
+        }
+        self._run_test_case(y, inputs, args, backend)
+
+    @pytest.mark.parametrize(
+        "input_layout",
+        [
+            # C_in=4 as 2×2; D=H=W=4 ⇒ 64 slots per full spatial block; c = c0*2+c1
+            "[0:2:128][1:4:1][2:4:1][3:4:1][0:2:64]",
+            "[0:2:128][1:4:1][2:4:1][3:4:1][G:2][0:2:64]",
+            "[G:8][0:2:128][1:4:1][2:4:1][3:4:1][G:2][0:2:64]",
+        ],
+    )
+    def test_conv3d_same_split_channel_layouts(self, backend, input_layout):
+        """Conv3D(same) with input channel split across two dim-0 factors (+ optional gaps)."""
+        args = get_default_args()
+        args.n = 4096
+        args.rolls = True
+        args.conv_roll = False
+        args.benchmark = f"conv3d_same_splitc_{abs(hash(input_layout)) % 10**8}"
+
+        d = h = w = 4
+        # c_out == c_in: split dim-0 channel packing can otherwise trip shape_check vs layout.
+        c_in, c_out = 4, 4
+        k = 3
+        a = TensorTerm.Tensor("a", [c_in, d, h, w], True, layout=input_layout)
+        b = TensorTerm.Tensor("b", [c_out, c_in, k, k, k], False)
+        y = TensorTerm.conv3d(a, b, 1, "same")
+
+        rng = np.random.default_rng(404)
+        inputs = {
+            "a": rng.normal(size=(c_in, d, h, w)).astype(np.float64),
+            "b": np.random.default_rng(505)
             .normal(size=(c_out, c_in, k, k, k))
             .astype(np.float64),
         }
@@ -164,6 +201,57 @@ class TestConvolution3D:
         }
         tensor_ir = self._create_conv3d(d, h, w, c_in, c_out, k, k, k, 1, "same")
         self._run_test_case(tensor_ir, inputs, args, backend)
+
+    @pytest.mark.parametrize("c_in,c_out", [(2, 3), (3, 1), (1, 4), (4, 2), (3, 3)])
+    def test_conv3d_same_multichannel_io_default_layout(self, backend, c_in, c_out):
+        """Conv3D(same): multiple input and output channels (assignment picks input layout)."""
+        args = get_default_args()
+        args.n = 4096
+        args.rolls = True
+        args.conv_roll = False
+        args.benchmark = f"conv3d_mc_io_{c_in}_{c_out}"
+
+        d = h = w = 4
+        k = 3
+        a = TensorTerm.Tensor("a", [c_in, d, h, w], True)
+        b = TensorTerm.Tensor("b", [c_out, c_in, k, k, k], False)
+        y = TensorTerm.conv3d(a, b, 1, "same")
+
+        rng = np.random.default_rng(1100 + c_in * 31 + c_out)
+        inputs = {
+            "a": rng.normal(size=(c_in, d, h, w)).astype(np.float64),
+            "b": np.random.default_rng(1200 + c_out)
+            .normal(size=(c_out, c_in, k, k, k))
+            .astype(np.float64),
+        }
+        self._run_test_case(y, inputs, args, backend)
+
+    @pytest.mark.parametrize("c_in,c_out", [(2, 3), (4, 1), (1, 3)])
+    def test_conv3d_same_multichannel_io_dense_channel_layout(
+        self, backend, c_in, c_out
+    ):
+        """Conv3D(same): multi I/O channels with explicit dense channel dim in layout string."""
+        args = get_default_args()
+        args.n = 4096
+        args.rolls = True
+        args.conv_roll = False
+        args.benchmark = f"conv3d_mc_dense_{c_in}_{c_out}"
+
+        d = h = w = 4
+        k = 3
+        layout = f"[0:{c_in}:1][1:4:1][2:4:1][3:4:1]"
+        a = TensorTerm.Tensor("a", [c_in, d, h, w], True, layout=layout)
+        b = TensorTerm.Tensor("b", [c_out, c_in, k, k, k], False)
+        y = TensorTerm.conv3d(a, b, 1, "same")
+
+        rng = np.random.default_rng(1300 + c_in + c_out * 17)
+        inputs = {
+            "a": rng.normal(size=(c_in, d, h, w)).astype(np.float64),
+            "b": np.random.default_rng(1400 + c_out)
+            .normal(size=(c_out, c_in, k, k, k))
+            .astype(np.float64),
+        }
+        self._run_test_case(y, inputs, args, backend)
 
     def test_conv3d_stride2_same(self, backend):
         args = get_default_args()

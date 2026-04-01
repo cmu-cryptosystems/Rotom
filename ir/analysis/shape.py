@@ -179,7 +179,6 @@ class Shape:
                 # does not power-of-2 pad rank>2 tensors. We still round the output to a
                 # power-of-2 for layout compatibility.
                 a_shape = copy(self.padded_shapes[args.input])
-                b_shape = copy(self.padded_shapes[args.filter])
                 logical_b = self.get_shape(args.filter)
                 logical_a = self.get_shape(args.input)
 
@@ -187,7 +186,8 @@ class Shape:
                 h_i = logical_a[1]
                 w_i = logical_a[2]
 
-                c_o = b_shape[0]
+                # Logical output channels (match layout gen / eval; filter c_out is not p2-padded).
+                c_o = logical_b[0]
                 # Use logical filter spatial sizes (declared shape), not power-of-2-padded filter.
                 if len(logical_b) == 4:
                     f_h, f_w = logical_b[2], logical_b[3]
