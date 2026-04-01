@@ -898,14 +898,14 @@
     <div class="ambient" aria-hidden="true"></div>
     <div class="shell">
       <nav>
-        <a class="brand" href="/">
+        <a class="brand" href="./index.html">
           <span class="brand-mark" aria-hidden="true"></span>
           Rotom
         </a>
         <div class="nav-links">
-          <a href="/#features">Product</a>
-          <a href="/#developers">Contribute</a>
-          <a href="/#paper">Research</a>
+          <a href="./index.html#features">Product</a>
+          <a href="./index.html#developers">Contribute</a>
+          <a href="./index.html#paper">Research</a>
           <a href="https://github.com/cmu-cryptosystems" target="_blank" rel="noopener noreferrer">Organization</a>
           <a href="https://github.com/cmu-cryptosystems/Rotom" target="_blank" rel="noopener noreferrer">Repository</a>
           <a href="https://eprint.iacr.org/2025/1319" target="_blank" rel="noopener noreferrer">Paper</a>
@@ -977,7 +977,7 @@
       </div>
 
       <div class="status-bar" id="status">
-        Ready — <code>.venv</code> + uvicorn (see <code>website/README.md</code>).
+        Ready — static mode (no Python server).
       </div>
     </div>
 
@@ -1533,37 +1533,28 @@
         return d.innerHTML;
       }
 
-      async function postJson(url, body) {
-        const res = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Rotom-Client": "web-v1",
-          },
-          body: JSON.stringify(body),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          const detail = data.detail;
-          const msg =
-            typeof detail === "string"
-              ? detail
-              : Array.isArray(detail)
-                ? detail.map((d) => d.msg || JSON.stringify(d)).join("; ")
-                : res.statusText;
-          throw new Error(msg || "Request failed");
-        }
-        return data;
+      let rotom = null;
+      async function ensureRotom() {
+        if (rotom) return rotom;
+        rotom = await import("./rotom_layout.js");
+        return rotom;
       }
 
       async function runLayout() {
         const code = editorInstance.getValue();
         setStatus("Running…");
         try {
-          const data = await postJson("/api/run", { code });
-          showLog(data.output || "(no output)");
-          renderViz(data.viz);
-          setStatus("Done.");
+          const m = await ensureRotom();
+          const p = m.parseEditorInput(code);
+          const { output, viz } = m.visualizeForWeb(
+            p.layout_str,
+            p.n,
+            p.tensor_shape,
+            p.secret
+          );
+          showLog(output || "(no output)");
+          renderViz(viz);
+          setStatus("Done (client-side).");
         } catch (e) {
           clearMapHighlight();
           showLog(String(e.message), true);

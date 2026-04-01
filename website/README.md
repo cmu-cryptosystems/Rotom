@@ -1,20 +1,27 @@
 # Layout visualizer — web UI
 
-Template site with a **Monaco** code editor and a small **FastAPI** backend that runs [`layout_visualizer.py`](../layout_visualizer.py) in-process (same interpreter as the Rotom tree).
+Static site with a **Monaco** code editor and an in-browser layout engine (pure JavaScript).
+
+The layout visualizer no longer depends on Rotom’s Python runtime, so it can be deployed directly to **GitHub Pages**.
 
 ## Run locally
 
-From the **Rotom repository root** (parent of `website/`). Use the same `.venv` as the rest of the project ([root README](../README.md): `python -m venv .venv`).
+Serve `website/` as static files (no backend needed):
 
 ```bash
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt    # Rotom deps (numpy, etc.) — omit if already installed
-pip install -r website/requirements.txt
-PYTHONPATH=. python -m uvicorn website.server:app --reload --host 127.0.0.1 --port 8765
+cd website
+python3 -m http.server 8765
 ```
 
-- **Landing** (project overview + paper): [http://127.0.0.1:8765/](http://127.0.0.1:8765/)
-- **Layout visualizer**: [http://127.0.0.1:8765/visualizer](http://127.0.0.1:8765/visualizer)
+- **Landing**: `http://127.0.0.1:8765/index.html`
+- **Layout visualizer**: `http://127.0.0.1:8765/visualizer.html`
+
+## Deploy to GitHub Pages
+
+This repo includes a GitHub Actions workflow that publishes `website/` to Pages.
+
+1. In your GitHub repo settings, enable Pages with **Source: GitHub Actions**.
+2. Push to the default branch; the workflow will deploy automatically.
 
 ## Quick instructions
 
@@ -64,44 +71,7 @@ secret = False
 
 **Run demo examples** and **Run full script** call `demo_layout_examples()` and the same comparison block as `python layout_visualizer.py` without using the editor text.
 
-## API
+## Notes
 
-| Method | Path | Body |
-|--------|------|------|
-| `POST` | `/api/run` | `{ "code": "<editor text>" }` |
-| `POST` | `/api/run-demo` | `{ "mode": "demo" \| "full" }` |
-
-Response: `{ "ok": true, "output": "<captured stdout>", "viz": <object|null> }`.
-
-When `tensor_shape` is set, `viz` includes the tensor grid, packed ciphertext vectors, and per-slot **`entries`** (each slot’s `label` such as `T[i,j]`, row-major **`linear`** index, `kind`: `tensor` | `gap` | `oob`, and `value`). Omit `tensor_shape` and `viz` is `null` (text-only).
-
-## Server configuration (optional)
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `ROTOM_WEB_CORS_ORIGINS` | `http://127.0.0.1:8765`, `http://localhost:8765`, and `:8000` variants | Comma-separated allowed `Origin` values for browser `fetch`. Set this if you use another host/port. |
-| `ROTOM_WEB_DEBUG` | (off) | If `1` / `true`, 500 responses include exception text (local debugging only). |
-| `ROTOM_WEB_MAX_LAYOUT_LEN` | `16384` | Max `layout_str` length (characters). |
-| `ROTOM_WEB_MAX_N` | `65536` | Max HE slot count `n`. |
-| `ROTOM_WEB_MAX_TENSOR_ELEMENTS` | `250000` | Max tensor size (product of `tensor_shape`). |
-| `ROTOM_WEB_MAX_TENSOR_RANK` | `16` | Max number of dimensions in `tensor_shape`. |
-| `ROTOM_WEB_SKIP_BROWSER_CHECKS` | (off) | If `1` / `true`, disables CSRF-style checks on `POST /api/*` (for scripts only; do not use on an exposed host). |
-
-### API hardening (CSRF / cross-site POST)
-
-Browser `POST` requests to `/api/run` and `/api/run-demo` must include:
-
-- Header **`X-Rotom-Client: web-v1`** (HTML forms cannot set this; the bundled visualizer sends it automatically).
-- If the browser sends **`Origin`**, it must match `ROTOM_WEB_CORS_ORIGINS` (or the default localhost list).
-- Requests with **`Sec-Fetch-Site: cross-site`** are rejected.
-
-Automation (`curl`, tests): send the client header, e.g.
-
-```bash
-curl -s -X POST http://127.0.0.1:8765/api/run \
-  -H 'Content-Type: application/json' \
-  -H 'X-Rotom-Client: web-v1' \
-  -d '{"code": "[0:4:1][1:4:1]"}'
-```
-
-Or set `ROTOM_WEB_SKIP_BROWSER_CHECKS=1` (insecure on a public network).
+- The visualizer’s “engine” lives in `website/rotom_layout.js` (a small JS port of the parsing + slot-mapping logic).
+- The legacy FastAPI server (`website/server.py`) is no longer required for the website to function.
