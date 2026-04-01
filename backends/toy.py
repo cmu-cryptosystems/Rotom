@@ -408,6 +408,9 @@ class Toy:
             if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE]:
                 continue
 
+            if getattr(self.args, "skip_toy_eval_checks", False):
+                continue
+
             # Evaluate the tensor computation to get the expected result
             eval_result = term.layout.term.eval(self.inputs)
             if term.op == KernelOp.PUNCTURED_TENSOR:

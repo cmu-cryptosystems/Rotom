@@ -87,6 +87,9 @@ def create_layout_without_dims(layout: Layout, dims_to_remove: List[Dim]) -> Lay
     Returns:
         A new Layout object without the removed dimensions
     """
+    # Remove dims by value/equality.
+    # Note: callers (e.g. `lower_sum`) often pass copied `Dim` objects that are
+    # equal-by-value but not identical instances.
     dims_to_remove_set = set(dims_to_remove)
 
     # Filter out removed dimensions from ct_dims and slot_dims
