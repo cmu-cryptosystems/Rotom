@@ -55,49 +55,6 @@ def cifar10_test_loader(batch_size: int = 256, num_workers: int = 2) -> DataLoad
     return DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
 
-def cifar10_train_dataset() -> Any:
-    """Training split with the same normalization as `cifar10_test_dataset`."""
-    os.makedirs(DATA_DIR, exist_ok=True)
-    offline = (
-        os.environ.get("ROTOM_OFFLINE", "").strip() or os.environ.get("CI", "").strip()
-    )
-
-    try:
-        from torchvision.datasets import CIFAR10
-        from torchvision.transforms import Compose, Normalize, ToTensor
-    except Exception as e:  # pragma: no cover
-        raise ModuleNotFoundError(
-            "torchvision is required to load/download CIFAR-10. "
-            "Install it (see requirements.txt)."
-        ) from e
-
-    transform = Compose(
-        [
-            ToTensor(),
-            Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-        ]
-    )
-
-    try:
-        return CIFAR10(
-            root=DATA_DIR, train=True, download=not offline, transform=transform
-        )
-    except RuntimeError as e:
-        raise FileNotFoundError(
-            f"Missing CIFAR-10 dataset under {DATA_DIR}. "
-            "Unset CI/ROTOM_OFFLINE (or set ROTOM_OFFLINE=0) to allow auto-download."
-        ) from e
-
-
-def cifar10_train_loader(
-    batch_size: int = 256, num_workers: int = 2, shuffle: bool = True
-) -> DataLoader:
-    ds = cifar10_train_dataset()
-    return DataLoader(
-        ds, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers
-    )
-
-
 def load_checkpoint(path: str = CKPT_FILE):
     if not os.path.exists(path):
         return None

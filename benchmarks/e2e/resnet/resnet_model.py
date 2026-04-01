@@ -36,10 +36,7 @@ class BasicBlock(nn.Module):
             planes, planes, kernel_size=3, stride=1, padding=1, bias=False
         )
         self.bn2 = nn.BatchNorm2d(planes)
-        # Two SiLU sites per block (conv path and post-residual); separate modules so
-        # calibration / per-site polynomial bounds can be traced independently.
-        self.act1 = nn.SiLU()
-        self.act2 = nn.SiLU()
+        self.act = nn.SiLU()
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != planes:
@@ -66,10 +63,10 @@ class BasicBlock(nn.Module):
                 )
 
     def forward(self, x):
-        out = self.act1(self.bn1(self.conv1(x)))
+        out = self.act(self.bn1(self.conv1(x)))
         out = self.bn2(self.conv2(out))
         out += self.shortcut(x)
-        out = self.act2(out)
+        out = self.act(out)
         return out
 
 
@@ -84,7 +81,7 @@ class ResNet(nn.Module):
         self.layer2 = self._make_layer(block, 32, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2)
         self.linear = nn.Linear(64, num_classes)
-        self.act_conv1 = nn.SiLU()
+        self.act = nn.SiLU()
 
         self.apply(_weights_init)
 
@@ -98,7 +95,7 @@ class ResNet(nn.Module):
 
     def forward_features(self, x):
         """Conv/BN/SiLU backbone through global pool; shape [batch, 64] before classifier."""
-        out = self.act_conv1(self.bn1(self.conv1(x)))
+        out = self.act(self.bn1(self.conv1(x)))
         out = self.layer1(out)
         out = self.layer2(out)
         out = self.layer3(out)
