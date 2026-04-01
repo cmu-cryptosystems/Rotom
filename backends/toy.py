@@ -102,39 +102,11 @@ class Toy:
     implements the same interface as other backends but performs all
     operations on plaintext data.
 
-    **Memory:** For each ciphertext root DAG, Toy evaluates in an extended
-    post-order (including ``HEOp.CS`` children, unlike ``HETerm.post_order``)
-    and removes operands from ``env`` when their incoming use count hits
-    zero—same def-use idea as ``OpenFHE.update_dependencies``. That keeps peak
-    memory bounded for large circuits (e.g. ResNet-scale with big ``n``)
-    instead of retaining every intermediate until a full ``env`` wipe.
-    Peak RSS can still be large when a single DAG holds many live vectors of
-    size ``n`` (e.g. hitting a cgroup ``MemoryMax`` → SIGKILL).
-
-    **Tensor eval caching (correctness):**
-
-    - ``_tensor_term_dense_by_id``: memoizes ``TensorTerm.eval(inputs)`` by
-      ``id(layout.term)``. **Valid** while ``self.inputs`` is unchanged and IR
-      nodes are not mutated mid-run (normal compiler usage). Same term object ⇒
-      one dense tensor; packing may still differ by ``Layout``.
-    - ``input_cache``: packed slot rows keyed by ``(layout.term, layout)``.
-      **Valid** for the same reasons; each key is one layout geometry applied to
-      that term’s dense value at fill time. Identical geometry with two different
-      ``Layout`` objects ⇒ duplicate work but still correct.
-
-    Dense values depend only on the tensor IR node, not packing; distinct
-    ``Layout`` instances that share one ``layout.term`` therefore reuse one
-    ``eval`` via ``_tensor_term_dense_by_id``.
-
-    **Packed storage:** layout helpers return Python ``list[list[scalar]]``; Toy
-    converts once to a ``float64`` 2-D array so row slices are views without a
-    second full copy via ``np.asarray`` + ``_as_np_vec``.
-
     Attributes:
         circuit_ir: The FHE circuit intermediate representation
         inputs: Dictionary of input tensors
         n: HE vector size
-        env: Environment for storing intermediate results (drained per ct root)
+        env: Environment for storing intermediate results
         input_cache: Cache for packed input tensors
     """
 

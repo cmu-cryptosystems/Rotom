@@ -65,19 +65,19 @@ def gen_sum(term, kernels):
             else:
                 new_dims.append(dim)
 
-        new_perms = []
+        new_rolls = []
         for roll in kernel.layout.rolls:
             if (
                 roll.dim_to_roll.dim == sum_dim_value
                 or roll.dim_to_roll_by.dim == sum_dim_value
             ):
                 continue
-            new_perms.append(roll)
+            new_rolls.append(roll)
 
         sum_layout = dimension_merging(
             Layout(
                 term,
-                new_perms,
+                new_rolls,
                 new_dims,
                 kernel.layout.n,
                 kernel.layout.secret,
