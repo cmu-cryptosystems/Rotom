@@ -1,35 +1,15 @@
 # Rotom
 
+**Rotom** is a tensor compiler for **homomorphic encryption (HE)**. It autovectorizes high-level tensor programs into packed ciphertext circuits—searching layouts, applying roll-style rewrites, and cutting rotation cost—so you avoid hand-packing every operand. Simulation and execution backends support the full edit–compile–run loop.
+
 <p align="center">
   <a href="https://secartifacts.github.io/usenixsec2026/badges"><img src="docs/usenix-badges/usenixbadges-available.png" alt="USENIX Security 2026 — Artifacts Available" width="72" height="72"></a>
   &nbsp;&nbsp;
   <a href="https://secartifacts.github.io/usenixsec2026/badges"><img src="docs/usenix-badges/usenixbadges-functional.png" alt="USENIX Security 2026 — Artifacts Functional" width="72" height="72"></a>
   &nbsp;&nbsp;
   <a href="https://secartifacts.github.io/usenixsec2026/badges"><img src="docs/usenix-badges/usenixbadges-reproduced.png" alt="USENIX Security 2026 — Results Reproduced" width="72" height="72"></a>
-  <br><br>
-  <a href="https://heir.dev/" title="Google HEIR"><img src="docs/assets/heir-logo.png" alt="Google HEIR logo" width="80" height="80"></a><br>
-  <sub><a href="https://heir.dev/">Google HEIR</a> · <a href="https://github.com/google/heir">github.com/google/heir</a></sub>
 </p>
-
-<p align="center"><sub>USENIX Security 2026 <a href="https://secartifacts.github.io/usenixsec2026/badges">artifact evaluation badges</a> · HEIR logo from <a href="https://github.com/google/heir">google/heir</a></sub></p>
-
----
-
-### What it is
-
-**Rotom** is a tensor compiler for **fully homomorphic encryption (FHE)**. It autovectorizes high-level tensor programs into packed ciphertext circuits—searching layouts, applying roll-style rewrites, and cutting rotation cost—so you avoid hand-packing every operand. Simulation and execution backends support the full edit–compile–run loop.
-
-### Artifact & HEIR
-
-This repository is the **USENIX Security 2026** research artifact for *Bridging Usability and Performance: A Tensor Compiler for Autovectorizing Homomorphic Encryption*.
-
-Rotom also targets [**Google HEIR**](https://heir.dev/) (MLIR toolchain for FHE; *Homomorphic Encryption Intermediate Representation*). Use `--backend heir` to emit HEIR-compatible MLIR and serialized inputs; Rotom's bundled MLIR interpreter can check correctness locally before you run HEIR's compiler passes.
-
-### Links
-
-- **Paper** — [IACR ePrint 2025/1319](https://eprint.iacr.org/2025/1319) (*Bridging Usability and Performance…*)
-- **Site** — [cmu-cryptosystems.github.io/Rotom](https://cmu-cryptosystems.github.io/Rotom/) (overview and **layout visualizer**)
-- **Source** — [github.com/cmu-cryptosystems/Rotom](https://github.com/cmu-cryptosystems/Rotom)
+<p align="center"><sub>USENIX Security 2026 <a href="https://secartifacts.github.io/usenixsec2026/badges">Artifact Evaluation Badges</a>
 
 <details>
 <summary><strong>BibTeX</strong></summary>
@@ -43,10 +23,28 @@ Rotom also targets [**Google HEIR**](https://heir.dev/) (MLIR toolchain for FHE;
     url = {https://eprint.iacr.org/2025/1319}
 }
 ```
-
 </details>
 
+### Links
+
+- **Paper** — [IACR ePrint 2025/1319](https://eprint.iacr.org/2025/1319) (*Bridging Usability and Performance…*)
+- **Site** — [cmu-cryptosystems.github.io/Rotom](https://cmu-cryptosystems.github.io/Rotom/) (overview and **layout visualizer**)
+
 Maintained by [CMU Cryptosystems](https://github.com/cmu-cryptosystems).
+
+--- 
+
+### HEIR
+
+Rotom also targets [**Google HEIR**](https://heir.dev/) (MLIR toolchain for FHE; *Homomorphic Encryption Intermediate Representation*). Use `--backend heir` to emit HEIR-compatible MLIR and serialized inputs; Rotom's bundled MLIR interpreter can check correctness locally before you run HEIR's compiler passes.
+
+<p align="center">
+  <a href="https://heir.dev/" title="Google HEIR"><img src="docs/assets/heir-logo.png" alt="Google HEIR logo" width="80" height="80"></a><br>
+  <sub><a href="https://heir.dev/">Google HEIR</a> · <a href="https://github.com/google/heir">github.com/google/heir</a></sub>
+</p>
+<p align="center"> HEIR logo from <a href="https://github.com/google/heir">google/heir</a></sub></p>
+
+---
 
 ### Installation
 
