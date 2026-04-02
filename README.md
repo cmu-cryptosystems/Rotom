@@ -1,16 +1,30 @@
 # Rotom
 
-Research artifact for [*Bridging Usability and Performance: A Tensor Compiler for Autovectorizing Homomorphic Encryption*](https://eprint.iacr.org/2025/1319) (USENIX Security 2026).
+<table align="right">
+  <tr>
+    <td><a href="https://secartifacts.github.io/usenixsec2026/badges"><img src="docs/usenix-badges/usenixbadges-available.png" alt="USENIX Security 2026 — Artifacts Available" width="88" height="88"></a></td>
+    <td><a href="https://secartifacts.github.io/usenixsec2026/badges"><img src="docs/usenix-badges/usenixbadges-functional.png" alt="USENIX Security 2026 — Artifacts Functional" width="88" height="88"></a></td>
+    <td><a href="https://secartifacts.github.io/usenixsec2026/badges"><img src="docs/usenix-badges/usenixbadges-reproduced.png" alt="USENIX Security 2026 — Results Reproduced" width="88" height="88"></a></td>
+  </tr>
+</table>
 
-[![USENIX Security 2026 — Artifacts Available](docs/usenix-badges/usenixbadges-available.png)](https://secartifacts.github.io/usenixsec2026/badges)
-[![USENIX Security 2026 — Artifacts Functional](docs/usenix-badges/usenixbadges-functional.png)](https://secartifacts.github.io/usenixsec2026/badges)
-[![USENIX Security 2026 — Results Reproduced](docs/usenix-badges/usenixbadges-reproduced.png)](https://secartifacts.github.io/usenixsec2026/badges)
+Rotom is a tensor compiler that autovectorizes high-level programs into homomorphic encryption circuits—searching layouts, applying roll-style transforms, and reducing rotation cost. It targets practical FHE pipelines: besides simulation and execution backends, Rotom integrates with **Google HEIR** ([heir.dev](https://heir.dev/) · [GitHub](https://github.com/google/heir)), Google's open-source MLIR toolchain for homomorphic encryption (*Homomorphic Encryption Intermediate Representation*). With `--backend heir`, Rotom emits Google HEIR-compatible MLIR and serialized inputs; a bundled MLIR interpreter can check correctness locally before you hand off to Google HEIR's compiler passes.
 
-Rotom is a tensor compiler that autovectorizes high-level programs into homomorphic encryption circuits—searching layouts, applying roll-style transforms, and reducing rotation cost.
+This repository is the **USENIX Security 2026** research artifact for *Bridging Usability and Performance: A Tensor Compiler for Autovectorizing Homomorphic Encryption*.
 
-Rotom integrates with **Google HEIR** ([heir.dev](https://heir.dev/) · [GitHub](https://github.com/google/heir)), Google's open-source MLIR toolchain for homomorphic encryption—the *Homomorphic Encryption Intermediate Representation* project. With `--backend heir`, Rotom emits Google HEIR-compatible MLIR and serialized inputs; a bundled MLIR interpreter can check correctness locally before you hand off to Google HEIR's compiler passes.
+For more details, read the [**paper** (IACR ePrint 2025/1319)](https://eprint.iacr.org/2025/1319) and visit the [**project website**](https://cmu-cryptosystems.github.io/Rotom/) (includes the **layout visualizer**). Source code: [**github.com/cmu-cryptosystems/Rotom**](https://github.com/cmu-cryptosystems/Rotom).
 
-- **Website & layout visualizer:** [cmu-cryptosystems.github.io/Rotom](https://cmu-cryptosystems.github.io/Rotom/)
+To cite this work, you can use the following BibTeX entry:
+
+```bibtex
+@misc{cryptoeprint:2025/1319,
+    author = {Edward Chen and Fraser Brown and Wenting Zheng},
+    title = {Bridging Usability and Performance: A Tensor Compiler for Autovectorizing Homomorphic Encryption},
+    howpublished = {Cryptology {ePrint} Archive, Paper 2025/1319},
+    year = {2025},
+    url = {https://eprint.iacr.org/2025/1319}
+}
+```
 
 Maintained by [CMU Cryptosystems](https://github.com/cmu-cryptosystems).
 
@@ -236,19 +250,9 @@ python serve_docs.py 8000
 
 ## Citation
 
-If you use Rotom in research, please cite:
-
 **Edward Chen**, **Fraser Brown**, **Wenting Zheng**. *Bridging Usability and Performance: A Tensor Compiler for Autovectorizing Homomorphic Encryption.* [IACR ePrint 2025/1319](https://eprint.iacr.org/2025/1319). Published at USENIX Security 2026.
 
-```bibtex
-@misc{cryptoeprint:2025/1319,
-    author = {Edward Chen and Fraser Brown and Wenting Zheng},
-    title = {Bridging Usability and Performance: A Tensor Compiler for Autovectorizing Homomorphic Encryption},
-    howpublished = {Cryptology {ePrint} Archive, Paper 2025/1319},
-    year = {2025},
-    url = {https://eprint.iacr.org/2025/1319}
-}
-```
+The BibTeX block at the [top of this README](#rotom) matches this entry; use that for copy-paste.
 
 ## License
 
