@@ -2,10 +2,9 @@
 
 Rotom is a tensor compiler that autovectorizes high-level programs into homomorphic encryption circuits—searching layouts, applying roll-style transforms, and reducing rotation cost.
 
-Rotom can emit **MLIR for [Google HEIR](https://github.com/google/heir)** (Homomorphic Encryption Intermediate Representation): use `--backend heir` to generate HEIR-compatible MLIR, serialized inputs, and optional verification via Rotom’s MLIR interpreter. See [backends/heir/README.md](backends/heir/README.md) and [google/heir#2432](https://github.com/google/heir/pull/2432) for pipeline details.
+The compiler can target **[HEIR](https://heir.dev/)**, Google's homomorphic encryption stack in MLIR (*Homomorphic Encryption Intermediate Representation*). With `--backend heir`, Rotom writes HEIR-compatible MLIR plus serialized inputs; a bundled MLIR interpreter can check correctness locally before you run HEIR's compiler passes.
 
 - **Website & layout visualizer:** [cmu-cryptosystems.github.io/Rotom](https://cmu-cryptosystems.github.io/Rotom/)
-- **Repository:** [github.com/cmu-cryptosystems/Rotom](https://github.com/cmu-cryptosystems/Rotom)
 
 Maintained by [CMU Cryptosystems](https://github.com/cmu-cryptosystems).
 
