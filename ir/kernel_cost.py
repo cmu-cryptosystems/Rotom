@@ -693,7 +693,6 @@ class KernelCost:
             case KernelOp.CONV2D:
                 ops = self.conv2d_ops(ops)
             case KernelOp.CONV3D:
-                # Use the same generic conv cost formula (based on input/output geometry).
                 ops = self.conv2d_ops(ops)
             case KernelOp.ROLL:
                 ops = self.roll_ops(ops)

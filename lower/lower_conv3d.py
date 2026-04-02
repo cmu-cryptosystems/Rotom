@@ -192,12 +192,7 @@ def lower_conv3d(env, kernel):
 
     layout_cts = LayoutCiphertexts(layout=kernel.layout, cts=a_layout_cts.cts)
 
-    # For valid padding, the assigned output layout may keep spatial extents equal to the
-    # (padded) input grid. In that case we must explicitly zero out slots that correspond
-    # to out-of-range logical output coordinates (d>=D_out, h>=H_out, w>=W_out).
-    #
-    # This mirrors how `apply_layout` pads/truncates plaintext eval results when the layout
-    # expects a larger spatial grid than the logical output tensor provides.
+    # Valid: zero slots outside the logical output box (d>=D_out, h>=H_out, w>=W_out).
     logical_out_shape = shape.get_shape(kernel.layout.term)
     if kernel.layout.term.cs[3] == "valid" and logical_out_shape is not None:
         _c_o, d_o, h_o, w_o = logical_out_shape

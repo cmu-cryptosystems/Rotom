@@ -574,14 +574,8 @@ class LayoutAssignment:
             norm_kernel = [k for k in kernel_shape if k != 1]
             norm_shape = [s for s in shape if s != 1]
             if norm_kernel != norm_shape:
-                # Conv3D(valid) lowering currently keeps outputs aligned to the input spatial grid
-                # (i.e., a larger padded spatial layout) rather than repacking into dense
-                # [D_out,H_out,W_out]. Allow a layout whose spatial extents are >= expected
-                # (power-of-two), since `apply_layout` will naturally pad/truncate plaintext
-                # results to match the layout during correctness checks.
-                #
-                # Expected (shape analysis): [C_out, D_out_p2, H_out_p2, W_out_p2]
-                # Allowed kernel:           [C_out, D_in_p2, H_in_p2, W_in_p2]
+                # Conv3D(valid): layout keeps input-sized spatial extents; lowering masks outside
+                # the logical output box. Analysis shape is [C_out, D_out_p2, H_out_p2, W_out_p2].
                 if (
                     getattr(kernel.layout.term, "op", None) == TensorOp.CONV3D
                     and len(kernel.layout.term.cs) >= 4

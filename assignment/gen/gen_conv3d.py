@@ -5,9 +5,6 @@ This mirrors `gen_conv2d` but for 3D convolutions with shapes:
 - input:  [C_in, D_in, H_in, W_in]   (secret)
 - filter: [C_out, C_in, Kd, Kh, Kw] (public)
 - output: [C_out, D_out, H_out, W_out]
-
-The lowering for CONV3D lives in ``lower.lower_conv3d``; this module only produces
-layouts compatible with that path.
 """
 
 from copy import deepcopy as copy
@@ -178,15 +175,9 @@ def gen_conv3d(term, cs_kernels, shapes):
             d_o = (d_i - k_d) // stride + 1
             h_o = (h_i - k_h) // stride + 1
             w_o = (w_i - k_w) // stride + 1
-            # IMPORTANT: For valid padding, lowering currently produces outputs aligned to the
-            # *input* spatial grid (it masks out invalid / unused positions rather than
-            # repacking into a dense [D_out,H_out,W_out] tensor). To keep layout assignment
-            # consistent with lowering (and `apply_layout` semantics), we keep the output
-            # spatial extents equal to the input extents (rounded to p2), letting
-            # `apply_layout` naturally pad/truncate to the logical (smaller) plaintext shape.
-            d_o_layout = d_i
-            h_o_layout = h_i
-            w_o_layout = w_i
+            # Shape analysis still uses dense [D_out,H_out,W_out] (p2);
+            # see Conv3D(valid) in ``assignment.shape_check``.
+            d_o_layout, h_o_layout, w_o_layout = d_i, h_i, w_i
         else:
             if stride == 1:
                 d_o, h_o, w_o = d_i, h_i, w_i

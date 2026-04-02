@@ -14,11 +14,13 @@ learnable conv is 3×3 with ``padding=1``. Distinct layer types are exactly six
 Each test builds a single ``TensorTerm.conv2d`` with weights taken from that
 representative ``nn.Conv2d``, compares LayoutAssignment → Lower → Toy against
 ``tensor_ir.eval`` via ``check_results`` (same pattern as ``test_resnet_silu``).
-Ring dimension ``n=32768`` matches the user's request.
+``test_resnet20_stem_plus_layer1_first_conv_toy`` chains stem + layer1.0's first
+conv (no BN/SiLU) on ``32×32``. Ring dimension ``n=32768`` matches the other tests.
 """
 
 from __future__ import annotations
 
+import numpy as np
 import torch
 
 import pytest
@@ -64,6 +66,43 @@ def _run_conv_matches_toy(
     args.rolls = True
     args.net = "lan"
     args.benchmark = benchmark
+
+    kernel = LayoutAssignment(tensor_ir, args).run()
+    circuit_ir = Lower(kernel).run()
+    backend_results = Toy(circuit_ir, inputs, args).run()
+    check_results(tensor_ir, inputs, kernel, backend_results, 0, args)
+
+
+@pytest.mark.slow
+def test_resnet20_stem_plus_layer1_first_conv_toy() -> None:
+    """Stem (3→16) then layer1.0 conv1 (16→16), both 3×3 stride-1 same as in ``resnet20``."""
+    model = resnet20()
+    w_stem = model.conv1.weight.detach().cpu().numpy().astype(np.float64)
+    w_l1 = model.layer1[0].conv1.weight.detach().cpu().numpy().astype(np.float64)
+
+    torch.manual_seed(0)
+    x_np = (
+        torch.randn(1, 3, 32, 32, dtype=torch.float32)
+        .squeeze(0)
+        .cpu()
+        .numpy()
+        .astype(np.float64)
+    )
+
+    inp = TensorTerm.Tensor("input", [3, 32, 32], True)
+    t_stem = TensorTerm.Tensor("conv1_w", list(w_stem.shape), False)
+    t_l1 = TensorTerm.Tensor("l1_0_conv1_w", list(w_l1.shape), False)
+    h = TensorTerm.conv2d(inp, t_stem, 1, "same")
+    tensor_ir = TensorTerm.conv2d(h, t_l1, 1, "same")
+
+    inputs = {"input": x_np, "conv1_w": w_stem, "l1_0_conv1_w": w_l1}
+
+    args = get_default_args()
+    args.backend = "toy"
+    args.n = _RESNET20_CONV_N
+    args.rolls = True
+    args.net = "lan"
+    args.benchmark = "resnet20_conv_stem_plus_l1_0"
 
     kernel = LayoutAssignment(tensor_ir, args).run()
     circuit_ir = Lower(kernel).run()
