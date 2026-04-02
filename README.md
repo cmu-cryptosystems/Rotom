@@ -6,15 +6,24 @@
     <td><a href="https://secartifacts.github.io/usenixsec2026/badges"><img src="docs/usenix-badges/usenixbadges-functional.png" alt="USENIX Security 2026 — Artifacts Functional" width="88" height="88"></a></td>
     <td><a href="https://secartifacts.github.io/usenixsec2026/badges"><img src="docs/usenix-badges/usenixbadges-reproduced.png" alt="USENIX Security 2026 — Results Reproduced" width="88" height="88"></a></td>
   </tr>
+  <tr>
+    <td colspan="3" align="center"><a href="https://heir.dev/" title="Google HEIR"><img src="docs/assets/heir-logo.png" alt="Google HEIR logo" width="96" height="96"></a><br><sub><a href="https://heir.dev/">Google HEIR</a></sub></td>
+  </tr>
 </table>
 
-Rotom is a tensor compiler that autovectorizes high-level programs into homomorphic encryption circuits—searching layouts, applying roll-style transforms, and reducing rotation cost. It targets practical FHE pipelines: besides simulation and execution backends, Rotom integrates with **Google HEIR** ([heir.dev](https://heir.dev/) · [GitHub](https://github.com/google/heir)), Google's open-source MLIR toolchain for homomorphic encryption (*Homomorphic Encryption Intermediate Representation*). With `--backend heir`, Rotom emits Google HEIR-compatible MLIR and serialized inputs; a bundled MLIR interpreter can check correctness locally before you hand off to Google HEIR's compiler passes.
+**Rotom** is a tensor compiler for **fully homomorphic encryption (FHE)**. It autovectorizes high-level tensor programs into packed ciphertext circuits—searching layouts, applying roll-style rewrites, and cutting rotation cost—so you avoid hand-packing every operand. Rotom ships with simulation and execution backends for developing and running those circuits end to end.
 
-This repository is the **USENIX Security 2026** research artifact for *Bridging Usability and Performance: A Tensor Compiler for Autovectorizing Homomorphic Encryption*.
+**USENIX Security 2026** research artifact for *Bridging Usability and Performance: A Tensor Compiler for Autovectorizing Homomorphic Encryption*.
 
-For more details, read the [**paper** (IACR ePrint 2025/1319)](https://eprint.iacr.org/2025/1319) and visit the [**project website**](https://cmu-cryptosystems.github.io/Rotom/) (includes the **layout visualizer**). Source code: [**github.com/cmu-cryptosystems/Rotom**](https://github.com/cmu-cryptosystems/Rotom).
+**Google HEIR.** Rotom targets [**Google HEIR**](https://heir.dev/) ([GitHub](https://github.com/google/heir)), Google's open-source MLIR toolchain for FHE (*Homomorphic Encryption Intermediate Representation*). With `--backend heir`, it emits HEIR-compatible MLIR and serialized inputs; Rotom's bundled MLIR interpreter can check correctness locally before you run HEIR's own compiler passes.
 
-To cite this work, you can use the following BibTeX entry:
+---
+
+**Paper** — [*Bridging Usability and Performance…*](https://eprint.iacr.org/2025/1319) (IACR ePrint **2025/1319**)  
+**Site** — [cmu-cryptosystems.github.io/Rotom](https://cmu-cryptosystems.github.io/Rotom/) (overview and **layout visualizer**)  
+**Source** — [github.com/cmu-cryptosystems/Rotom](https://github.com/cmu-cryptosystems/Rotom)
+
+**Citation** (BibTeX):
 
 ```bibtex
 @misc{cryptoeprint:2025/1319,
@@ -25,6 +34,8 @@ To cite this work, you can use the following BibTeX entry:
     url = {https://eprint.iacr.org/2025/1319}
 }
 ```
+
+*HEIR logo from the [HEIR project](https://github.com/google/heir) ([heir.dev](https://heir.dev/)); design credited on the HEIR site.*
 
 Maintained by [CMU Cryptosystems](https://github.com/cmu-cryptosystems).
 
