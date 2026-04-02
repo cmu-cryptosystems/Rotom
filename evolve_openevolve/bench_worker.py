@@ -42,6 +42,7 @@ def main() -> None:
         double_matmul_128_64_ct_ct,
     )
     from benchmarks.rotom_benchmarks.matmul.matmul_128_64 import matmul_128_64
+    from benchmarks.rotom_benchmarks.matmul.matmul_256_128 import matmul_256_128
     from ir.kernel_cost import KernelCost
     from lower.lower import Lower
     from util.layout_util import apply_layout
@@ -68,6 +69,7 @@ def main() -> None:
 
     specs = [
         ("matmul_128_64", matmul_128_64),
+        ("matmul_256_128", matmul_256_128),
         ("double_matmul_128_64", double_matmul_128_64_ct_ct),
     ]
 

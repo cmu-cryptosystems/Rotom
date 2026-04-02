@@ -2,6 +2,9 @@
 .env
 .env.*
 
+# OpenEvolve runs (default output next to initial program under assignment/)
+assignment/openevolve_output/
+
 .vscode/
 .pytest_cache
 __pycache__/

@@ -1,5 +1,5 @@
 # OpenEvolve: evolve Rotom assignment/layout_strategy.py (or a copy)
-max_iterations: 15
+max_iterations: 25
 checkpoint_interval: 5
 
 llm:
@@ -8,30 +8,40 @@ llm:
   secondary_model: "gemini-2.5-flash"
   secondary_model_weight: 0.2
   api_base: "https://generativelanguage.googleapis.com/v1beta/openai/"
-  temperature: 0.65
-  max_tokens: 8000
+  temperature: 0.72
+  max_tokens: 12000
   timeout: 180
 
 prompt:
   system_message: |
-    You edit layout_strategy.py for the Rotom FHE compiler. The module must keep:
+    You edit layout_strategy.py for the Rotom FHE compiler. Keep this exact API
+    (names and signatures):
+      def pre_optimizer_kernels(kernels, term, network: str) -> list
       def optimizer_pass_config(roll_flag: bool) -> dict[str, bool]
+      def layout_sort_key(kernel, network: str) -> str
       def postprocess_kernels(kernels, term, network: str) -> list
-    When roll_flag is False, optimizer_pass_config should return {}.
+      def cost_model_multipliers(network: str) -> dict[str, float]
+    When roll_flag is False, optimizer_pass_config must return {}.
     When roll_flag is True, keys are: roll_propagation, roll_reordering, rot_roll,
-    ct_roll_bsgs, bsgs_matmul. Disabling a pass may lower HE cost but can break
-    semantics; the evaluator runs Toy backend checks against plaintext reference.
-    postprocess_kernels may reorder kernels or drop some after equivalent expansion;
-    dropping can miss cheaper layouts. Prefer toggling optimizer passes or safe reordering.
-    Preserve imports and typing. Return only valid Python.
+    ct_roll_bsgs, bsgs_matmul.
+    pre_optimizer_kernels runs on codegen output before those passes; you may reorder
+    or drop candidates (Toy + plaintext check enforces correctness).
+    postprocess_kernels runs after shape_check and equivalent-kernel expansion; you may
+    reorder, deduplicate, or keep only the first K kernels after a deterministic sort.
+    layout_sort_key breaks ties / ordering after Optimizer; default is layout_str().
+    cost_model_multipliers returns an empty dict for baseline. During search only, Rotom scales
+    analytic comm/add/mul/rot costs by your factors to steer which layout wins; the
+    evaluator still scores realized circuits with the default cost model—so non-1.0
+    multipliers explore different discrete choices. Stay conservative (e.g. 0.85–1.15).
+    Preserve imports from __future__ and typing. Return only valid Python.
 
 database:
-  population_size: 40
-  archive_size: 16
-  num_islands: 2
+  population_size: 56
+  archive_size: 24
+  num_islands: 3
   elite_selection_ratio: 0.2
-  exploitation_ratio: 0.65
-  similarity_threshold: 0.99
+  exploitation_ratio: 0.6
+  similarity_threshold: 0.985
 
 evaluator:
   timeout: 600
@@ -39,4 +49,4 @@ evaluator:
   parallel_evaluations: 1
 
 diff_based_evolution: true
-max_code_length: 12000
+max_code_length: 16000

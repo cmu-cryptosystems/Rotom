@@ -16,6 +16,7 @@ The module works closely with the kernel IR to generate optimized HE circuits
 while maintaining correctness of the computation graph semantics.
 """
 
+import os
 from copy import deepcopy as copy
 
 # import frontend terms
@@ -210,10 +211,36 @@ class LayoutAssignment:
         self.secret.run()
         self.shape.run()
 
+        # Strategy cost multipliers affect argmin during assignment only (see KernelCost).
+        _prev_cost_ctx = os.environ.get("ROTOM_APPLY_STRATEGY_COST_MULTIPLIERS")
+        os.environ["ROTOM_APPLY_STRATEGY_COST_MULTIPLIERS"] = "1"
+        try:
+            self._run_assignment_pass()
+        finally:
+            if _prev_cost_ctx is None:
+                os.environ.pop("ROTOM_APPLY_STRATEGY_COST_MULTIPLIERS", None)
+            else:
+                os.environ["ROTOM_APPLY_STRATEGY_COST_MULTIPLIERS"] = _prev_cost_ctx
+
+        # find cheapest layout assignment
+        assignment = self.search(self.comp)
+
+        # fuzz layout assignment
+        if self.fuzz_result:
+            cs_shapes = self.get_cs_shapes(self.comp)
+            self.fuzzer.fuzz_kernel(assignment.kernel, cs_shapes)
+
+        return self.combine_kernels(assignment)
+
+    def _run_assignment_pass(self):
+        """Post-order candidate generation, optimization, and kernel map updates."""
         # generate optimized candidate kernels
         for term in self.comp.post_order():
             candidate_kernels = self.generate_candidate_kernels(term)
-            kernels = Optimizer(self.roll_flag).run(candidate_kernels)
+            candidate_kernels = get_strategy_module().pre_optimizer_kernels(
+                candidate_kernels, term, self.network
+            )
+            kernels = Optimizer(self.roll_flag, self.network).run(candidate_kernels)
 
             # prune the search space
             kernels = self.shape_check(kernels)
@@ -225,16 +252,6 @@ class LayoutAssignment:
 
             # update kernel map
             self.update_kernels(term, kernels)
-
-        # find cheapest layout assignment
-        assignment = self.search(self.comp)
-
-        # fuzz layout assignment
-        if self.fuzz_result:
-            cs_shapes = self.get_cs_shapes(self.comp)
-            self.fuzzer.fuzz_kernel(assignment.kernel, cs_shapes)
-
-        return self.combine_kernels(assignment)
 
     def canonicalize_kernels(self, kernels):
         """Canonicalizes kernel layouts by sorting ciphertext dimensions.
@@ -476,7 +493,11 @@ class LayoutAssignment:
 
         # Return a deterministic, sorted list of kernels
         assert eq_kernels
-        return sorted(eq_kernels, key=lambda k: k.layout.layout_str())
+        strat = get_strategy_module()
+        return sorted(
+            eq_kernels,
+            key=lambda k: strat.layout_sort_key(k, self.network),
+        )
 
     def prune(self, kernels):
         layouts = {}

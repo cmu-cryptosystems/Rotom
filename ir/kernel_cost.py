@@ -12,6 +12,7 @@ find the cost of a kernel without materializing the entire kernel.
 """
 
 import math
+import os
 
 from ir.dim import DimType
 from ir.kernel import KernelOp
@@ -47,6 +48,10 @@ class KernelCost:
     def cost_model(self):
         """Get the cost model for operations based on network type.
 
+        When env ROTOM_APPLY_STRATEGY_COST_MULTIPLIERS=1 (set during LayoutAssignment.run),
+        `layout_strategy.cost_model_multipliers` scales base costs to steer discrete search.
+        Reported costs after assignment use the default model (env unset).
+
         Returns:
             dict: Dictionary mapping operation types to their costs in milliseconds
         """
@@ -62,7 +67,7 @@ class KernelCost:
                 # - Addition is relatively cheap (~0.5ms per add)
                 # - Communication is relatively cheap on LAN (0.0096ms per CT)
                 # These values are calibrated to make packing beneficial when appropriate
-                return {
+                base = {
                     "comm": 0.0096,
                     "add": 0.5,  # Increased from 0.0001 to reflect actual cost
                     "mul": 10.0,  # Increased from 0.006 to reflect actual cost
@@ -73,7 +78,7 @@ class KernelCost:
                 # 0.096 ms per ct
                 # On WAN, communication is much more expensive relative to compute
                 # But compute costs remain the same
-                return {
+                base = {
                     "comm": 0.096,
                     "add": 0.5,
                     "mul": 10.0,
@@ -81,6 +86,22 @@ class KernelCost:
                 }
             case _:
                 raise NotImplementedError(f"network: {self.network}")
+
+        if os.environ.get("ROTOM_APPLY_STRATEGY_COST_MULTIPLIERS") != "1":
+            return base
+
+        try:
+            from assignment.strategy_loader import get_strategy_module
+
+            mults = get_strategy_module().cost_model_multipliers(self.network) or {}
+        except Exception:
+            return base
+
+        out = dict(base)
+        for name, factor in mults.items():
+            if name in out:
+                out[name] = float(out[name]) * float(factor)
+        return out
 
     # -------------------------------------------------------------------------
     # Layout and tensor transformation costs (no-op or layout-only families)

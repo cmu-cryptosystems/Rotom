@@ -30,14 +30,16 @@ class Optimizer:
         roll_flag: Boolean flag indicating whether roll optimizations should be applied
     """
 
-    def __init__(self, roll_flag):
+    def __init__(self, roll_flag, network: str = "lan"):
         """
         Initialize the optimizer.
 
         Args:
             roll_flag: Boolean indicating whether to apply roll optimizations
+            network: Cost network label (passed to layout_sort_key)
         """
         self.roll_flag = roll_flag
+        self.network = network
 
     def run(self, kernels):
         """
@@ -82,9 +84,10 @@ class Optimizer:
         else:
             optimized_kernels = list(kernels)
 
-        # Make the result deterministic by sorting kernels by their layout string
         assert optimized_kernels
+        sort_key = strategy.layout_sort_key
         optimized_kernels = sorted(
-            optimized_kernels, key=lambda k: k.layout.layout_str()
+            optimized_kernels,
+            key=lambda k: sort_key(k, self.network),
         )
         return optimized_kernels
