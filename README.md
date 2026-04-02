@@ -1,8 +1,14 @@
 # Rotom
 
+Research artifact for [*Bridging Usability and Performance: A Tensor Compiler for Autovectorizing Homomorphic Encryption*](https://eprint.iacr.org/2025/1319) (USENIX Security 2026).
+
+[![USENIX Security 2026 — Artifacts Available](docs/usenix-badges/usenixbadges-available.png)](https://secartifacts.github.io/usenixsec2026/badges)
+[![USENIX Security 2026 — Artifacts Functional](docs/usenix-badges/usenixbadges-functional.png)](https://secartifacts.github.io/usenixsec2026/badges)
+[![USENIX Security 2026 — Results Reproduced](docs/usenix-badges/usenixbadges-reproduced.png)](https://secartifacts.github.io/usenixsec2026/badges)
+
 Rotom is a tensor compiler that autovectorizes high-level programs into homomorphic encryption circuits—searching layouts, applying roll-style transforms, and reducing rotation cost.
 
-The compiler can target **[HEIR](https://heir.dev/)**, Google's homomorphic encryption stack in MLIR (*Homomorphic Encryption Intermediate Representation*). With `--backend heir`, Rotom writes HEIR-compatible MLIR plus serialized inputs; a bundled MLIR interpreter can check correctness locally before you run HEIR's compiler passes.
+Rotom integrates with **Google HEIR** ([heir.dev](https://heir.dev/) · [GitHub](https://github.com/google/heir)), Google's open-source MLIR toolchain for homomorphic encryption—the *Homomorphic Encryption Intermediate Representation* project. With `--backend heir`, Rotom emits Google HEIR-compatible MLIR and serialized inputs; a bundled MLIR interpreter can check correctness locally before you hand off to Google HEIR's compiler passes.
 
 - **Website & layout visualizer:** [cmu-cryptosystems.github.io/Rotom](https://cmu-cryptosystems.github.io/Rotom/)
 
@@ -49,13 +55,13 @@ results = Toy(circuit_ir, inputs, args).run()
 
 ### Google HEIR backend
 
-To lower compiled circuits to **HEIR** MLIR instead of running the toy or OpenFHE backends:
+To lower compiled circuits to **Google HEIR** MLIR instead of running the toy or OpenFHE backends:
 
 ```bash
 python main.py --backend heir --n 4096 --rolls --fn <name>
 ```
 
-Output is written under `heir/<name>/` (MLIR, packed inputs, and optional results). You can feed that MLIR into HEIR’s compiler passes; see [backends/heir/README.md](backends/heir/README.md) for layout, the bundled interpreter, and upstream integration notes ([HEIR repository](https://github.com/google/heir), [example PR](https://github.com/google/heir/pull/2432)).
+Output is written under `heir/<name>/` (MLIR, packed inputs, and optional results). Feed that MLIR into **Google HEIR**'s passes ([heir.dev](https://heir.dev/), [google/heir](https://github.com/google/heir)). Details: [backends/heir/README.md](backends/heir/README.md); upstream example: [google/heir#2432](https://github.com/google/heir/pull/2432).
 
 ### Running Tests
 
@@ -131,7 +137,7 @@ High-level Tensor Operations
            ↓
     Lowering (lower.py)
            ↓
-    Backend: toy / OpenFHE (CKKS) / HEIR MLIR (heir.py)
+    Backend: toy / OpenFHE (CKKS) / Google HEIR MLIR (heir.py)
            ↓
     Simulated HE, runtime FHE, or MLIR for Google HEIR
 ```
@@ -155,7 +161,7 @@ High-level Tensor Operations
 ### Backends (`backends/`)
 - **Toy** — plaintext simulation of the circuit IR
 - **OpenFHE** — CKKS execution (`openfhe_backend.py`)
-- **HEIR** — MLIR emission and tooling for [Google HEIR](https://github.com/google/heir) (`backends/heir/`)
+- **Google HEIR** — MLIR emission and tooling ([heir.dev](https://heir.dev/), [repository](https://github.com/google/heir); code in `backends/heir/`)
 
 ### Utilities (`util/`)
 - Layout utilities (`layout_util.py`)
