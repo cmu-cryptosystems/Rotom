@@ -1,4 +1,13 @@
-# Rotom 
+# Rotom
+
+Rotom is a tensor compiler that autovectorizes high-level programs into homomorphic encryption circuits—searching layouts, applying roll-style transforms, and reducing rotation cost.
+
+Rotom can emit **MLIR for [Google HEIR](https://github.com/google/heir)** (Homomorphic Encryption Intermediate Representation): use `--backend heir` to generate HEIR-compatible MLIR, serialized inputs, and optional verification via Rotom’s MLIR interpreter. See [backends/heir/README.md](backends/heir/README.md) and [google/heir#2432](https://github.com/google/heir/pull/2432) for pipeline details.
+
+- **Website & layout visualizer:** [cmu-cryptosystems.github.io/Rotom](https://cmu-cryptosystems.github.io/Rotom/)
+- **Repository:** [github.com/cmu-cryptosystems/Rotom](https://github.com/cmu-cryptosystems/Rotom)
+
+Maintained by [CMU Cryptosystems](https://github.com/cmu-cryptosystems).
 
 ### Installation
 
@@ -18,24 +27,36 @@ pip install -r requirements.txt
 ### Basic Usage
 
 ```python
-from frontends.tensor import TensorTerm
-from assignment.assignment import LayoutAssignment
 import argparse
+import numpy as np
+
+from assignment.assignment import LayoutAssignment
+from backends.toy import Toy
+from frontends.tensor import TensorTerm
+from lower.lower import Lower
 
 # Create tensor operations
 a = TensorTerm.Tensor("a", [64, 64], True)  # 64x64 ciphertext matrix
-b = TensorTerm.Tensor("b", [64], False)     # 64-element plaintext vector
+b = TensorTerm.Tensor("b", [64], False)  # 64-element plaintext vector
 c = a @ b  # Matrix-vector multiplication
 
-# Run layout assignment
+# Run layout assignment, lower to circuit IR, execute with toy backend
 args = argparse.Namespace(n=4096, rolls=True, backend="toy")
-assignment = LayoutAssignment(c, args)
-kernel = assignment.run()
-
-# Execute with toy backend
-from backends.toy import Toy
+kernel = LayoutAssignment(c, args).run()
+circuit_ir = Lower(kernel).run()
+inputs = {"a": np.random.randn(64, 64), "b": np.random.randn(64)}
 results = Toy(circuit_ir, inputs, args).run()
 ```
+
+### Google HEIR backend
+
+To lower compiled circuits to **HEIR** MLIR instead of running the toy or OpenFHE backends:
+
+```bash
+python main.py --backend heir --n 4096 --rolls --fn <name>
+```
+
+Output is written under `heir/<name>/` (MLIR, packed inputs, and optional results). You can feed that MLIR into HEIR’s compiler passes; see [backends/heir/README.md](backends/heir/README.md) for layout, the bundled interpreter, and upstream integration notes ([HEIR repository](https://github.com/google/heir), [example PR](https://github.com/google/heir/pull/2432)).
 
 ### Running Tests
 
@@ -111,9 +132,9 @@ High-level Tensor Operations
            ↓
     Lowering (lower.py)
            ↓
-    Backend (toy.py, openfhe_backend.py)
+    Backend: toy / OpenFHE (CKKS) / HEIR MLIR (heir.py)
            ↓
-    HE Circuit
+    Simulated HE, runtime FHE, or MLIR for Google HEIR
 ```
 
 ## Core Components
@@ -133,8 +154,9 @@ High-level Tensor Operations
 ### Layout Assignment (`assignment/`)
 
 ### Backends (`backends/`)
-- Code generation for HE libraries
-- Runtime execution
+- **Toy** — plaintext simulation of the circuit IR
+- **OpenFHE** — CKKS execution (`openfhe_backend.py`)
+- **HEIR** — MLIR emission and tooling for [Google HEIR](https://github.com/google/heir) (`backends/heir/`)
 
 ### Utilities (`util/`)
 - Layout utilities (`layout_util.py`)
@@ -206,6 +228,22 @@ python serve_docs.py 8000
 - `docs/source/user_guide/` - User guide documentation
 - `docs/source/api_reference/` - API reference documentation
 
+
+## Citation
+
+If you use Rotom in research, please cite:
+
+**Edward Chen**, **Fraser Brown**, **Wenting Zheng**. *Bridging Usability and Performance: A Tensor Compiler for Autovectorizing Homomorphic Encryption.* [IACR ePrint 2025/1319](https://eprint.iacr.org/2025/1319). Published at USENIX Security 2026.
+
+```bibtex
+@misc{cryptoeprint:2025/1319,
+    author = {Edward Chen and Fraser Brown and Wenting Zheng},
+    title = {Bridging Usability and Performance: A Tensor Compiler for Autovectorizing Homomorphic Encryption},
+    howpublished = {Cryptology {ePrint} Archive, Paper 2025/1319},
+    year = {2025},
+    url = {https://eprint.iacr.org/2025/1319}
+}
+```
 
 ## License
 
