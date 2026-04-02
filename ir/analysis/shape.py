@@ -16,7 +16,12 @@ Key Concepts:
 from copy import deepcopy as copy
 
 from frontends.tensor import TensorOp
-from frontends.tensor_args import Conv2dArgs, ReshapeArgs, TensorPlaceholderArgs
+from frontends.tensor_args import (
+    Conv2dArgs,
+    Conv3dArgs,
+    ReshapeArgs,
+    TensorPlaceholderArgs,
+)
 from util.util import round_to_ceiling_power_of_2
 
 
@@ -170,15 +175,19 @@ class Shape:
                 ]
             case TensorOp.CONV2D:
                 args = Conv2dArgs.from_term(term)
+                # Convolution semantics use the *logical* input spatial sizes; tensor eval
+                # does not power-of-2 pad rank>2 tensors. We still round the output to a
+                # power-of-2 for layout compatibility.
                 a_shape = copy(self.padded_shapes[args.input])
-                b_shape = copy(self.padded_shapes[args.filter])
                 logical_b = self.get_shape(args.filter)
+                logical_a = self.get_shape(args.input)
 
                 _c_i = a_shape[0]
-                h_i = a_shape[1]
-                w_i = a_shape[2]
+                h_i = logical_a[1]
+                w_i = logical_a[2]
 
-                c_o = b_shape[0]
+                # Logical output channels (match layout gen / eval; filter c_out is not p2-padded).
+                c_o = logical_b[0]
                 # Use logical filter spatial sizes (declared shape), not power-of-2-padded filter.
                 if len(logical_b) == 4:
                     f_h, f_w = logical_b[2], logical_b[3]
@@ -207,6 +216,43 @@ class Shape:
                     round_to_ceiling_power_of_2(w_o),
                 ]
                 return c_shape
+            case TensorOp.CONV3D:
+                args = Conv3dArgs.from_term(term)
+                # Use logical input spatial sizes; then round the output spatial dims to p2.
+                a_shape = copy(self.padded_shapes[args.input])
+                b_shape = copy(self.padded_shapes[args.filter])
+                logical_b = self.get_shape(args.filter)
+                logical_a = self.get_shape(args.input)
+
+                d_i, h_i, w_i = logical_a[1], logical_a[2], logical_a[3]
+                # Logical output channels (layout gen uses unpadded filter c_out).
+                c_o = logical_b[0]
+                # Use logical filter spatial sizes, not padded filter.
+                k_d, k_h, k_w = logical_b[2], logical_b[3], logical_b[4]
+                stride = args.stride
+                padding = args.padding
+
+                if padding == "valid":
+                    d_o = (d_i - k_d) // stride + 1
+                    h_o = (h_i - k_h) // stride + 1
+                    w_o = (w_i - k_w) // stride + 1
+                elif padding == "same":
+                    if stride == 1:
+                        d_o, h_o, w_o = d_i, h_i, w_i
+                    else:
+                        p_d, p_h, p_w = k_d // 2, k_h // 2, k_w // 2
+                        d_o = (d_i + 2 * p_d - k_d) // stride + 1
+                        h_o = (h_i + 2 * p_h - k_h) // stride + 1
+                        w_o = (w_i + 2 * p_w - k_w) // stride + 1
+                else:
+                    raise NotImplementedError(f"unknown padding: {padding}")
+
+                return [
+                    c_o,
+                    round_to_ceiling_power_of_2(d_o),
+                    round_to_ceiling_power_of_2(h_o),
+                    round_to_ceiling_power_of_2(w_o),
+                ]
             case TensorOp.INDEX:
                 a_shape = copy(self.padded_shapes[term.cs[0]])
                 return self._index_shape(a_shape, term.cs[1])
@@ -315,6 +361,36 @@ class Shape:
                     raise NotImplementedError(f"unknown padding: {padding}")
                 c_shape = [c_o, h_o, w_o]
                 return c_shape
+            case TensorOp.CONV3D:
+                args = Conv3dArgs.from_term(term)
+                a = args.input
+                b = args.filter
+                a_shape = copy(self.get_shape(a))
+                b_shape = copy(self.get_shape(b))
+
+                c_o = b_shape[0]
+                k_d, k_h, k_w = b_shape[2], b_shape[3], b_shape[4]
+                d_i, h_i, w_i = a_shape[1], a_shape[2], a_shape[3]
+
+                stride = args.stride
+                padding = args.padding
+
+                if padding == "valid":
+                    d_o = (d_i - k_d) // stride + 1
+                    h_o = (h_i - k_h) // stride + 1
+                    w_o = (w_i - k_w) // stride + 1
+                elif padding == "same":
+                    if stride == 1:
+                        d_o, h_o, w_o = d_i, h_i, w_i
+                    else:
+                        p_d, p_h, p_w = k_d // 2, k_h // 2, k_w // 2
+                        d_o = (d_i + 2 * p_d - k_d) // stride + 1
+                        h_o = (h_i + 2 * p_h - k_h) // stride + 1
+                        w_o = (w_i + 2 * p_w - k_w) // stride + 1
+                else:
+                    raise NotImplementedError(f"unknown padding: {padding}")
+
+                return [c_o, d_o, h_o, w_o]
             case TensorOp.INDEX:
                 a = term.cs[0]
                 a_shape = copy(self.get_shape(a))

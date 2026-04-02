@@ -512,25 +512,13 @@ def apply_layout(pt_tensor, layout):
                 ct.append(0)
                 continue
 
-            # Access tensor using the appropriate number of indices
+            # Access tensor (supports arbitrary rank; needed e.g. for 5D conv3d filters).
             if pt_tensor_ndim == 0:
                 value = pt_tensor.item()
-            elif pt_tensor_ndim == 1:
-                value = pt_tensor[effective_index[0]]
-            elif pt_tensor_ndim == 2:
-                value = pt_tensor[effective_index[0]][effective_index[1]]
-            elif pt_tensor_ndim == 3:
-                value = pt_tensor[effective_index[0]][effective_index[1]][
-                    effective_index[2]
-                ]
-            elif pt_tensor_ndim == 4:
-                value = pt_tensor[effective_index[0]][effective_index[1]][
-                    effective_index[2]
-                ][effective_index[3]]
             else:
-                raise NotImplementedError(
-                    f"tensors with {pt_tensor_ndim} dimensions are not supported"
-                )
+                value = pt_tensor[
+                    tuple(effective_index[i] for i in range(pt_tensor_ndim))
+                ]
 
             # Convert single-element arrays to scalars
             if isinstance(value, np.ndarray) and value.ndim > 0 and value.size == 1:
@@ -546,7 +534,7 @@ def apply_layout(pt_tensor, layout):
 
 
 _APPLY_LAYOUT_PLAN_CACHE: dict[str, dict] = {}
-_APPLY_LAYOUT_PLAN_CACHE_VERSION = "3"
+_APPLY_LAYOUT_PLAN_CACHE_VERSION = "4"
 
 
 def _apply_layout_plan_cache_key(layout, pt_tensor_ndim: int, layout_len: int) -> str:

@@ -692,6 +692,8 @@ class KernelCost:
                 ops = self.conv2d_roll_ops(ops)
             case KernelOp.CONV2D:
                 ops = self.conv2d_ops(ops)
+            case KernelOp.CONV3D:
+                ops = self.conv2d_ops(ops)
             case KernelOp.ROLL:
                 ops = self.roll_ops(ops)
             case KernelOp.SPLIT_ROLL:
@@ -825,6 +827,8 @@ class KernelCost:
                         d += 1
                     case KernelOp.MATMUL | KernelOp.CONV2D:
                         # HACK: depth actually varies if masking is required or not
+                        d += 2
+                    case KernelOp.CONV3D:
                         d += 2
                     case _:
                         raise NotImplementedError(term.op)

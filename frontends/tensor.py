@@ -31,7 +31,7 @@ Layout Example:
 from enum import Enum
 from typing import Any, Dict, Iterable, List, Optional
 
-from .tensor_args import Conv2dArgs
+from .tensor_args import Conv2dArgs, Conv3dArgs
 from .tensor_evaluator import TensorEvaluator
 
 
@@ -53,6 +53,7 @@ class TensorOp(Enum):
         MATMUL: Matrix multiplication
         BLOCK_MATMUL: Block matrix multiplication
         CONV2D: 2D convolution
+        CONV3D: 3D convolution
         POLY_CALL: Polynomial approximation
         RESHAPE: Tensor reshaping
         PERMUTE: Dimension permutation
@@ -70,6 +71,7 @@ class TensorOp(Enum):
     MATMUL = "MatMul"  # matmul
     BLOCK_MATMUL = "Block_MatMul"  # block matmul
     CONV2D = "Conv"  # convolutions
+    CONV3D = "Conv3D"  # 3D convolutions
     POLY_CALL = "PolyCall"  # polynomial approximation call
     RESHAPE = "Reshape"  # tensor reshape
     PERMUTE = "Permute"  # permute dims
@@ -171,6 +173,9 @@ class TensorTerm:
                 case TensorOp.CONV2D:
                     args = Conv2dArgs.from_term(self)
                     self._str_cache = f"(conv2d {str(args.input)} {str(args.filter)})"
+                case TensorOp.CONV3D:
+                    args = Conv3dArgs.from_term(self)
+                    self._str_cache = f"(conv3d {str(args.input)} {str(args.filter)})"
                 case _:
                     self._str_cache = f"({self.op} {cs})"
         return self._str_cache
@@ -513,6 +518,25 @@ class TensorTerm:
             >>> d = TensorTerm.conv2d(input, filter, 1, "same", layout="[0:32:1][1:32:1][2:64:1]")
         """
         return TensorTerm(TensorOp.CONV2D, [a, b, stride, padding], layout)
+
+    @staticmethod
+    def conv3d(
+        a: "TensorTerm",
+        b: "TensorTerm",
+        stride: int,
+        padding: str,
+        layout: Optional[str] = None,
+    ) -> "TensorTerm":
+        """Create a 3D convolution operation.
+
+        Conventions (TensorEvaluator + Shape analysis):
+        - Input tensor shape: [C_in, D_in, H_in, W_in]
+        - Filter tensor shape: [C_out, C_in, K_d, K_h, K_w]
+        - Output tensor shape: [C_out, D_out, H_out, W_out]
+        - `stride` applies to all spatial dims (D/H/W).
+        - `padding` is "valid" or "same".
+        """
+        return TensorTerm(TensorOp.CONV3D, [a, b, stride, padding], layout)
 
     def helper_post_order(self, seen):
         """Helper routine for post-order traversal.

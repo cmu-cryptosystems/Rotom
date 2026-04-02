@@ -24,6 +24,7 @@ from assignment.gen.gen_binop import gen_binop
 from assignment.gen.gen_block_matmul import gen_block_matmul
 from assignment.gen.gen_const import gen_const
 from assignment.gen.gen_conv2d import gen_conv2d, gen_conv2d_roll
+from assignment.gen.gen_conv3d import gen_conv3d
 from assignment.gen.gen_index import gen_index
 from assignment.gen.gen_permute import gen_permute
 from assignment.gen.gen_poly_call import gen_poly_call
@@ -158,6 +159,9 @@ class LayoutAssignment:
                     kernels = gen_conv2d_roll(term, cs_kernels[0], cs_shapes)
                 else:
                     kernels = gen_conv2d(term, cs_kernels[0], cs_shapes)
+            case TensorOp.CONV3D:
+                cs_shapes = self.get_unpadded_cs_shapes(term)
+                kernels = gen_conv3d(term, cs_kernels[0], cs_shapes)
             case TensorOp.RESHAPE:
                 kernels = gen_reshape(term, cs_kernels[0])
             case TensorOp.PERMUTE:
@@ -369,6 +373,7 @@ class LayoutAssignment:
                 | TensorOp.MATMUL
                 | TensorOp.BLOCK_MATMUL
                 | TensorOp.CONV2D
+                | TensorOp.CONV3D
             ):
                 a = self.get_last_kernels(self.kernels[term.cs[0]].values())
                 b = self.get_last_kernels(self.kernels[term.cs[1]].values())
@@ -569,6 +574,19 @@ class LayoutAssignment:
             norm_kernel = [k for k in kernel_shape if k != 1]
             norm_shape = [s for s in shape if s != 1]
             if norm_kernel != norm_shape:
+                # Conv3D(valid): layout keeps input-sized spatial extents; lowering masks outside
+                # the logical output box. Analysis shape is [C_out, D_out_p2, H_out_p2, W_out_p2].
+                if (
+                    getattr(kernel.layout.term, "op", None) == TensorOp.CONV3D
+                    and len(kernel.layout.term.cs) >= 4
+                    and kernel.layout.term.cs[3] == "valid"
+                    and len(kernel_shape) == len(shape) == 4
+                    and kernel_shape[0] == shape[0]
+                    and all(k >= s for k, s in zip(kernel_shape[1:], shape[1:]))
+                ):
+                    new_kernels.append(kernel)
+                    continue
+
                 # Helpful context when this trips (e.g. extents-1 axes / non-dense dim indices).
                 layout_dims = [
                     (d.dim, d.extent, getattr(d, "dim_type", None))

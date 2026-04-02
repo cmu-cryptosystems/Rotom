@@ -74,6 +74,12 @@ class Secret:
                 assert a_secret
                 assert not b_secret
                 return a_secret or b_secret
+            case TensorOp.CONV3D:
+                a_secret = secrets[0]
+                b_secret = secrets[1]
+                assert a_secret
+                assert not b_secret
+                return a_secret or b_secret
             case _:
                 raise NotImplementedError(term.op)
 
@@ -99,6 +105,14 @@ class Secret:
                 from frontends.tensor_args import Conv2dArgs
 
                 args = Conv2dArgs.from_term(term)
+                assert self.secret[args.input]
+                assert not self.secret[args.filter]
+                kernel_secret = self.secret[args.input]
+                self.secret[term] = kernel_secret
+            case TensorOp.CONV3D:
+                from frontends.tensor_args import Conv3dArgs
+
+                args = Conv3dArgs.from_term(term)
                 assert self.secret[args.input]
                 assert not self.secret[args.filter]
                 kernel_secret = self.secret[args.input]

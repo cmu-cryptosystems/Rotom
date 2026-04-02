@@ -2,8 +2,6 @@
 
 Static site with a **Monaco** code editor and an in-browser layout engine (pure JavaScript).
 
-The layout visualizer no longer depends on Rotom’s Python runtime, so it can be deployed directly to **GitHub Pages**.
-
 ## Run locally
 
 Serve `website/` as static files (no backend needed):
@@ -68,10 +66,3 @@ n = 32
 tensor_shape = (4, 4)
 secret = False
 ```
-
-**Run demo examples** and **Run full script** call `demo_layout_examples()` and the same comparison block as `python layout_visualizer.py` without using the editor text.
-
-## Notes
-
-- The visualizer’s “engine” lives in `website/rotom_layout.js` (a small JS port of the parsing + slot-mapping logic).
-- The legacy FastAPI server (`website/server.py`) is no longer required for the website to function.

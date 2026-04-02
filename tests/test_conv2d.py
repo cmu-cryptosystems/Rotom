@@ -365,3 +365,143 @@ def test_conv2d_stride2_gap_split_channel_layout_regression():
     results, kernel = run_compiler_and_backend(y, inputs, args, "toy")
     expected_cts = apply_layout(expected, kernel.layout)
     assert_results_equal(expected_cts, results, "toy")
+
+
+@pytest.mark.parametrize(
+    "input_layout",
+    [
+        None,  # default (assignment chooses)
+        "[0:1:1][1:4:1][2:4:1]",  # explicit dense
+        "[G:2][0:1:1][1:4:1][2:4:1]",  # small leading gap
+        "[G:8][0:1:1][1:4:1][2:4:1]",  # medium leading gap
+        "[G:32][0:1:1][1:4:1][2:4:1]",  # large leading gap
+        "[0:1:1][G:4][1:4:1][2:4:1]",  # gap between channel and H
+        "[0:1:1][2:4:1][1:4:1]",  # swap H/W physical order
+    ],
+)
+def test_conv2d_same_varied_input_layouts(backend, input_layout):
+    """Conv2D(same) stays correct across a few input packing layouts."""
+    args = get_default_args()
+    args.n = 4096
+    args.rolls = True
+    args.conv_roll = False
+    args.benchmark = f"conv2d_same_layout_{abs(hash(input_layout)) % 10**8}"
+
+    h = w = 4
+    c_in, c_out = 1, 1
+    k = 3
+    a = TensorTerm.Tensor("a", [c_in, h, w], True, layout=input_layout)
+    b = TensorTerm.Tensor("b", [c_out, c_in, k, k], False)
+    y = TensorTerm.conv2d(a, b, 1, "same")
+
+    rng = np.random.default_rng(123 if input_layout is None else 456)
+    inputs = {
+        "a": rng.normal(size=(c_in, h, w)).astype(np.float64),
+        "b": np.random.default_rng(999)
+        .normal(size=(c_out, c_in, k, k))
+        .astype(np.float64),
+    }
+
+    expected = y.eval(inputs)
+    results, kernel = run_compiler_and_backend(y, inputs, args, backend)
+    expected_cts = apply_layout(expected, kernel.layout)
+    assert_results_equal(expected_cts, results, backend)
+
+
+@pytest.mark.parametrize(
+    "input_layout",
+    [
+        # C_in=4 as 2×2; H=W=4 ⇒ spatial stride 16; c = c0*2+c1 ⇒ offset c0*32+c1*16
+        "[0:2:32][1:4:1][2:4:1][0:2:16]",
+        "[0:2:32][1:4:1][2:4:1][G:2][0:2:16]",
+        "[G:8][0:2:32][1:4:1][2:4:1][G:2][0:2:16]",
+    ],
+)
+def test_conv2d_same_split_channel_layouts(backend, input_layout):
+    """Conv2D(same) with input channel split across two dim-0 factors (+ optional gaps)."""
+    args = get_default_args()
+    args.n = 4096
+    args.rolls = True
+    args.conv_roll = False
+    args.benchmark = f"conv2d_same_splitc_{abs(hash(input_layout)) % 10**8}"
+
+    h = w = 4
+    # c_out == c_in: with split dim-0 channel packing, shape_check can otherwise disagree
+    # between logical Cout and materialized output layout extents.
+    c_in, c_out = 4, 4
+    k = 3
+    a = TensorTerm.Tensor("a", [c_in, h, w], True, layout=input_layout)
+    b = TensorTerm.Tensor("b", [c_out, c_in, k, k], False)
+    y = TensorTerm.conv2d(a, b, 1, "same")
+
+    rng = np.random.default_rng(202)
+    inputs = {
+        "a": rng.normal(size=(c_in, h, w)).astype(np.float64),
+        "b": np.random.default_rng(303)
+        .normal(size=(c_out, c_in, k, k))
+        .astype(np.float64),
+    }
+
+    expected = y.eval(inputs)
+    results, kernel = run_compiler_and_backend(y, inputs, args, backend)
+    expected_cts = apply_layout(expected, kernel.layout)
+    assert_results_equal(expected_cts, results, backend)
+
+
+@pytest.mark.parametrize("c_in,c_out", [(2, 3), (3, 1), (1, 4), (4, 2), (3, 3)])
+def test_conv2d_same_multichannel_io_default_layout(backend, c_in, c_out):
+    """Conv2D(same): multiple input and output channels (assignment picks input layout)."""
+    args = get_default_args()
+    args.n = 4096
+    args.rolls = True
+    args.conv_roll = False
+    args.benchmark = f"conv2d_mc_io_{c_in}_{c_out}"
+
+    h = w = 4
+    k = 3
+    a = TensorTerm.Tensor("a", [c_in, h, w], True)
+    b = TensorTerm.Tensor("b", [c_out, c_in, k, k], False)
+    y = TensorTerm.conv2d(a, b, 1, "same")
+
+    rng = np.random.default_rng(700 + c_in * 31 + c_out)
+    inputs = {
+        "a": rng.normal(size=(c_in, h, w)).astype(np.float64),
+        "b": np.random.default_rng(800 + c_out)
+        .normal(size=(c_out, c_in, k, k))
+        .astype(np.float64),
+    }
+
+    expected = y.eval(inputs)
+    results, kernel = run_compiler_and_backend(y, inputs, args, backend)
+    expected_cts = apply_layout(expected, kernel.layout)
+    assert_results_equal(expected_cts, results, backend)
+
+
+@pytest.mark.parametrize("c_in,c_out", [(2, 3), (4, 1), (1, 3)])
+def test_conv2d_same_multichannel_io_dense_channel_layout(backend, c_in, c_out):
+    """Conv2D(same): multi I/O channels with explicit dense channel dim in layout string."""
+    args = get_default_args()
+    args.n = 4096
+    args.rolls = True
+    args.conv_roll = False
+    args.benchmark = f"conv2d_mc_dense_{c_in}_{c_out}"
+
+    h = w = 4
+    k = 3
+    layout = f"[0:{c_in}:1][1:4:1][2:4:1]"
+    a = TensorTerm.Tensor("a", [c_in, h, w], True, layout=layout)
+    b = TensorTerm.Tensor("b", [c_out, c_in, k, k], False)
+    y = TensorTerm.conv2d(a, b, 1, "same")
+
+    rng = np.random.default_rng(900 + c_in + c_out * 17)
+    inputs = {
+        "a": rng.normal(size=(c_in, h, w)).astype(np.float64),
+        "b": np.random.default_rng(1000 + c_out)
+        .normal(size=(c_out, c_in, k, k))
+        .astype(np.float64),
+    }
+
+    expected = y.eval(inputs)
+    results, kernel = run_compiler_and_backend(y, inputs, args, backend)
+    expected_cts = apply_layout(expected, kernel.layout)
+    assert_results_equal(expected_cts, results, backend)
