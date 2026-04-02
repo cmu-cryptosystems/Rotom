@@ -11,9 +11,9 @@
 </p>
 <p align="center"><sub>USENIX Security 2026 <a href="https://secartifacts.github.io/usenixsec2026/badges">Artifact Evaluation Badges</a></sub></p>
 
-If you use Rotom or build on this work in academic publications, please cite the paper below.
+### Citation
 
-**BibTeX:**
+If you use Rotom or build on this work in academic publications, please cite the paper below.
 
 **Edward Chen**, **Fraser Brown**, **Wenting Zheng**. *Bridging Usability and Performance: A Tensor Compiler for Autovectorizing Homomorphic Encryption.* [IACR ePrint 2025/1319](https://eprint.iacr.org/2025/1319). Published at USENIX Security 2026.
 
