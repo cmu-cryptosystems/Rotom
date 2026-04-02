@@ -1,6 +1,6 @@
 # Rotom
 
-**Rotom** is a tensor compiler for **homomorphic encryption (HE)**. It autovectorizes high-level tensor programs into packed ciphertext circuits—searching layouts, applying roll-style rewrites, and cutting rotation cost—so you avoid hand-packing every operand. Simulation and execution backends support the full edit–compile–run loop.
+**Rotom** is a tensor compiler for **homomorphic encryption (HE)**. It autovectorizes high-level tensor programs into packed ciphertext circuits—searching layouts, applying roll-style rewrites, and cutting rotation cost—so you avoid hand-packing every operand. 
 
 <p align="center">
   <a href="https://secartifacts.github.io/usenixsec2026/badges"><img src="docs/usenix-badges/usenixbadges-available.png" alt="USENIX Security 2026 — Artifacts Available" width="72" height="72"></a>
@@ -9,10 +9,11 @@
   &nbsp;&nbsp;
   <a href="https://secartifacts.github.io/usenixsec2026/badges"><img src="docs/usenix-badges/usenixbadges-reproduced.png" alt="USENIX Security 2026 — Results Reproduced" width="72" height="72"></a>
 </p>
-<p align="center"><sub>USENIX Security 2026 <a href="https://secartifacts.github.io/usenixsec2026/badges">Artifact Evaluation Badges</a>
+<p align="center"><sub>USENIX Security 2026 <a href="https://secartifacts.github.io/usenixsec2026/badges">Artifact Evaluation Badges</a></sub></p>
 
-<details>
-<summary><strong>BibTeX</strong></summary>
+If you use Rotom or build on this work in academic publications, please cite the paper below.
+
+**BibTeX:**
 
 ```bibtex
 @misc{cryptoeprint:2025/1319,
@@ -23,7 +24,6 @@
     url = {https://eprint.iacr.org/2025/1319}
 }
 ```
-</details>
 
 ### Links
 
@@ -42,7 +42,7 @@ Rotom also targets [**Google HEIR**](https://heir.dev/) (MLIR toolchain for FHE;
   <a href="https://heir.dev/" title="Google HEIR"><img src="docs/assets/heir-logo.png" alt="Google HEIR logo" width="80" height="80"></a><br>
   <sub><a href="https://heir.dev/">Google HEIR</a> · <a href="https://github.com/google/heir">github.com/google/heir</a></sub>
 </p>
-<p align="center"> HEIR logo from <a href="https://github.com/google/heir">google/heir</a></sub></p>
+<p align="center"><sub>HEIR logo from <a href="https://github.com/google/heir">google/heir</a></sub></p>
 
 ---
 
@@ -264,13 +264,6 @@ python serve_docs.py 8000
 - `docs/source/understanding_layout_representations.rst` - Layout system explanation
 - `docs/source/user_guide/` - User guide documentation
 - `docs/source/api_reference/` - API reference documentation
-
-
-## Citation
-
-**Edward Chen**, **Fraser Brown**, **Wenting Zheng**. *Bridging Usability and Performance: A Tensor Compiler for Autovectorizing Homomorphic Encryption.* [IACR ePrint 2025/1319](https://eprint.iacr.org/2025/1319). Published at USENIX Security 2026.
-
-Open the **BibTeX** disclosure at the [top of this README](#rotom) to copy the entry.
 
 ## License
 
