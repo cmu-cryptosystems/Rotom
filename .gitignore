@@ -1,3 +1,7 @@
+# Local secrets (API keys for OpenEvolve, etc.)
+.env
+.env.*
+
 .vscode/
 .pytest_cache
 __pycache__/
