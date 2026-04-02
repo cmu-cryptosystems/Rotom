@@ -49,6 +49,7 @@ from ir.layout_utils import dimension_merging
 from ir.roll import Roll
 
 # import optimization components
+from assignment.strategy_loader import get_strategy_module
 from opt.opt import Optimizer
 
 # import fuzzer
@@ -218,6 +219,9 @@ class LayoutAssignment:
             kernels = self.shape_check(kernels)
             # kernels = self.prune_tiles(kernels)
             kernels = self.add_equivalent_kernels(kernels)
+            kernels = get_strategy_module().postprocess_kernels(
+                kernels, term, self.network
+            )
 
             # update kernel map
             self.update_kernels(term, kernels)

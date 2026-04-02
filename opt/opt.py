@@ -9,6 +9,7 @@ in sequence to transform kernels into more efficient forms.
 
 from copy import deepcopy as copy
 
+from assignment.strategy_loader import get_strategy_module
 from opt.bsgs_matmul import run_bsgs_matmul
 from opt.ct_roll_bsgs import run_ct_roll_bsgs
 from opt.roll_propagation import run_roll_propagation
@@ -56,18 +57,28 @@ class Optimizer:
             Currently includes commented-out BSGS optimizations that may
             be enabled in future versions.
         """
-        # run optimization passes
+        strategy = get_strategy_module()
+        cfg = strategy.optimizer_pass_config(self.roll_flag)
+
         optimized_kernels = []
         if self.roll_flag:
             for kernel in kernels:
                 opt_kernel = copy(kernel)
-                opt_kernel = run_roll_propagation(opt_kernel)
-                opt_kernels = run_roll_reordering(opt_kernel)
-                for opt_kernel in opt_kernels:
-                    opt_kernel = run_rot_roll(opt_kernel)
-                    opt_kernel = run_ct_roll_bsgs(opt_kernel)
-                    opt_kernel = run_bsgs_matmul(opt_kernel)
-                    optimized_kernels.append(opt_kernel)
+                if cfg.get("roll_propagation", True):
+                    opt_kernel = run_roll_propagation(opt_kernel)
+                if cfg.get("roll_reordering", True):
+                    opt_kernels = run_roll_reordering(opt_kernel)
+                else:
+                    opt_kernels = {opt_kernel}
+                for ok in opt_kernels:
+                    sub = ok
+                    if cfg.get("rot_roll", True):
+                        sub = run_rot_roll(sub)
+                    if cfg.get("ct_roll_bsgs", True):
+                        sub = run_ct_roll_bsgs(sub)
+                    if cfg.get("bsgs_matmul", True):
+                        sub = run_bsgs_matmul(sub)
+                    optimized_kernels.append(sub)
         else:
             optimized_kernels = list(kernels)
 

@@ -1,0 +1,42 @@
+# OpenEvolve: evolve Rotom assignment/layout_strategy.py (or a copy)
+max_iterations: 15
+checkpoint_interval: 5
+
+llm:
+  primary_model: "gemini-2.5-flash-lite"
+  primary_model_weight: 0.8
+  secondary_model: "gemini-2.5-flash"
+  secondary_model_weight: 0.2
+  api_base: "https://generativelanguage.googleapis.com/v1beta/openai/"
+  temperature: 0.65
+  max_tokens: 8000
+  timeout: 180
+
+prompt:
+  system_message: |
+    You edit layout_strategy.py for the Rotom FHE compiler. The module must keep:
+      def optimizer_pass_config(roll_flag: bool) -> dict[str, bool]
+      def postprocess_kernels(kernels, term, network: str) -> list
+    When roll_flag is False, optimizer_pass_config should return {}.
+    When roll_flag is True, keys are: roll_propagation, roll_reordering, rot_roll,
+    ct_roll_bsgs, bsgs_matmul. Disabling a pass may lower HE cost but can break
+    semantics; the evaluator runs Toy backend checks against plaintext reference.
+    postprocess_kernels may reorder kernels or drop some after equivalent expansion;
+    dropping can miss cheaper layouts. Prefer toggling optimizer passes or safe reordering.
+    Preserve imports and typing. Return only valid Python.
+
+database:
+  population_size: 40
+  archive_size: 16
+  num_islands: 2
+  elite_selection_ratio: 0.2
+  exploitation_ratio: 0.65
+  similarity_threshold: 0.99
+
+evaluator:
+  timeout: 600
+  cascade_evaluation: false
+  parallel_evaluations: 1
+
+diff_based_evolution: true
+max_code_length: 12000
