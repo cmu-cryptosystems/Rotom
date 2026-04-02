@@ -4,6 +4,10 @@ OpenEvolve evaluator: semantic check vs plaintext reference, score vs baseline s
 Run from repo root (evolve/) or Rotom parent with:
   openevolve-run Rotom/assignment/layout_strategy.py Rotom/evolve_openevolve/evaluator.py \\
     --config Rotom/evolve_openevolve/config.yaml --iterations N
+
+Put API keys in Rotom/.env (gitignored), e.g. OPENAI_API_KEY=... .
+OpenEvolve's CLI loads .env from cwd, config dir, and Rotom roots before
+creating the LLM client.
 """
 
 from __future__ import annotations
