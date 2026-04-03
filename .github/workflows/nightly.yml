@@ -23,5 +23,6 @@ jobs:
 
     - name: Run full test suite including slow tests
       run: |
-        pytest -v --tb=short --timeout=600
+        pytest --override-ini="addopts=-v --tb=short --strict-markers --disable-warnings" \
+          --tb=short --timeout=600
 

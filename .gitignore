@@ -1,7 +1,9 @@
 .vscode/
 .pytest_cache
+.profile_pytest_out.txt
 __pycache__/
 layout_cache
+.cache/
 *.so
 # circuit files
 modules/

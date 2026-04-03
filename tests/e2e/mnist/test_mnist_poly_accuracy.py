@@ -1,8 +1,11 @@
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from e2e import main as e2e_main
+
+pytestmark = pytest.mark.slow
 
 
 def _build_args(fn: str, backend: str, label: int) -> SimpleNamespace:

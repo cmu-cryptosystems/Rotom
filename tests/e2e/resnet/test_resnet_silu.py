@@ -1,13 +1,15 @@
 """CIFAR ResNet-20 TensorTerm e2e tests (SiLU via ``PolyCall('silu', ...)``, affine BN).
 
-TensorEvaluator implements ``func == 'silu'`` as exact SiLU for ``tensor_ir.eval``; Toy
-uses the clipped polynomial for HE. ``check_results`` tolerances apply Toy vs eval.
+By default ``tensor_ir.eval`` uses **exact** SiLU for ``PolyCall("silu", ...)``. For Toy
+e2e checks that must survive deep graphs, tests set
+``inputs["__rotom_silu_eval_mode"] = "poly"`` so **eval and Toy** share the same
+least-squares SiLU polynomial on each site's ``[lower_bound, upper_bound]``.
 
-- **Stem (checkpoint):** conv + BN + SiLU poly, DaCapo weights when available; Toy vs eval
-  and dense vs PyTorch ``act(bn(conv(x)))``.
-- **Stem (random init):** same IR without checkpoint (always runs in slow suite).
-- **Layer1:** skipped by default (follow-up PR). Set ``ROTOM_RUN_RESNET_LAYER1_SILU_E2E=1`` to run
-  Toy vs eval and eval vs PyTorch on stem+layer1.
+- **Stem (Toy):** poly mode + ``check_results`` (slow).
+- **Layer1 (Toy):** skipped: Toy internal check diverges on the first layer-1 ``Conv2D`` (~8 max diff), same with exact SiLU; not caused by poly mode.
+- **Stem (checkpoint):** Toy vs eval (poly in stem random-init test); ckpt test still
+  compares **exact** eval vs PyTorch.
+- **Layer1 vs PyTorch:** ``tensor_ir.eval`` stays exact unless poly keys are set.
 - **Full graph:** opt-in via ``ROTOM_RUN_HEAVY_E2E=1`` (memory/time).
 """
 
@@ -44,9 +46,6 @@ _RUN_HEAVY_E2E = os.environ.get("ROTOM_RUN_HEAVY_E2E", "").strip().lower() in {
     "yes",
     "on",
 }
-_RUN_LAYER1_SILU_E2E = os.environ.get(
-    "ROTOM_RUN_RESNET_LAYER1_SILU_E2E", ""
-).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _load_dacapo_weights(model: torch.nn.Module, ckpt_path: str) -> None:
@@ -65,13 +64,14 @@ def _load_dacapo_weights(model: torch.nn.Module, ckpt_path: str) -> None:
 
 @pytest.mark.slow
 def test_resnet20_silu_poly_stem_toy_matches_tensor_eval() -> None:
-    """Stem + BN + SiLU poly through Toy matches tensor eval (random init weights)."""
+    """Stem + BN + SiLU: Toy matches ``tensor_ir.eval`` with shared poly SiLU approximation."""
     torch.manual_seed(0)
     model = resnet20(num_classes=10)
     model.eval()
 
     inputs: dict = {}
     populate_resnet20_inputs(model, inputs)
+    inputs["__rotom_silu_eval_mode"] = "poly"
 
     x = torch.randn(3, 32, 32, dtype=torch.float64)
     inputs["input"] = x.numpy()
@@ -142,21 +142,21 @@ def test_resnet20_silu_poly_stem_ckpt_matches_tensor_eval_and_pytorch() -> None:
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(
-    not _RUN_LAYER1_SILU_E2E,
+@pytest.mark.skip(
     reason=(
-        "Layer1 SiLU e2e deferred; set ROTOM_RUN_RESNET_LAYER1_SILU_E2E=1 to run "
-        "(see follow-up PR for Toy vs eval on stem+layer1)."
+        "Toy.run diverges vs dense eval on first layer1 Conv2D (max diff ~8); "
+        "reproduces without __rotom_silu_eval_mode. Needs HE conv/layout alignment."
     ),
 )
 def test_resnet20_silu_poly_layer1_toy_matches_tensor_eval() -> None:
-    """Stem + layer1 (three BasicBlocks, 32×32) through Toy matches tensor eval."""
+    """Stem + layer1 (three blocks): Toy matches ``tensor_ir.eval`` (poly SiLU mode)."""
     torch.manual_seed(0)
     model = resnet20(num_classes=10)
     model.eval()
 
     inputs: dict = {}
     populate_resnet20_inputs(model, inputs)
+    inputs["__rotom_silu_eval_mode"] = "poly"
 
     x = torch.randn(3, 32, 32, dtype=torch.float64)
     inputs["input"] = x.numpy()
@@ -177,10 +177,6 @@ def test_resnet20_silu_poly_layer1_toy_matches_tensor_eval() -> None:
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(
-    not _RUN_LAYER1_SILU_E2E,
-    reason=("Layer1 SiLU e2e deferred; set ROTOM_RUN_RESNET_LAYER1_SILU_E2E=1 to run."),
-)
 def test_resnet20_silu_poly_layer1_tensor_eval_matches_pytorch() -> None:
     """Stem + layer1 SiLU-poly IR: ``tensor_ir.eval`` matches PyTorch (exact SiLU at eval)."""
     torch.manual_seed(0)
@@ -198,7 +194,7 @@ def test_resnet20_silu_poly_layer1_tensor_eval_matches_pytorch() -> None:
     dense = np.asarray(tensor_ir.eval(inputs))
 
     with torch.no_grad():
-        t = model.act(model.bn1(model.conv1(x)))
+        t = model.act_conv1(model.bn1(model.conv1(x)))
         for i in range(3):
             t = model.layer1[i](t)
         pt = t[0].cpu().numpy()

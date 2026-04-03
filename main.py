@@ -39,6 +39,10 @@ from ir.dim import *
 from ir.layout import *
 from lower.circuit_serializer import serialize_circuit
 from lower.lower import Lower
+from util.benchmark_layout_plan_cache import (
+    clear_benchmark_layout_plan_cache_override,
+    maybe_install_layout_plan_cache_from_args,
+)
 from util.checker import check_results
 from wrappers.fhelipe_wrapper import FhelipeWrapper
 from wrappers.viaduct_wrapper import ViaductWrapper
@@ -46,150 +50,145 @@ from wrappers.viaduct_wrapper import ViaductWrapper
 
 def run_benchmark_or_microbenchmark(args):
     """Run either a microbenchmark or benchmark based on args"""
-
-    if args.microbenchmark != "main":
-        kernel = None
-        n = args.n
-
-        match args.microbenchmark:
-            case "conversion":
-                kernel, inputs = conversion(args.n, args.size)
-            case "roll":
-                kernel, inputs = roll(args.n, args.size)
-            case "rot_roll":
-                kernel, inputs = rot_roll(args.n, args.size)
-            case "slot_conversion":
-                kernel, inputs = slot_conversion(args.n, args.size)
-            case "slot_roll":
-                kernel, inputs = slot_roll(args.n, args.size)
-            case "slot_bsgs_roll":
-                kernel, inputs = slot_bsgs_roll(args.n, args.size)
-        assert kernel
-        assert inputs
-
-        circuit_ir = Lower(kernel).run()
-
-        # Serialize circuit if requested
-        if args.serialize:
-            circuit_name = f"{args.microbenchmark}_{args.n}"
-            output_dir = f"output/{circuit_name}"
-            file_paths = serialize_circuit(circuit_ir, output_dir, circuit_name)
-            print(
-                f"Serialized circuit to {len(file_paths)} instruction files in {output_dir}/"
+    try:
+        if args.microbenchmark != "main":
+            maybe_install_layout_plan_cache_from_args(
+                args, f"micro_{args.microbenchmark}"
             )
+            kernel = None
+            n = args.n
 
-        runtime = 0
-        if args.backend.lower() == "toy":
-            results = Toy(circuit_ir, inputs, args).run()
-            check_results(kernel.term, inputs, kernel, results, runtime, args)
-        elif args.backend.lower() == "ckks":
-            runtime, results = CKKS(circuit_ir, inputs, args).run()
-            check_results(kernel.term, inputs, kernel, results, runtime, args)
-        elif args.backend.lower() == "heir":
-            # HEIR backend generates MLIR output
-            heir_backend = HEIR(circuit_ir, inputs, args)
-            heir_backend.run()
-            # Run MLIR interpreter to get results
-            mlir_file = f"heir/{args.fn}/{args.fn}.mlir"
-            mlir_results = run_mlir_interpreter(mlir_file, n)
-            # Check MLIR results against kernel.term.eval()
-            check_results(kernel.term, inputs, kernel, mlir_results, runtime, args)
-            heir_backend.serialize_results(mlir_results)
-        else:
-            raise NotImplementedError("unknown backend")
+            match args.microbenchmark:
+                case "conversion":
+                    kernel, inputs = conversion(args.n, args.size)
+                case "roll":
+                    kernel, inputs = roll(args.n, args.size)
+                case "rot_roll":
+                    kernel, inputs = rot_roll(args.n, args.size)
+                case "slot_conversion":
+                    kernel, inputs = slot_conversion(args.n, args.size)
+                case "slot_roll":
+                    kernel, inputs = slot_roll(args.n, args.size)
+                case "slot_bsgs_roll":
+                    kernel, inputs = slot_bsgs_roll(args.n, args.size)
+            assert kernel
+            assert inputs
 
-        print("runtime:", runtime)
-        return
+            circuit_ir = Lower(kernel).run()
 
-    if args.benchmark:
-        tensor_ir = None
-        inputs = None
-        n = args.n
+            if args.serialize:
+                circuit_name = f"{args.microbenchmark}_{args.n}"
+                output_dir = f"output/{circuit_name}"
+                file_paths = serialize_circuit(circuit_ir, output_dir, circuit_name)
+                print(
+                    f"Serialized circuit to {len(file_paths)} instruction files in {output_dir}/"
+                )
 
-        match args.benchmark:
-            case "matmul_128_64":
-                tensor_ir, inputs = matmul_128_64()
-            case "matmul_256_128":
-                tensor_ir, inputs = matmul_256_128()
-            case "double_matmul_128_64":
-                tensor_ir, inputs = double_matmul_128_64_ct_ct()
-            case "double_matmul_256_128":
-                tensor_ir, inputs = double_matmul_256_128_ct_ct()
-            case "convolution":
-                tensor_ir, inputs, n = convolution()
-                args.n = n
-            case "convolution_32768":
-                tensor_ir, inputs, n = convolution_32768()
-                args.n = n
-            case "logreg":
-                tensor_ir, inputs = logreg()
-                args.n = n
-            case "mlp_mnist_square":
-                tensor_ir, inputs = mlp_mnist_square()
-                args.n = n
-            case "resnet_silu":
-                tensor_ir, inputs, n = resnet_silu()
-                args.n = n
-            case "resnet_silu_one_layer":
-                tensor_ir, inputs, n = resnet_silu_one_layer()
-                args.n = n
-            case "ttm":
-                tensor_ir, inputs = ttm()
-                args.n = n
-            case "bert_attention":
-                tensor_ir, inputs, n = bert_attention()
-                args.n = n
-            case _:
-                raise NotImplementedError("unknown benchmark")
+            runtime = 0
+            if args.backend.lower() == "toy":
+                results = Toy(circuit_ir, inputs, args).run()
+                check_results(kernel.term, inputs, kernel, results, runtime, args)
+            elif args.backend.lower() == "ckks":
+                runtime, results = CKKS(circuit_ir, inputs, args).run()
+                check_results(kernel.term, inputs, kernel, results, runtime, args)
+            elif args.backend.lower() == "heir":
+                heir_backend = HEIR(circuit_ir, inputs, args)
+                heir_backend.run()
+                mlir_file = f"heir/{args.fn}/{args.fn}.mlir"
+                mlir_results = run_mlir_interpreter(mlir_file, n)
+                check_results(kernel.term, inputs, kernel, mlir_results, runtime, args)
+                heir_backend.serialize_results(mlir_results)
+            else:
+                raise NotImplementedError("unknown backend")
 
-        assert tensor_ir
-        assert inputs
-        assert n
+            print("runtime:", runtime)
+            return
 
-        # Generate kernel from tensor_ir
-        kernel = LayoutAssignment(tensor_ir, args).run()
+        if args.benchmark:
+            tensor_ir = None
+            inputs = None
+            n = args.n
 
-        # Output found kernel
-        print("found kernel:")
-        for k in kernel.post_order():
-            print(k)
-        print()
+            match args.benchmark:
+                case "matmul_128_64":
+                    tensor_ir, inputs = matmul_128_64()
+                case "matmul_256_128":
+                    tensor_ir, inputs = matmul_256_128()
+                case "double_matmul_128_64":
+                    tensor_ir, inputs = double_matmul_128_64_ct_ct()
+                case "double_matmul_256_128":
+                    tensor_ir, inputs = double_matmul_256_128_ct_ct()
+                case "convolution":
+                    tensor_ir, inputs, n = convolution()
+                    args.n = n
+                case "convolution_32768":
+                    tensor_ir, inputs, n = convolution_32768()
+                    args.n = n
+                case "logreg":
+                    tensor_ir, inputs = logreg()
+                    args.n = n
+                case "mlp_mnist_square":
+                    tensor_ir, inputs = mlp_mnist_square()
+                    args.n = n
+                case "resnet_silu":
+                    tensor_ir, inputs, n = resnet_silu()
+                    args.n = n
+                case "resnet_silu_one_layer":
+                    tensor_ir, inputs, n = resnet_silu_one_layer()
+                    args.n = n
+                case "ttm":
+                    tensor_ir, inputs = ttm()
+                    args.n = n
+                case "bert_attention":
+                    tensor_ir, inputs, n = bert_attention()
+                    args.n = n
+                case _:
+                    raise NotImplementedError("unknown benchmark")
 
-        # Lower to circuit IR
-        circuit_ir = Lower(kernel).run()
+            assert tensor_ir
+            assert inputs
+            assert n
 
-        # Serialize circuit if requested
-        if args.serialize:
-            circuit_name = f"{args.benchmark}_{args.n}"
-            output_dir = f"output/{circuit_name}"
-            file_paths = serialize_circuit(circuit_ir, output_dir, circuit_name)
-            print(
-                f"Serialized circuit to {len(file_paths)} instruction files in {output_dir}/"
-            )
+            maybe_install_layout_plan_cache_from_args(args, args.benchmark)
 
-        # Run backend with result checking
-        runtime = 0
-        if args.backend.lower() == "toy":
-            results = Toy(circuit_ir, inputs, args).run()
-            check_results(tensor_ir, inputs, kernel, results, runtime, args)
-        elif args.backend.lower() == "ckks":
-            runtime, results = CKKS(circuit_ir, inputs, args).run()
-            check_results(tensor_ir, inputs, kernel, results, runtime, args)
-        elif args.backend.lower() == "heir":
-            # HEIR backend generates MLIR output
-            heir_backend = HEIR(circuit_ir, inputs, args)
-            heir_backend.run()
-            # Run MLIR interpreter to get results
-            mlir_file = f"heir/{args.fn}/{args.fn}.mlir"
-            mlir_results = run_mlir_interpreter(mlir_file, n)
-            # Check MLIR results against tensor_ir.eval()
-            check_results(tensor_ir, inputs, kernel, mlir_results, runtime, args)
-            heir_backend.serialize_results(mlir_results)
-        else:
-            raise NotImplementedError("unknown backend")
+            kernel = LayoutAssignment(tensor_ir, args).run()
 
-        print("runtime:", runtime)
-        return
+            print("found kernel:")
+            for k in kernel.post_order():
+                print(k)
+            print()
+
+            circuit_ir = Lower(kernel).run()
+
+            if args.serialize:
+                circuit_name = f"{args.benchmark}_{args.n}"
+                output_dir = f"output/{circuit_name}"
+                file_paths = serialize_circuit(circuit_ir, output_dir, circuit_name)
+                print(
+                    f"Serialized circuit to {len(file_paths)} instruction files in {output_dir}/"
+                )
+
+            runtime = 0
+            if args.backend.lower() == "toy":
+                results = Toy(circuit_ir, inputs, args).run()
+                check_results(tensor_ir, inputs, kernel, results, runtime, args)
+            elif args.backend.lower() == "ckks":
+                runtime, results = CKKS(circuit_ir, inputs, args).run()
+                check_results(tensor_ir, inputs, kernel, results, runtime, args)
+            elif args.backend.lower() == "heir":
+                heir_backend = HEIR(circuit_ir, inputs, args)
+                heir_backend.run()
+                mlir_file = f"heir/{args.fn}/{args.fn}.mlir"
+                mlir_results = run_mlir_interpreter(mlir_file, n)
+                check_results(tensor_ir, inputs, kernel, mlir_results, runtime, args)
+                heir_backend.serialize_results(mlir_results)
+            else:
+                raise NotImplementedError("unknown backend")
+
+            print("runtime:", runtime)
+            return
+    finally:
+        clear_benchmark_layout_plan_cache_override()
 
 
 def main(args):
@@ -282,6 +281,12 @@ if __name__ == "__main__":
     parser.add_argument("--strassens", action=BooleanOptionalAction, default=False)
     parser.add_argument("--net", default="lan")
     parser.add_argument("--cache", action=BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--cache-layout-plans",
+        action=BooleanOptionalAction,
+        default=True,
+        help="Persist apply_layout plan pickles under .cache/layout_plans/<benchmark>/n_<n>/",
+    )
     parser.add_argument(
         "--serialize",
         type=BooleanOptionalAction,
