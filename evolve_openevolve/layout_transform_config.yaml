@@ -1,0 +1,41 @@
+# Evolve layout_transform_program.py (TENSOR layout permute / roll search)
+max_iterations: 20
+checkpoint_interval: 5
+
+llm:
+  primary_model: "gemini-2.5-flash-lite"
+  primary_model_weight: 0.85
+  secondary_model: "gemini-2.5-flash"
+  secondary_model_weight: 0.15
+  api_base: "https://generativelanguage.googleapis.com/v1beta/openai/"
+  temperature: 0.7
+  max_tokens: 12000
+  timeout: 180
+
+prompt:
+  system_message: |
+    You edit layout_transform_program.py. Implement propose_transformed_kernel(seed_kernel)
+    returning a Kernel (TENSOR, same tensor term as seed). Use only:
+      from evolve_openevolve.layout_transform_lib import apply_permute_traversal_dims, apply_append_roll
+    apply_permute_traversal_dims(layout, perm) — perm is a permutation tuple, e.g. (1,0) swaps two dims.
+    apply_append_roll(layout, i, j) — append Roll between layout.dims[i] and layout.dims[j]; extents must match.
+    Build: new_layout = ... then return Kernel(seed_kernel.op, seed_kernel.cs, new_layout).
+    Goal: lower HE cost (KernelCost) while Toy output matches plaintext (evaluator checks).
+    Invalid transforms fail lowering or semantics — prefer small permutations or one extra roll.
+    Keep imports valid for PYTHONPATH=Rotom repo root.
+
+database:
+  population_size: 40
+  archive_size: 16
+  num_islands: 2
+  elite_selection_ratio: 0.2
+  exploitation_ratio: 0.65
+  similarity_threshold: 0.99
+
+evaluator:
+  timeout: 300
+  cascade_evaluation: false
+  parallel_evaluations: 1
+
+diff_based_evolution: true
+max_code_length: 14000
