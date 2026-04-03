@@ -21,6 +21,8 @@ PYTHONPATH="${ROOT}" "${VPY}" -m pytest \
   -m "openevolve and not slow" -q --tb=short
 echo "== pytest layout-transform harness =="
 PYTHONPATH="${ROOT}" "${VPY}" -m pytest "${ROOT}/tests/test_layout_transform_harness.py" -q --tb=short
+echo "== pytest matmul layout explore =="
+PYTHONPATH="${ROOT}" "${VPY}" -m pytest "${ROOT}/tests/test_matmul_layout_explore.py" -q --tb=short
 echo "== bench_worker (baseline layout_strategy) =="
 "${VPY}" "${ROOT}/evolve_openevolve/bench_worker.py" "${ROOT}/assignment/layout_strategy.py"
 echo "OK"
