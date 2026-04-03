@@ -1,4 +1,52 @@
-# Rotom 
+# Rotom
+
+**Rotom** is a tensor compiler for **homomorphic encryption (HE)**. It autovectorizes high-level tensor programs into packed ciphertext circuits—searching layouts, applying roll-style rewrites, and cutting rotation cost—so you avoid hand-packing every operand. 
+
+<p align="center">
+  <a href="https://secartifacts.github.io/usenixsec2026/badges"><img src="docs/usenix-badges/usenixbadges-available.png" alt="USENIX Security 2026 — Artifacts Available" width="72" height="72"></a>
+  &nbsp;&nbsp;
+  <a href="https://secartifacts.github.io/usenixsec2026/badges"><img src="docs/usenix-badges/usenixbadges-functional.png" alt="USENIX Security 2026 — Artifacts Functional" width="72" height="72"></a>
+  &nbsp;&nbsp;
+  <a href="https://secartifacts.github.io/usenixsec2026/badges"><img src="docs/usenix-badges/usenixbadges-reproduced.png" alt="USENIX Security 2026 — Results Reproduced" width="72" height="72"></a>
+</p>
+<p align="center"><sub>USENIX Security 2026 <a href="https://secartifacts.github.io/usenixsec2026/badges">Artifact Evaluation Badges</a></sub></p>
+
+### Citation
+
+If you use Rotom or build on this work in academic publications, please cite the paper below.
+
+**Edward Chen**, **Fraser Brown**, **Wenting Zheng**. *Bridging Usability and Performance: A Tensor Compiler for Autovectorizing Homomorphic Encryption.* [IACR ePrint 2025/1319](https://eprint.iacr.org/2025/1319). Published at USENIX Security 2026.
+
+```bibtex
+@misc{cryptoeprint:2025/1319,
+    author = {Edward Chen and Fraser Brown and Wenting Zheng},
+    title = {Bridging Usability and Performance: A Tensor Compiler for Autovectorizing Homomorphic Encryption},
+    howpublished = {Cryptology {ePrint} Archive, Paper 2025/1319},
+    year = {2025},
+    url = {https://eprint.iacr.org/2025/1319}
+}
+```
+
+### Links
+
+- **Paper** — [IACR ePrint 2025/1319](https://eprint.iacr.org/2025/1319) (*Bridging Usability and Performance…*)
+- **Site** — [cmu-cryptosystems.github.io/Rotom](https://cmu-cryptosystems.github.io/Rotom/) (overview and **layout visualizer**)
+
+Maintained by [CMU Cryptosystems](https://github.com/cmu-cryptosystems).
+
+--- 
+
+### HEIR
+
+Rotom also targets [**Google HEIR**](https://heir.dev/) (MLIR toolchain for FHE; *Homomorphic Encryption Intermediate Representation*). Use `--backend heir` to emit HEIR-compatible MLIR and serialized inputs; Rotom's bundled MLIR interpreter can check correctness locally before you run HEIR's compiler passes.
+
+<p align="center">
+  <a href="https://heir.dev/" title="Google HEIR"><img src="docs/assets/heir-logo.png" alt="Google HEIR logo" width="80" height="80"></a><br>
+  <sub><a href="https://heir.dev/">Google HEIR</a> · <a href="https://github.com/google/heir">github.com/google/heir</a></sub>
+</p>
+<p align="center"><sub>HEIR logo from <a href="https://github.com/google/heir">google/heir</a></sub></p>
+
+---
 
 ### Installation
 
@@ -35,24 +83,36 @@ Details: [`website/README.md`](website/README.md).
 ### Basic Usage
 
 ```python
-from frontends.tensor import TensorTerm
-from assignment.assignment import LayoutAssignment
 import argparse
+import numpy as np
+
+from assignment.assignment import LayoutAssignment
+from backends.toy import Toy
+from frontends.tensor import TensorTerm
+from lower.lower import Lower
 
 # Create tensor operations
 a = TensorTerm.Tensor("a", [64, 64], True)  # 64x64 ciphertext matrix
-b = TensorTerm.Tensor("b", [64], False)     # 64-element plaintext vector
+b = TensorTerm.Tensor("b", [64], False)  # 64-element plaintext vector
 c = a @ b  # Matrix-vector multiplication
 
-# Run layout assignment
+# Run layout assignment, lower to circuit IR, execute with toy backend
 args = argparse.Namespace(n=4096, rolls=True, backend="toy")
-assignment = LayoutAssignment(c, args)
-kernel = assignment.run()
-
-# Execute with toy backend
-from backends.toy import Toy
+kernel = LayoutAssignment(c, args).run()
+circuit_ir = Lower(kernel).run()
+inputs = {"a": np.random.randn(64, 64), "b": np.random.randn(64)}
 results = Toy(circuit_ir, inputs, args).run()
 ```
+
+### Google HEIR backend
+
+To lower compiled circuits to **Google HEIR** MLIR instead of running the toy or OpenFHE backends:
+
+```bash
+python main.py --backend heir --n 4096 --rolls --fn <name>
+```
+
+Output is written under `heir/<name>/` (MLIR, packed inputs, and optional results). Feed that MLIR into **Google HEIR**'s passes ([heir.dev](https://heir.dev/), [google/heir](https://github.com/google/heir)). Details: [backends/heir/README.md](backends/heir/README.md); upstream example: [google/heir#2432](https://github.com/google/heir/pull/2432).
 
 ### Running Tests
 
@@ -128,9 +188,9 @@ High-level Tensor Operations
            ↓
     Lowering (lower.py)
            ↓
-    Backend (toy.py, openfhe_backend.py)
+    Backend: toy / OpenFHE (CKKS) / Google HEIR MLIR (heir.py)
            ↓
-    HE Circuit
+    Simulated HE, runtime FHE, or MLIR for Google HEIR
 ```
 
 ## Core Components
@@ -150,8 +210,9 @@ High-level Tensor Operations
 ### Layout Assignment (`assignment/`)
 
 ### Backends (`backends/`)
-- Code generation for HE libraries
-- Runtime execution
+- **Toy** — plaintext simulation of the circuit IR
+- **OpenFHE** — CKKS execution (`openfhe_backend.py`)
+- **Google HEIR** — MLIR emission and tooling ([heir.dev](https://heir.dev/), [repository](https://github.com/google/heir); code in `backends/heir/`)
 
 ### Utilities (`util/`)
 - Layout utilities (`layout_util.py`)
@@ -222,7 +283,6 @@ python serve_docs.py 8000
 - `docs/source/understanding_layout_representations.rst` - Layout system explanation
 - `docs/source/user_guide/` - User guide documentation
 - `docs/source/api_reference/` - API reference documentation
-
 
 ## License
 

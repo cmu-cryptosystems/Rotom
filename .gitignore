@@ -1,6 +1,10 @@
 .vscode/
 .pytest_cache
 __pycache__/
+
+# Coverage.py / pytest-cov
+.coverage
+.coverage.*
 layout_cache
 *.so
 # circuit files
