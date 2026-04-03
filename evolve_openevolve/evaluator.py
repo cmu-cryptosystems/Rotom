@@ -72,6 +72,10 @@ def evaluate(program_path: str):
 
     Baseline costs come from the committed Rotom assignment/layout_strategy.py
     (default hooks), not from the evolved file.
+
+    If ``ROTOM_EVOLVE_BENCHES`` is set in the environment (comma-separated names:
+    matmul_128_64, matmul_256_128, double_matmul_128_64), the worker runs only
+    that subset (used by pytest for faster checks).
     """
     rotom = _rotom_root()
     baseline_strategy = rotom / "assignment" / "layout_strategy.py"

@@ -67,11 +67,44 @@ def main() -> None:
             skip_toy_eval_checks=False,
         )
 
-    specs = [
+    all_specs = [
         ("matmul_128_64", matmul_128_64),
         ("matmul_256_128", matmul_256_128),
         ("double_matmul_128_64", double_matmul_128_64_ct_ct),
     ]
+
+    bench_filter = os.environ.get("ROTOM_EVOLVE_BENCHES", "").strip()
+    if bench_filter:
+        allow = {x.strip() for x in bench_filter.split(",") if x.strip()}
+        specs = [s for s in all_specs if s[0] in allow]
+        unknown = allow - {s[0] for s in all_specs}
+        if unknown:
+            print(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "benchmarks": {},
+                        "error": f"unknown ROTOM_EVOLVE_BENCHES names: {sorted(unknown)}",
+                    }
+                ),
+                flush=True,
+            )
+            sys.exit(2)
+    else:
+        specs = list(all_specs)
+
+    if not specs:
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "benchmarks": {},
+                    "error": "no benchmarks selected (empty ROTOM_EVOLVE_BENCHES?)",
+                }
+            ),
+            flush=True,
+        )
+        sys.exit(2)
 
     out: dict = {}
     try:

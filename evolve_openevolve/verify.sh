@@ -15,6 +15,10 @@ fi
 export PYTHONPATH="${ROOT}"
 echo "== pytest tests/test_sum_ops.py =="
 "${VPY}" -m pytest "${ROOT}/tests/test_sum_ops.py" -q --tb=short
+echo "== pytest OpenEvolve layout evolution (fast) =="
+PYTHONPATH="${ROOT}" "${VPY}" -m pytest \
+  "${ROOT}/tests/test_openevolve_layout_evolution.py" \
+  -m "openevolve and not slow" -q --tb=short
 echo "== bench_worker (baseline layout_strategy) =="
 "${VPY}" "${ROOT}/evolve_openevolve/bench_worker.py" "${ROOT}/assignment/layout_strategy.py"
 echo "OK"
