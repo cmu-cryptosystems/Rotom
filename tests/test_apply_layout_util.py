@@ -45,6 +45,10 @@ def _golden_apply_layout(pt_tensor, layout) -> list[list]:
         ct = []
         for index in ct_indices:
             effective_index = list(index)
+            # Compact plans encode None as -1 sentinel.
+            for k, v in enumerate(effective_index):
+                if isinstance(v, (int, np.integer)) and int(v) == -1:
+                    effective_index[k] = None
             while len(effective_index) < pt_tensor_ndim:
                 effective_index.append(0)
 

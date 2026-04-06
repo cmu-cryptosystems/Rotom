@@ -523,21 +523,39 @@ def _ct_index_rows_to_values(pt_tensor, ct_indices):
             out.append(_normalize_scalar_from_tensor(base))
         return out
 
-    # Build (n, pt_tensor_ndim) index matrix: pad short rows with 0, truncate long rows.
-    idx = np.zeros((n, pt_tensor_ndim), dtype=np.int64)
-    bad = np.zeros(n, dtype=bool)
-    for i, index in enumerate(ct_indices):
-        row = list(index)
-        if len(row) < pt_tensor_ndim:
-            row = row + [0] * (pt_tensor_ndim - len(row))
-        elif len(row) > pt_tensor_ndim:
-            row = row[:pt_tensor_ndim]
-        for j in range(pt_tensor_ndim):
-            v = row[j]
-            if v is None:
-                bad[i] = True
-            else:
-                idx[i, j] = int(v)
+    # Build (n, pt_tensor_ndim) index matrix.
+    # Fastest case: plan provides a compact int32 array with -1 sentinel for None.
+    if (
+        isinstance(ct_indices, np.ndarray)
+        and ct_indices.ndim == 2
+        and ct_indices.dtype == np.int32
+    ):
+        # ct_indices is shaped (n, ndims_in_plan). When the plan was built for fewer
+        # dims than the runtime tensor has (e.g. vector plan applied to (N, 1)),
+        # pad missing dims with zeros to match legacy behavior.
+        plan_ndim = int(ct_indices.shape[1])
+        use = min(plan_ndim, pt_tensor_ndim)
+        if use == pt_tensor_ndim:
+            idx = ct_indices[:, :pt_tensor_ndim].astype(np.int64, copy=False)
+        else:
+            idx = np.zeros((n, pt_tensor_ndim), dtype=np.int64)
+            idx[:, :use] = ct_indices[:, :use].astype(np.int64, copy=False)
+        bad = (idx[:, :use] == -1).any(axis=1) if use else np.zeros(n, dtype=bool)
+    else:
+        idx = np.zeros((n, pt_tensor_ndim), dtype=np.int64)
+        bad = np.zeros(n, dtype=bool)
+        for i, index in enumerate(ct_indices):
+            row = list(index)
+            if len(row) < pt_tensor_ndim:
+                row = row + [0] * (pt_tensor_ndim - len(row))
+            elif len(row) > pt_tensor_ndim:
+                row = row[:pt_tensor_ndim]
+            for j in range(pt_tensor_ndim):
+                v = row[j]
+                if v is None:
+                    bad[i] = True
+                else:
+                    idx[i, j] = int(v)
 
     shp = np.asarray(pt_tensor.shape, dtype=np.int64)
     oob = (idx < 0) | (idx >= shp)
@@ -585,14 +603,21 @@ def apply_layout(pt_tensor, layout):
     base_indices_by_cts = plan["base_indices_by_cts"]
 
     cts = []
-    for ct_indices in base_indices_by_cts:
-        cts.append(_ct_index_rows_to_values(pt_tensor, ct_indices))
+    # base_indices_by_cts may be either:
+    # - list[list[list[int|None]]] (legacy)
+    # - np.ndarray shaped (num_ct, n, ndims) with int32 and -1 sentinel (compact)
+    if isinstance(base_indices_by_cts, np.ndarray):
+        for i in range(base_indices_by_cts.shape[0]):
+            cts.append(_ct_index_rows_to_values(pt_tensor, base_indices_by_cts[i]))
+    else:
+        for ct_indices in base_indices_by_cts:
+            cts.append(_ct_index_rows_to_values(pt_tensor, ct_indices))
 
     return cts
 
 
 _APPLY_LAYOUT_PLAN_CACHE: dict[str, dict] = {}
-_APPLY_LAYOUT_PLAN_CACHE_VERSION = "4"
+_APPLY_LAYOUT_PLAN_CACHE_VERSION = "5"
 
 # Optional directory override (set by ``activate_benchmark_layout_plan_cache``). Takes
 # precedence over ``ROTOM_APPLY_LAYOUT_PLAN_CACHE_DIR`` so callers do not mutate os.environ.
@@ -623,6 +648,35 @@ def _apply_layout_plan_cache_key(layout, pt_tensor_ndim: int, layout_len: int) -
         f"{_APPLY_LAYOUT_PLAN_CACHE_VERSION}|layout_geom={layout.layout_str()}|ndim={pt_tensor_ndim}|layout_len={layout_len}|n={layout.n}"
     ).encode("utf-8", errors="replace")
     return hashlib.sha256(payload).hexdigest()
+
+
+def _to_i32_with_none_sentinel(xs: list, *, none_sentinel: int = -1) -> np.ndarray:
+    """Convert a Python list possibly containing None to int32 with sentinel."""
+    # Use object -> int loop; this runs once per plan build (not per apply_layout call).
+    out = np.empty(len(xs), dtype=np.int32)
+    for i, v in enumerate(xs):
+        out[i] = none_sentinel if v is None else int(v)
+    return out
+
+
+def _combine_index_arrays(
+    a: np.ndarray, b: np.ndarray, *, none_sentinel: int = -1
+) -> np.ndarray:
+    """Elementwise combine like add_vecs_of_vecs with None sentinel."""
+    # Rules:
+    # - if both valid: a+b
+    # - if one valid: that one
+    # - if both none: none
+    av = a != none_sentinel
+    bv = b != none_sentinel
+    out = np.full_like(a, none_sentinel)
+    both = av & bv
+    out[both] = a[both] + b[both]
+    only_a = av & ~bv
+    out[only_a] = a[only_a]
+    only_b = ~av & bv
+    out[only_b] = b[only_b]
+    return out
 
 
 def _get_apply_layout_plan(layout, pt_tensor_ndim: int, *, layout_len: int) -> dict:
@@ -686,35 +740,36 @@ def _get_apply_layout_plan(layout, pt_tensor_ndim: int, *, layout_len: int) -> d
                         indices_map[pertinent_dim], dim_indices[i]
                     )
 
-        # map to pertinent dimensions
-        base_indices = [[0] * (max(indices_map) + 1) for _ in range(layout_len)]
+        # Map to pertinent dimensions, compactly.
+        ndims = max(indices_map) + 1
+        base = np.zeros((layout_len, ndims), dtype=np.int32)
+        # Populate columns; None becomes -1 sentinel.
         for dim, indices in indices_map.items():
-            for i, index in enumerate(indices):
-                base_indices[i][dim] = index
+            base[:, int(dim)] = _to_i32_with_none_sentinel(indices, none_sentinel=-1)
 
-        # split by cts
-        base_indices_by_cts = [
-            base_indices[i * layout.n : (i + 1) * layout.n]
-            for i in range((layout_len // layout.n))
-        ]
+        # Split by ciphertexts: (num_ct, n, ndims)
+        num_ct = layout_len // layout.n
+        base_by_ct = base.reshape((num_ct, layout.n, ndims))
 
         # combine cts if ct_dim is a gap dimension
-        combined_cts = copy(base_indices_by_cts)
+        combined_cts = base_by_ct
         ct_dims = copy(layout.ct_dims)
         for ct_dim in layout.ct_dims:
             if ct_dim.dim_type == DimType.EMPTY:
                 new_combined_cts = []
                 ct_indices = get_ct_idxs_by_dim(ct_dims, ct_dim)
                 for indices in ct_indices:
-                    base = base_indices_by_cts[indices[0]]
+                    cur = combined_cts[indices[0]]
                     for index in indices[1:]:
-                        base = add_vecs_of_vecs(base, base_indices_by_cts[index])
-                    new_combined_cts.append(base)
+                        cur = _combine_index_arrays(
+                            cur, combined_cts[index], none_sentinel=-1
+                        )
+                    new_combined_cts.append(cur)
                 ct_dims.remove(ct_dim)
-                combined_cts = new_combined_cts
-        base_indices_by_cts = combined_cts
+                combined_cts = np.stack(new_combined_cts, axis=0)
+        base_by_ct = combined_cts
 
-        plan = {"base_indices_by_cts": base_indices_by_cts}
+        plan = {"base_indices_by_cts": base_by_ct}
 
         if disk_dir:
             plan_path = Path(disk_dir).expanduser() / f"{key}.pkl"
