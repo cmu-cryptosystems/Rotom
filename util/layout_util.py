@@ -530,8 +530,17 @@ def _ct_index_rows_to_values(pt_tensor, ct_indices):
         and ct_indices.ndim == 2
         and ct_indices.dtype == np.int32
     ):
-        idx = ct_indices[:, :pt_tensor_ndim].astype(np.int64, copy=False)
-        bad = (idx == -1).any(axis=1)
+        # ct_indices is shaped (n, ndims_in_plan). When the plan was built for fewer
+        # dims than the runtime tensor has (e.g. vector plan applied to (N, 1)),
+        # pad missing dims with zeros to match legacy behavior.
+        plan_ndim = int(ct_indices.shape[1])
+        use = min(plan_ndim, pt_tensor_ndim)
+        if use == pt_tensor_ndim:
+            idx = ct_indices[:, :pt_tensor_ndim].astype(np.int64, copy=False)
+        else:
+            idx = np.zeros((n, pt_tensor_ndim), dtype=np.int64)
+            idx[:, :use] = ct_indices[:, :use].astype(np.int64, copy=False)
+        bad = (idx[:, :use] == -1).any(axis=1) if use else np.zeros(n, dtype=bool)
     else:
         idx = np.zeros((n, pt_tensor_ndim), dtype=np.int64)
         bad = np.zeros(n, dtype=bool)
