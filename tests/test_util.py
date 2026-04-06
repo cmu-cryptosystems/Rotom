@@ -18,5 +18,4 @@ def get_default_args() -> Namespace:
         conv_roll=False,
         fn="",
         benchmark="",
-        cache_layout_plans=False,
     )

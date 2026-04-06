@@ -96,12 +96,6 @@ if __name__ == "__main__":
     parser.add_argument("--net", default="lan")
     parser.add_argument("--cache", action=BooleanOptionalAction, default=False)
     parser.add_argument(
-        "--cache-layout-plans",
-        action=BooleanOptionalAction,
-        default=True,
-        help="Persist apply_layout plan pickles under .cache/layout_plans/<fn>/n_<n>/",
-    )
-    parser.add_argument(
         "--not-secure",
         action=BooleanOptionalAction,
         default=False,

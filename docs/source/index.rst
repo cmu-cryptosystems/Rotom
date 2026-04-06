@@ -127,7 +127,7 @@ Rotom's flags:
    python main.py --n 8192                       # Set number of slots 
    python main.py --rolls                        # Enable roll optimizations
    python main.py --net lan                      # Set network type (lan/wan)
-   python main.py --cache                        # Enable input caching
+   python main.py --cache                        # Enable caching (inputs + layout plans)
    python main.py --serialize                    # Enable input serialization
    python main.py --mock                         # Enable mock inputs for testing
    python main.py --fuzz                         # Enable fuzzing

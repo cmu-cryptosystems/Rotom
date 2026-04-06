@@ -282,12 +282,6 @@ if __name__ == "__main__":
     parser.add_argument("--net", default="lan")
     parser.add_argument("--cache", action=BooleanOptionalAction, default=False)
     parser.add_argument(
-        "--cache-layout-plans",
-        action=BooleanOptionalAction,
-        default=True,
-        help="Persist apply_layout plan pickles under .cache/layout_plans/<benchmark>/n_<n>/",
-    )
-    parser.add_argument(
         "--serialize",
         type=BooleanOptionalAction,
         default=False,
