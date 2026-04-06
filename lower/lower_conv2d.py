@@ -4,6 +4,7 @@ from ir.he import HEOp, HETerm
 from ir.layout import Layout
 from lower.layout_cts import LayoutCiphertexts, create_layout_without_dims
 from lower.lower_util import find_sum_dim, rotate_and_sum
+import numpy as np
 from util.layout_util import (
     _get_apply_layout_plan,
     convert_layout_to_mask,
@@ -17,7 +18,7 @@ from util.shape_util import get_term_shape
 
 def _slot_mask_conv2d_same_stride1(
     *,
-    base_indices_ct: list,
+    base_indices_ct,
     rot_amt: int,
     fh: int,
     fw: int,
@@ -40,13 +41,23 @@ def _slot_mask_conv2d_same_stride1(
             mask[s] = 0
             continue
         idx = base_indices_ct[src]
-        if not isinstance(idx, (list, tuple)) or len(idx) < 3:
-            mask[s] = 0
-            continue
-        if any(idx[i] is None for i in range(3)):
-            mask[s] = 0
-            continue
-        hu, wu = int(idx[1]), int(idx[2])
+        # Compact plan: int32 with -1 sentinel.
+        if isinstance(idx, np.ndarray):
+            if idx.shape[0] < 3:
+                mask[s] = 0
+                continue
+            if int(idx[0]) < 0 or int(idx[1]) < 0 or int(idx[2]) < 0:
+                mask[s] = 0
+                continue
+            hu, wu = int(idx[1]), int(idx[2])
+        else:
+            if not isinstance(idx, (list, tuple)) or len(idx) < 3:
+                mask[s] = 0
+                continue
+            if any(idx[i] is None for i in range(3)):
+                mask[s] = 0
+                continue
+            hu, wu = int(idx[1]), int(idx[2])
         if hu < 0 or hu >= hin or wu < 0 or wu >= win:
             mask[s] = 0
             continue
