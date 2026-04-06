@@ -158,6 +158,43 @@ def build_resnet20_silu_poly_graph_through_layer1(inputs: dict) -> TensorTerm:
     return build_resnet20_silu_poly_graph_to_depth(inputs, "l1")
 
 
+def build_resnet20_stem_plus_layer1_convs_only(inputs: dict) -> TensorTerm:
+    """Stem conv + all six layer1 3×3 convs (no BN, SiLU, or residual).
+
+    Chains ``conv1`` then ``l1_i`` conv1/conv2 for ``i`` in ``0..2``. All stride-1
+    ``same`` on ``32×32``; channel width stays 16 after the stem. Expects
+    :func:`populate_resnet20_inputs` weight keys.
+    """
+    x = TensorTerm.Tensor("input", [3, 32, 32], True)
+    x = _conv_same(x, "conv1_w", inputs, 1)
+    for i in range(3):
+        x = _conv_same(x, f"l1_{i}_conv1_w", inputs, 1)
+        x = _conv_same(x, f"l1_{i}_conv2_w", inputs, 1)
+    return x
+
+
+def build_resnet20_stem_plus_l1_0_block_graph(inputs: dict) -> TensorTerm:
+    """Stem + the first layer1 BasicBlock only (convs, affine BN, SiLU poly, residual).
+
+    Matches the prefix of :func:`build_resnet20_silu_poly_graph_to_depth` through
+    ``l1_0``. Expects ``populate_resnet20_inputs`` (or the same weight keys) and a
+    secret ``"input"`` tensor ``[3, 32, 32]`` in ``inputs``.
+
+    ``tensor_ir.eval`` uses exact SiLU for the ``"silu"`` poly name; the Toy backend
+    uses a clipped polynomial, so stacked SiLUs do not match ``eval`` within the
+    usual 1e-2 gate—use for eval vs PyTorch checks or opt-in heavy e2e (see
+    ``tests/e2e/resnet/test_resnet_silu.py``).
+    """
+    h, w = 32, 32
+    x = TensorTerm.Tensor("input", [3, 32, 32], True)
+    x = _conv_same(x, "conv1_w", inputs, 1)
+    h, w = _spatial_hw_after_conv3(h, w, 1)
+    x = _bn_affine_hw(x, "bn1", 16, h, w, inputs)
+    x = _silu_poly(x)
+    x, h, w = _basic_block_silu_poly(x, "l1_0", 16, 16, 1, inputs, h, w)
+    return x
+
+
 def build_resnet20_silu_poly_l2_0_block_graph(inputs: dict) -> TensorTerm:
     """Only the layer2.0 stride-2 BasicBlock (SiLU poly).
 

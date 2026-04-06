@@ -129,6 +129,15 @@ class Toy:
         # object identity (not TensorTerm.__hash__), since __eq__ is hash-based.
         self._tensor_term_dense_by_id: dict[int, Any] = {}
 
+    @staticmethod
+    def _pack_cache_key(layout) -> tuple[int, int]:
+        """Cache key for packed tensors.
+
+        ``TensorTerm`` and ``Layout`` use hash-based ``__eq__`` only; different
+        objects can compare equal and must not share pack slots.
+        """
+        return (id(layout.term), id(layout))
+
     def _dense_eval_for_tensor_term(self, tensor_term):
         """Run ``tensor_term.eval(self.inputs)`` at most once per IR node object."""
         tid = id(tensor_term)
@@ -157,13 +166,6 @@ class Toy:
             return v.astype(np.float64, copy=False)
         return np.asarray(v, dtype=np.float64)
 
-    def _as_np_vec(self, v):
-        """Ensure vectors are stored as 1D float64 numpy arrays."""
-        if isinstance(v, np.ndarray):
-            return v.astype(np.float64, copy=False)
-        # Common case: list[float] from apply_layout
-        return np.asarray(v, dtype=np.float64)
-
     def eval_mask(self, term):
         """
         Evaluate a mask operation.
@@ -190,9 +192,10 @@ class Toy:
             The packed vector at the specified index
         """
         layout = term.cs[0]
-        if (layout.term, layout) not in self.input_cache:
+        pkey = self._pack_cache_key(layout)
+        if pkey not in self.input_cache:
             tensor = self._dense_eval_for_tensor_term(layout.term)
-            self.input_cache[(layout.term, layout)] = _packed_ct_lists_to_float64(
+            self.input_cache[pkey] = _packed_ct_lists_to_float64(
                 apply_layout(tensor, layout)
             )
 
@@ -200,7 +203,7 @@ class Toy:
         # Parse metadata: "packing_idx rot:rot_amt" or just "packing_idx"
         metadata_parts = term.metadata.split()
         packing_idx = int(metadata_parts[0])
-        vector = self.input_cache[(layout.term, layout)][packing_idx]
+        vector = self.input_cache[pkey][packing_idx]
 
         # Check if this pack has pre-rotation metadata
         rot_amt = None
@@ -230,27 +233,29 @@ class Toy:
             The packed vector at the specified index
         """
         layout = term.cs[0]
-        if (layout.term, layout) not in self.input_cache:
+        pkey = self._pack_cache_key(layout)
+        if pkey not in self.input_cache:
             tensor = self._dense_eval_for_tensor_term(layout.term)
-            self.input_cache[(layout.term, layout)] = _packed_ct_lists_to_float64(
+            self.input_cache[pkey] = _packed_ct_lists_to_float64(
                 apply_punctured_layout(tensor, layout)
             )
 
         # get packing index and return packed vector
         packing_idx = int(term.metadata.split()[0])
-        return self._as_np_vec(self.input_cache[(layout.term, layout)][packing_idx])
+        return self._as_np_vec(self.input_cache[pkey][packing_idx])
 
     def eval_cs_pack(self, term):
         layout = term.cs[1]
-        if (layout.term, layout) not in self.input_cache:
+        pkey = self._pack_cache_key(layout)
+        if pkey not in self.input_cache:
             tensor = self.inputs[term.cs[0]]
-            self.input_cache[(layout.term, layout)] = _packed_ct_lists_to_float64(
+            self.input_cache[pkey] = _packed_ct_lists_to_float64(
                 apply_layout(tensor, layout)
             )
 
         # get packing index and return packed vector
         packing_idx = int(term.metadata.split()[0])
-        return self._as_np_vec(self.input_cache[(layout.term, layout)][packing_idx])
+        return self._as_np_vec(self.input_cache[pkey][packing_idx])
 
     def eval_const(self, term):
         layout = term.cs[0]
@@ -289,7 +294,10 @@ class Toy:
         elif poly_func == "relu_exact" or poly_func == "relu":
             return np.where(vec > 0, vec, 0.0)
         elif poly_func == "silu":
-            # Plaintext exact SiLU (same as ``TensorEvaluator`` for ``PolyCall("silu")``).
+            # Plaintext exact SiLU (same as default ``TensorEvaluator`` for ``PolyCall("silu")``).
+            # Optional polynomialized mode for tests that want backend+eval agreement with an
+            # explicit SiLU polynomial approximation:
+            #   inputs["__rotom_silu_eval_mode"] == "poly"
             x_clip = np.clip(vec, -40.0, 40.0)
             sig = 1.0 / (1.0 + np.exp(-x_clip))
             return vec * sig
@@ -304,6 +312,35 @@ class Toy:
         metadata = term.cs[1]
         poly_func = metadata.get("poly_func", None)
         poly_channel = metadata.get("poly_channel", None)
+        if (
+            poly_func == "silu"
+            and self.inputs.get("__rotom_silu_eval_mode", "exact") == "poly"
+        ):
+            lo = float(metadata.get("lower_bound", -8.0))
+            hi = float(metadata.get("upper_bound", 8.0))
+            degree = int(self.inputs.get("__rotom_silu_poly_degree", 11))
+            n_nodes = int(self.inputs.get("__rotom_silu_poly_nodes", 80))
+            if degree < 1:
+                raise ValueError("silu poly degree must be >= 1")
+            # silu(x) ≈ x * q(x) on [lo, hi] (match TensorEvaluator._silu_poly_ascending_coeffs).
+            j = np.arange(n_nodes, dtype=np.float64) + 0.5
+            t = np.cos(np.pi * j / n_nodes)
+            xs = 0.5 * (hi - lo) * t + 0.5 * (hi + lo)
+            ys = xs * (1.0 / (1.0 + np.exp(-np.clip(xs, -40.0, 40.0))))
+            q_deg = degree - 1
+            ratio = np.divide(
+                ys,
+                xs,
+                out=np.full_like(ys, 0.5),
+                where=np.abs(xs) > 1e-15,
+            )
+            high_to_low = np.polyfit(xs, ratio, q_deg)
+            q = [float(c) for c in high_to_low[::-1]]
+            xv = np.clip(self._as_np_vec(vec).astype(np.float64), lo, hi)
+            qx = np.zeros_like(xv, dtype=np.float64)
+            for i, c in enumerate(q):
+                qx = qx + c * (xv**i)
+            return xv * qx
         return self._apply_poly_to_vector(vec, poly_func, poly_channel=poly_channel)
 
     def eval_rescale(self, term):
@@ -404,23 +441,38 @@ class Toy:
                     max_diff = max(max_diff, np.max(np.abs(diff)))
 
             if not all_close:
-                print("expected:")
-                for expected_vec in expected:
-                    print(expected_vec)
-                print()
+                tensor_op = getattr(getattr(term.layout, "term", None), "op", None)
+                print("[toy mismatch]")
+                print("kernel op:", term.op)
+                print("tensor op:", tensor_op)
+                print(
+                    "layout:",
+                    term.layout.layout_str()
+                    if hasattr(term.layout, "layout_str")
+                    else term.layout,
+                )
+                print("term:", term.layout.term)
+                print("max diff:", max_diff)
 
-                print("result:")
-                for result_vec in results:
-                    print(result_vec)
-                print()
+                if getattr(self.args, "toy_print_mismatch_vectors", False):
+                    print("expected:")
+                    for expected_vec in expected:
+                        print(expected_vec)
+                    print()
 
-                print("diff:")
-                for expected_vec, result_vec in zip(expected, results):
-                    print([e - r for e, r in zip(expected_vec, result_vec)])
-                print()
-                print("expected layout:", term.layout)
+                    print("result:")
+                    for result_vec in results:
+                        print(result_vec)
+                    print()
 
-                assert all_close, f"Values not close enough. Max diff: {max_diff}"
+                    print("diff:")
+                    for expected_vec, result_vec in zip(expected, results):
+                        print([e - r for e, r in zip(expected_vec, result_vec)])
+                    print()
+
+                assert (
+                    all_close
+                ), f"Toy mismatch at {term.op}/{tensor_op}. Max diff: {max_diff}"
 
         return results
 

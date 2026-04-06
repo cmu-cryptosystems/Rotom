@@ -32,10 +32,22 @@ def _chebyshev_nodes(lo: float, hi: float, n: int) -> np.ndarray:
 def silu_poly_ascending_coeffs(
     lo: float, hi: float, degree: int, n_nodes: int = 80
 ) -> List[float]:
-    """Least-squares polynomial for SiLU on [lo, hi]; coeffs for c0 + c1*x + ... + c_d*x^d."""
+    """Ascending coeffs for q in ``silu(x) ≈ x * q(x)`` (total degree ``degree``).
+
+    See ``TensorEvaluator._silu_poly_ascending_coeffs`` for rationale (``f(0)=0``).
+    """
+    if degree < 1:
+        raise ValueError("degree must be >= 1")
     xs = _chebyshev_nodes(lo, hi, n_nodes)
     ys = _reference_silu_np(xs)
-    high_to_low = np.polyfit(xs, ys, degree)
+    q_deg = degree - 1
+    ratio = np.divide(
+        ys,
+        xs,
+        out=np.full_like(ys, 0.5),
+        where=np.abs(xs) > 1e-15,
+    )
+    high_to_low = np.polyfit(xs, ratio, q_deg)
     return [float(c) for c in high_to_low[::-1]]
 
 
@@ -158,7 +170,7 @@ def calibrate_silu_input_bounds(
 
 
 class PolySiLU(nn.Module):
-    """SiLU replaced by a fixed polynomial ``sum_i c_i x^i`` (ascending powers)."""
+    """SiLU replaced by ``x * q(x)`` with ascending coeffs for q (matches tensor/Toy poly mode)."""
 
     def __init__(self, coeffs: Sequence[float]):
         super().__init__()
@@ -169,14 +181,14 @@ class PolySiLU(nn.Module):
         c = self.coeffs
         if c.numel() == 0:
             return x
-        out = torch.zeros_like(x, dtype=torch.float32)
+        qx = torch.zeros_like(x, dtype=torch.float32)
         xp = torch.ones_like(x, dtype=torch.float32)
         x32 = x.to(dtype=torch.float32)
         for i in range(c.numel()):
-            out = out + c[i] * xp
+            qx = qx + c[i] * xp
             if i + 1 < c.numel():
                 xp = xp * x32
-        return out.to(dtype=x.dtype)
+        return (x32 * qx).to(dtype=x.dtype)
 
 
 def replace_resnet20_silu_with_poly(

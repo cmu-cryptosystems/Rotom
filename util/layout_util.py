@@ -484,6 +484,98 @@ def mul(vec, n):
     return [v * n if v is not None else None for v in vec]
 
 
+def _normalize_scalar_from_tensor(value):
+    """Match legacy ``apply_layout`` scalar extraction from indexed tensor values."""
+    if isinstance(value, np.ndarray) and value.ndim > 0 and value.size == 1:
+        return value.item()
+    if isinstance(value, np.ndarray) and value.ndim == 0:
+        return value.item()
+    return value
+
+
+def _ct_index_rows_to_values(pt_tensor, ct_indices):
+    """Map layout index rows to plaintext tensor values (semantics match legacy loop).
+
+    Hot path uses vectorized advanced indexing (same as ``pt_tensor[tuple(idx)]`` per
+    row), which is correct for C-, F-, and non-contiguous arrays. A stride + ``ravel``
+    shortcut was incorrect after ops like ``PERMUTE`` that yield Fortran-ordered views.
+    """
+    pt_tensor_ndim = int(np.ndim(pt_tensor))
+    n = len(ct_indices)
+    if n == 0:
+        return []
+
+    if pt_tensor_ndim == 0:
+        out = []
+        base = pt_tensor.item()
+        for index in ct_indices:
+            effective_index = list(index)
+            while len(effective_index) < pt_tensor_ndim:
+                effective_index.append(0)
+            if any(effective_index[i] is None for i in range(pt_tensor_ndim)):
+                out.append(0)
+                continue
+            if any(
+                effective_index[i] >= pt_tensor.shape[i] for i in range(pt_tensor_ndim)
+            ):
+                out.append(0)
+                continue
+            out.append(_normalize_scalar_from_tensor(base))
+        return out
+
+    # Build (n, pt_tensor_ndim) index matrix: pad short rows with 0, truncate long rows.
+    idx = np.zeros((n, pt_tensor_ndim), dtype=np.int64)
+    bad = np.zeros(n, dtype=bool)
+    for i, index in enumerate(ct_indices):
+        row = list(index)
+        if len(row) < pt_tensor_ndim:
+            row = row + [0] * (pt_tensor_ndim - len(row))
+        elif len(row) > pt_tensor_ndim:
+            row = row[:pt_tensor_ndim]
+        for j in range(pt_tensor_ndim):
+            v = row[j]
+            if v is None:
+                bad[i] = True
+            else:
+                idx[i, j] = int(v)
+
+    shp = np.asarray(pt_tensor.shape, dtype=np.int64)
+    oob = (idx < 0) | (idx >= shp)
+    bad |= oob.any(axis=1)
+
+    # Fast path: numeric ndarray — advanced indexing (memory-order agnostic).
+    if (
+        isinstance(pt_tensor, np.ndarray)
+        and pt_tensor.size > 0
+        and np.issubdtype(pt_tensor.dtype, np.number)
+    ):
+        lim = np.maximum(shp - 1, 0)
+        safe = idx.astype(np.int64, copy=True)
+        safe[bad] = 0
+        for j in range(pt_tensor_ndim):
+            safe[:, j] = np.clip(safe[:, j], 0, lim[j])
+        coords = tuple(safe[:, j] for j in range(pt_tensor_ndim))
+        vals = np.asarray(pt_tensor[coords], dtype=np.float64)
+        vals[bad] = 0.0
+        return [_normalize_scalar_from_tensor(v) for v in vals]
+
+    # Non-ndarray or empty: preserve exact legacy behavior.
+    out = []
+    for index in ct_indices:
+        effective_index = list(index)
+        while len(effective_index) < pt_tensor_ndim:
+            effective_index.append(0)
+        if any(effective_index[i] is None for i in range(pt_tensor_ndim)):
+            out.append(0)
+            continue
+        if any(effective_index[i] >= pt_tensor.shape[i] for i in range(pt_tensor_ndim)):
+            out.append(0)
+            continue
+        value = pt_tensor[tuple(effective_index[i] for i in range(pt_tensor_ndim))]
+        out.append(_normalize_scalar_from_tensor(value))
+    return out
+
+
 def apply_layout(pt_tensor, layout):
     """apply a layout to a pt tensor"""
     layout_len = max(len(layout), layout.n)
@@ -494,47 +586,32 @@ def apply_layout(pt_tensor, layout):
 
     cts = []
     for ct_indices in base_indices_by_cts:
-        ct = []
-        for index in ct_indices:
-            # Preserve original behavior: only pad (no truncation).
-            effective_index = list(index)
-            while len(effective_index) < pt_tensor_ndim:
-                effective_index.append(0)
-
-            # Check if any required index is None
-            if any(effective_index[i] is None for i in range(pt_tensor_ndim)):
-                ct.append(0)
-                continue
-
-            if any(
-                effective_index[i] >= pt_tensor.shape[i] for i in range(pt_tensor_ndim)
-            ):
-                ct.append(0)
-                continue
-
-            # Access tensor (supports arbitrary rank; needed e.g. for 5D conv3d filters).
-            if pt_tensor_ndim == 0:
-                value = pt_tensor.item()
-            else:
-                value = pt_tensor[
-                    tuple(effective_index[i] for i in range(pt_tensor_ndim))
-                ]
-
-            # Convert single-element arrays to scalars
-            if isinstance(value, np.ndarray) and value.ndim > 0 and value.size == 1:
-                value = value.item()
-            elif isinstance(value, np.ndarray) and value.ndim == 0:
-                value = value.item()
-            ct.append(value)
-
-        # this places cts in row-major order
-        cts.append(ct)
+        cts.append(_ct_index_rows_to_values(pt_tensor, ct_indices))
 
     return cts
 
 
 _APPLY_LAYOUT_PLAN_CACHE: dict[str, dict] = {}
 _APPLY_LAYOUT_PLAN_CACHE_VERSION = "4"
+
+# Optional directory override (set by ``activate_benchmark_layout_plan_cache``). Takes
+# precedence over ``ROTOM_APPLY_LAYOUT_PLAN_CACHE_DIR`` so callers do not mutate os.environ.
+_APPLY_LAYOUT_PLAN_DISK_DIR_OVERRIDE: str | None = None
+
+
+def set_apply_layout_plan_disk_cache_dir(path: str | None) -> None:
+    """Set disk cache directory for layout plans, or clear override when ``path`` is empty."""
+    global _APPLY_LAYOUT_PLAN_DISK_DIR_OVERRIDE
+    if not path or not str(path).strip():
+        _APPLY_LAYOUT_PLAN_DISK_DIR_OVERRIDE = None
+    else:
+        _APPLY_LAYOUT_PLAN_DISK_DIR_OVERRIDE = str(path).strip()
+
+
+def _resolve_apply_layout_plan_disk_dir() -> str:
+    if _APPLY_LAYOUT_PLAN_DISK_DIR_OVERRIDE:
+        return _APPLY_LAYOUT_PLAN_DISK_DIR_OVERRIDE
+    return os.environ.get("ROTOM_APPLY_LAYOUT_PLAN_CACHE_DIR", "").strip()
 
 
 def _apply_layout_plan_cache_key(layout, pt_tensor_ndim: int, layout_len: int) -> str:
@@ -559,7 +636,7 @@ def _get_apply_layout_plan(layout, pt_tensor_ndim: int, *, layout_len: int) -> d
     if key in _APPLY_LAYOUT_PLAN_CACHE:
         return _APPLY_LAYOUT_PLAN_CACHE[key]
 
-    disk_dir = os.environ.get("ROTOM_APPLY_LAYOUT_PLAN_CACHE_DIR", "").strip()
+    disk_dir = _resolve_apply_layout_plan_disk_dir()
     plan = None
     if disk_dir:
         out_dir = Path(disk_dir).expanduser()
@@ -658,7 +735,9 @@ def apply_punctured_layout(pt_tensor, layout):
     assert len(cts) == len(masks)
 
     for i in range(len(cts)):
-        cts[i] = [c * m for c, m in zip(cts[i], masks[i])]
+        c_arr = np.asarray(cts[i], dtype=np.float64)
+        m_arr = np.asarray(masks[i], dtype=np.float64)
+        cts[i] = (c_arr * m_arr).tolist()
     return cts
 
 
