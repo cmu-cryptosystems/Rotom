@@ -2,6 +2,10 @@
 .pytest_cache
 .profile_pytest_out.txt
 __pycache__/
+
+# Coverage.py / pytest-cov
+.coverage
+.coverage.*
 layout_cache
 .cache/
 *.so
