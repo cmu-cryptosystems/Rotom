@@ -5,11 +5,12 @@ e2e checks that must survive deep graphs, tests set
 ``inputs["__rotom_silu_eval_mode"] = "poly"`` so **eval and Toy** share the same
 least-squares SiLU polynomial on each site's ``[lower_bound, upper_bound]``.
 
-- **Stem (Toy):** poly mode + ``check_results`` (slow).
-- **Layer1 (Toy):** skipped: Toy internal check diverges on the first layer-1 ``Conv2D`` (~8 max diff), same with exact SiLU; not caused by poly mode.
-- **Stem (checkpoint):** Toy vs eval (poly in stem random-init test); ckpt test still
-  compares **exact** eval vs PyTorch.
-- **Layer1 vs PyTorch:** ``tensor_ir.eval`` stays exact unless poly keys are set.
+- **Stem (checkpoint):** conv + BN + SiLU poly, DaCapo weights when available; Toy vs eval
+  and dense vs PyTorch ``act(bn(conv(x)))``.
+- **Stem (random init):** same IR without checkpoint (always runs in slow suite).
+- **Layer1:** skipped by default. Set ``ROTOM_RUN_RESNET_LAYER1_SILU_E2E=1`` to run Toy vs eval
+  on the three layer1 blocks (secret input = stem ``tensor_ir.eval``) and eval vs PyTorch on the
+  full stem+layer1 graph.
 - **Full graph:** opt-in via ``ROTOM_RUN_HEAVY_E2E=1`` (memory/time).
 """
 
@@ -31,6 +32,8 @@ from benchmarks.e2e.resnet.resnet_model import resnet20
 from benchmarks.e2e.resnet.resnet20_tensor_ir import (
     build_resnet20_silu_poly_graph,
     build_resnet20_silu_poly_graph_through_layer1,
+    build_resnet20_silu_poly_graph_to_depth,
+    build_resnet20_silu_poly_layer1_only_graph,
     populate_resnet20_inputs,
 )
 from frontends.tensor import TensorTerm
@@ -144,12 +147,19 @@ def test_resnet20_silu_poly_stem_ckpt_matches_tensor_eval_and_pytorch() -> None:
 @pytest.mark.slow
 @pytest.mark.skip(
     reason=(
-        "Toy.run diverges vs dense eval on first layer1 Conv2D (max diff ~8); "
-        "reproduces without __rotom_silu_eval_mode. Needs HE conv/layout alignment."
+        "Layer1 SiLU e2e opt-in; set ROTOM_RUN_RESNET_LAYER1_SILU_E2E=1 to run "
+        "(Toy vs eval on layer1-only IR; PyTorch check on full stem+layer1)."
     ),
 )
 def test_resnet20_silu_poly_layer1_toy_matches_tensor_eval() -> None:
-    """Stem + layer1 (three blocks): Toy matches ``tensor_ir.eval`` (poly SiLU mode)."""
+    """Layer1 only (three BasicBlocks): Toy matches ``tensor_ir.eval``.
+
+    Activations are ``stem.eval`` on the same ``inputs`` (stem is covered by
+    ``test_resnet20_silu_poly_stem_toy_matches_tensor_eval``). A single IR that
+    fuses stem with layer1 tickles a Toy/lowering mismatch on the first layer1
+    conv input layout; compiling layer1 as its own graph avoids that while still
+    exercising every layer1 tensor op (conv, BN, SiLU poly, residual add).
+    """
     torch.manual_seed(0)
     model = resnet20(num_classes=10)
     model.eval()
@@ -161,7 +171,9 @@ def test_resnet20_silu_poly_layer1_toy_matches_tensor_eval() -> None:
     x = torch.randn(3, 32, 32, dtype=torch.float64)
     inputs["input"] = x.numpy()
 
-    tensor_ir = build_resnet20_silu_poly_graph_through_layer1(inputs)
+    stem_ir = build_resnet20_silu_poly_graph_to_depth(inputs, "stem")
+    inputs["layer1_only_in"] = np.asarray(stem_ir.eval(inputs), dtype=np.float64)
+    tensor_ir = build_resnet20_silu_poly_layer1_only_graph(inputs)
 
     args = get_default_args()
     args.backend = "toy"

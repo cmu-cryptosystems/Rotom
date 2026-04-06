@@ -129,6 +129,15 @@ class Toy:
         # object identity (not TensorTerm.__hash__), since __eq__ is hash-based.
         self._tensor_term_dense_by_id: dict[int, Any] = {}
 
+    @staticmethod
+    def _pack_cache_key(layout) -> tuple[int, int]:
+        """Cache key for packed tensors.
+
+        ``TensorTerm`` and ``Layout`` use hash-based ``__eq__`` only; different
+        objects can compare equal and must not share pack slots.
+        """
+        return (id(layout.term), id(layout))
+
     def _dense_eval_for_tensor_term(self, tensor_term):
         """Run ``tensor_term.eval(self.inputs)`` at most once per IR node object."""
         tid = id(tensor_term)
@@ -150,8 +159,10 @@ class Toy:
                         self.env.pop(c, None)
 
     def _as_np_vec(self, v):
-        """Coerce to 1-D ``float64`` (lists from ``apply_layout``, ndarray ciphertext slots)."""
+        """Return a 1-D ``float64`` vector; avoid ``astype`` when already ``float64``."""
         if isinstance(v, np.ndarray):
+            if v.dtype == np.float64:
+                return v
             return v.astype(np.float64, copy=False)
         return np.asarray(v, dtype=np.float64)
 
@@ -181,9 +192,10 @@ class Toy:
             The packed vector at the specified index
         """
         layout = term.cs[0]
-        if (layout.term, layout) not in self.input_cache:
+        pkey = self._pack_cache_key(layout)
+        if pkey not in self.input_cache:
             tensor = self._dense_eval_for_tensor_term(layout.term)
-            self.input_cache[(layout.term, layout)] = _packed_ct_lists_to_float64(
+            self.input_cache[pkey] = _packed_ct_lists_to_float64(
                 apply_layout(tensor, layout)
             )
 
@@ -191,7 +203,7 @@ class Toy:
         # Parse metadata: "packing_idx rot:rot_amt" or just "packing_idx"
         metadata_parts = term.metadata.split()
         packing_idx = int(metadata_parts[0])
-        vector = self.input_cache[(layout.term, layout)][packing_idx]
+        vector = self.input_cache[pkey][packing_idx]
 
         # Check if this pack has pre-rotation metadata
         rot_amt = None
@@ -221,27 +233,29 @@ class Toy:
             The packed vector at the specified index
         """
         layout = term.cs[0]
-        if (layout.term, layout) not in self.input_cache:
+        pkey = self._pack_cache_key(layout)
+        if pkey not in self.input_cache:
             tensor = self._dense_eval_for_tensor_term(layout.term)
-            self.input_cache[(layout.term, layout)] = _packed_ct_lists_to_float64(
+            self.input_cache[pkey] = _packed_ct_lists_to_float64(
                 apply_punctured_layout(tensor, layout)
             )
 
         # get packing index and return packed vector
         packing_idx = int(term.metadata.split()[0])
-        return self._as_np_vec(self.input_cache[(layout.term, layout)][packing_idx])
+        return self._as_np_vec(self.input_cache[pkey][packing_idx])
 
     def eval_cs_pack(self, term):
         layout = term.cs[1]
-        if (layout.term, layout) not in self.input_cache:
+        pkey = self._pack_cache_key(layout)
+        if pkey not in self.input_cache:
             tensor = self.inputs[term.cs[0]]
-            self.input_cache[(layout.term, layout)] = _packed_ct_lists_to_float64(
+            self.input_cache[pkey] = _packed_ct_lists_to_float64(
                 apply_layout(tensor, layout)
             )
 
         # get packing index and return packed vector
         packing_idx = int(term.metadata.split()[0])
-        return self._as_np_vec(self.input_cache[(layout.term, layout)][packing_idx])
+        return self._as_np_vec(self.input_cache[pkey][packing_idx])
 
     def eval_const(self, term):
         layout = term.cs[0]
@@ -427,23 +441,38 @@ class Toy:
                     max_diff = max(max_diff, np.max(np.abs(diff)))
 
             if not all_close:
-                print("expected:")
-                for expected_vec in expected:
-                    print(expected_vec)
-                print()
+                tensor_op = getattr(getattr(term.layout, "term", None), "op", None)
+                print("[toy mismatch]")
+                print("kernel op:", term.op)
+                print("tensor op:", tensor_op)
+                print(
+                    "layout:",
+                    term.layout.layout_str()
+                    if hasattr(term.layout, "layout_str")
+                    else term.layout,
+                )
+                print("term:", term.layout.term)
+                print("max diff:", max_diff)
 
-                print("result:")
-                for result_vec in results:
-                    print(result_vec)
-                print()
+                if getattr(self.args, "toy_print_mismatch_vectors", False):
+                    print("expected:")
+                    for expected_vec in expected:
+                        print(expected_vec)
+                    print()
 
-                print("diff:")
-                for expected_vec, result_vec in zip(expected, results):
-                    print([e - r for e, r in zip(expected_vec, result_vec)])
-                print()
-                print("expected layout:", term.layout)
+                    print("result:")
+                    for result_vec in results:
+                        print(result_vec)
+                    print()
 
-                assert all_close, f"Values not close enough. Max diff: {max_diff}"
+                    print("diff:")
+                    for expected_vec, result_vec in zip(expected, results):
+                        print([e - r for e, r in zip(expected_vec, result_vec)])
+                    print()
+
+                assert (
+                    all_close
+                ), f"Toy mismatch at {term.op}/{tensor_op}. Max diff: {max_diff}"
 
         return results
 
