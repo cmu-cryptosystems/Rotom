@@ -85,6 +85,10 @@ def _toy_post_order(root: HETerm) -> list[HETerm]:
     return order
 
 
+# (lo, hi, degree, n_nodes) -> ascending q coefficients for silu poly branch
+_SILU_POLY_Q_CACHE: dict[tuple[float, float, int, int], list[float]] = {}
+
+
 def _packed_ct_lists_to_float64(packed_cts: list) -> np.ndarray:
     """One allocation: ``apply_layout`` / ``apply_punctured_layout`` output (list of slot lists) → ``float64``.
 
@@ -322,20 +326,24 @@ class Toy:
             n_nodes = int(self.inputs.get("__rotom_silu_poly_nodes", 80))
             if degree < 1:
                 raise ValueError("silu poly degree must be >= 1")
-            # silu(x) ≈ x * q(x) on [lo, hi] (match TensorEvaluator._silu_poly_ascending_coeffs).
-            j = np.arange(n_nodes, dtype=np.float64) + 0.5
-            t = np.cos(np.pi * j / n_nodes)
-            xs = 0.5 * (hi - lo) * t + 0.5 * (hi + lo)
-            ys = xs * (1.0 / (1.0 + np.exp(-np.clip(xs, -40.0, 40.0))))
-            q_deg = degree - 1
-            ratio = np.divide(
-                ys,
-                xs,
-                out=np.full_like(ys, 0.5),
-                where=np.abs(xs) > 1e-15,
-            )
-            high_to_low = np.polyfit(xs, ratio, q_deg)
-            q = [float(c) for c in high_to_low[::-1]]
+            cache_key = (lo, hi, degree, n_nodes)
+            q = _SILU_POLY_Q_CACHE.get(cache_key)
+            if q is None:
+                # silu(x) ≈ x * q(x) on [lo, hi] (match TensorEvaluator._silu_poly_ascending_coeffs).
+                j = np.arange(n_nodes, dtype=np.float64) + 0.5
+                t = np.cos(np.pi * j / n_nodes)
+                xs = 0.5 * (hi - lo) * t + 0.5 * (hi + lo)
+                ys = xs * (1.0 / (1.0 + np.exp(-np.clip(xs, -40.0, 40.0))))
+                q_deg = degree - 1
+                ratio = np.divide(
+                    ys,
+                    xs,
+                    out=np.full_like(ys, 0.5),
+                    where=np.abs(xs) > 1e-15,
+                )
+                high_to_low = np.polyfit(xs, ratio, q_deg)
+                q = [float(c) for c in high_to_low[::-1]]
+                _SILU_POLY_Q_CACHE[cache_key] = q
             xv = np.clip(self._as_np_vec(vec).astype(np.float64), lo, hi)
             qx = np.zeros_like(xv, dtype=np.float64)
             for i, c in enumerate(q):
@@ -373,7 +381,9 @@ class Toy:
                     self.env[term] = self.eval_pack(term)
                 return self.env[term]
             case HEOp.PUNCTURED_PACK:
-                return self.eval_pack_punctured(term)
+                if term not in self.env:
+                    self.env[term] = self.eval_pack_punctured(term)
+                return self.env[term]
             case HEOp.CS_PACK:
                 return self.eval_cs_pack(term)
             case HEOp.CONST:

@@ -13,12 +13,7 @@ new kernel op should be wired in here with a corresponding ``lower_*`` helper.
 """
 
 from ir.kernel import KernelOp
-from lower.circuit_opts.mask_opts import (
-    mask_identity_opt,
-    zero_mask_identity_opt,
-    zero_mask_opt,
-)
-from lower.circuit_opts.rot_opts import rot_zero_opt
+from lower.circuit_opts.combined_opts import fused_circuit_opts
 
 # replace with optimized cts
 from lower.layout_cts import LayoutCiphertexts
@@ -134,10 +129,8 @@ class Lower:
         layout_cts = self.env[self.kernel]
         opt_cts = {}
         for ct_idx, ct in layout_cts.items():
-            opt_ct = rot_zero_opt(ct)
-            opt_ct = zero_mask_opt(opt_ct)
-            opt_ct = mask_identity_opt(opt_ct)
-            opt_ct = zero_mask_identity_opt(opt_ct)
+            # One fused post-order pass (same semantics as the former four-pass pipeline).
+            opt_ct = fused_circuit_opts(ct)
 
             # Lift rotations to packing phase (optimization for convolution)
             # This replaces ROT(CS(PACK(...)), rot_amt) with pre-rotated PACK operations
