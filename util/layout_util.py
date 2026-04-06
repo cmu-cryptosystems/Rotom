@@ -600,7 +600,14 @@ def apply_layout(pt_tensor, layout):
     # get base_term indices
     pt_tensor_ndim = np.ndim(pt_tensor)
     plan = _get_apply_layout_plan(layout, pt_tensor_ndim, layout_len=layout_len)
-    base_indices_by_cts = plan["base_indices_by_cts"]
+    # Plans may optionally deduplicate identical ciphertext index blocks.
+    # - base_indices_by_cts: (num_ct, n, ndims) int32 with -1 sentinel
+    # - unique_base_indices_by_cts: (num_unique_ct, n, ndims)
+    # - ct_inverse: (num_ct,) mapping each ct -> unique index
+    base_indices_by_cts = plan.get(
+        "unique_base_indices_by_cts", plan["base_indices_by_cts"]
+    )
+    ct_inverse = plan.get("ct_inverse", None)
 
     cts = []
     # base_indices_by_cts may be either:
@@ -613,7 +620,10 @@ def apply_layout(pt_tensor, layout):
         for ct_indices in base_indices_by_cts:
             cts.append(_ct_index_rows_to_values(pt_tensor, ct_indices))
 
-    return cts
+    if ct_inverse is None:
+        return cts
+    # Expand unique ciphertexts back to full list.
+    return [cts[int(j)] for j in ct_inverse]
 
 
 _APPLY_LAYOUT_PLAN_CACHE: dict[str, dict] = {}
@@ -770,6 +780,41 @@ def _get_apply_layout_plan(layout, pt_tensor_ndim: int, *, layout_len: int) -> d
         base_by_ct = combined_cts
 
         plan = {"base_indices_by_cts": base_by_ct}
+
+        # Optional dedup: if some ct dimensions do not contribute to plaintext indexing
+        # (e.g. replication dims `[R:…]` in `layout.ct_dims`), many ciphertext blocks are
+        # identical. Detect that by grouping ciphertexts by the indices of ct-dims that
+        # correspond to real tensor dimensions.
+        #
+        # This is especially important for ResNet conv layouts where ct replication can
+        # multiply num_ct (e.g. ×16×3×3) without changing any tensor coordinates.
+        if isinstance(base_by_ct, np.ndarray) and len(ct_dims) > 0:
+            keep_ct_dim_idxs = [
+                i for i, d in enumerate(ct_dims) if d.dim is not None and d.extent > 1
+            ]
+            if keep_ct_dim_idxs:
+                ct_dim_indices = get_dim_indices(
+                    ct_dims
+                )  # list[len(ct_dims)] of [num_ct]
+                key_cols = [
+                    np.asarray(ct_dim_indices[i], dtype=np.int32)
+                    for i in keep_ct_dim_idxs
+                ]
+                keys = np.stack(key_cols, axis=1)  # (num_ct, nkey)
+                # Group by unique keys; pick first representative for each group.
+                _, first, inv = np.unique(
+                    keys, axis=0, return_index=True, return_inverse=True
+                )
+                if first.size < num_ct:
+                    # Preserve deterministic order by sorting representatives by first appearance.
+                    order = np.argsort(first)
+                    first = first[order]
+                    # Remap inverse to the sorted representative indices.
+                    remap = np.empty(order.size, dtype=np.int32)
+                    remap[order] = np.arange(order.size, dtype=np.int32)
+                    inv = remap[inv]
+                    plan["unique_base_indices_by_cts"] = base_by_ct[first]
+                    plan["ct_inverse"] = inv.astype(np.int32, copy=False)
 
         if disk_dir:
             plan_path = Path(disk_dir).expanduser() / f"{key}.pkl"
