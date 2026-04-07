@@ -297,6 +297,16 @@ if __name__ == "__main__":
         help="Use roll-based convolution for conv2d operations",
     )
     parser.add_argument(
+        "--layout-simplicity-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Add this times util.layout_simplicity.layout_simplicity_penalty(layout) to "
+            "each kernel's cached layout cost (favors fewer [G:*] groups / CT axes). "
+            "When 0, ROTOM_LAYOUT_SIMPLICITY_WEIGHT env may still set a nonzero weight."
+        ),
+    )
+    parser.add_argument(
         "--not-secure",
         action=BooleanOptionalAction,
         default=False,

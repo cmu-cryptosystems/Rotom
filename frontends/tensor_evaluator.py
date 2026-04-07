@@ -11,6 +11,8 @@ from typing import Any, Dict
 
 import numpy as np
 
+from util.silu_polycall_eval import eval_silu_polycall
+
 
 class TensorEvaluator:
     """Evaluate TensorTerm graphs.
@@ -223,46 +225,6 @@ class TensorEvaluator:
                             )
         return out
 
-    def __init__(self) -> None:
-        # Cache polynomial coeffs for PolyCall(silu, lo, hi) when eval mode requests it.
-        # Key: (lo, hi, degree, n_nodes)
-        self._silu_poly_cache: Dict[tuple[float, float, int, int], list[float]] = {}
-
-    @staticmethod
-    def _chebyshev_nodes(lo: float, hi: float, n: int) -> np.ndarray:
-        j = np.arange(n, dtype=np.float64) + 0.5
-        t = np.cos(np.pi * j / n)
-        return 0.5 * (hi - lo) * t + 0.5 * (hi + lo)
-
-    def _silu_poly_ascending_coeffs(
-        self, lo: float, hi: float, degree: int, n_nodes: int
-    ) -> list[float]:
-        """Ascending coeffs for q in ``silu(x) ≈ x * q(x)`` (total degree ``degree``).
-
-        A plain least-squares fit ``sum c_i x^i`` can have a large intercept so
-        ``poly(0) != silu(0)=0``, which breaks Toy vs ``apply_layout``: unused layout
-        slots are literal zeros in the HE sim but ``apply_layout`` maps them to 0
-        without applying poly.  Factoring out ``x`` keeps ``f(0)=0`` exactly.
-        """
-        key = (float(lo), float(hi), int(degree), int(n_nodes))
-        if key in self._silu_poly_cache:
-            return self._silu_poly_cache[key]
-        if degree < 1:
-            raise ValueError("silu poly degree must be >= 1")
-        xs = self._chebyshev_nodes(lo, hi, n_nodes)
-        ys = xs * (1.0 / (1.0 + np.exp(-np.clip(xs, -40.0, 40.0))))
-        q_deg = degree - 1
-        ratio = np.divide(
-            ys,
-            xs,
-            out=np.full_like(ys, 0.5),
-            where=np.abs(xs) > 1e-15,
-        )
-        high_to_low = np.polyfit(xs, ratio, q_deg)
-        coeffs = [float(c) for c in high_to_low[::-1]]
-        self._silu_poly_cache[key] = coeffs
-        return coeffs
-
     def _eval_poly(
         self, x: np.ndarray, func: Any, inputs: Dict[str, Any]
     ) -> np.ndarray:
@@ -278,26 +240,15 @@ class TensorEvaluator:
         ):
             return np.maximum(x, 0.0)
         if func == "silu":
-            # Plaintext exact SiLU for PolyCall("silu", ...).
-            x = np.asarray(x, dtype=np.float64)
-            return x * (1.0 / (1.0 + np.exp(-np.clip(x, -40.0, 40.0))))
+            # Legacy wire format without explicit bounds; use a default interval for ``poly``.
+            return eval_silu_polycall(
+                np.asarray(x, dtype=np.float64), -8.0, 8.0, inputs
+            )
         if isinstance(func, tuple) and len(func) >= 3 and func[0] == "silu":
-            # Optional polynomialized SiLU to match backends that approximate PolyCall("silu").
-            # Enable with inputs["__rotom_silu_eval_mode"] == "poly".
             _, lo, hi = func[:3]
-            mode = inputs.get("__rotom_silu_eval_mode", "exact")
-            if mode != "poly":
-                x = np.asarray(x, dtype=np.float64)
-                return x * (1.0 / (1.0 + np.exp(-np.clip(x, -40.0, 40.0))))
-            degree = int(inputs.get("__rotom_silu_poly_degree", 11))
-            n_nodes = int(inputs.get("__rotom_silu_poly_nodes", 80))
-            q = self._silu_poly_ascending_coeffs(float(lo), float(hi), degree, n_nodes)
-            xv = np.asarray(x, dtype=np.float64)
-            xv = np.clip(xv, float(lo), float(hi))
-            qx = np.zeros_like(xv, dtype=np.float64)
-            for i, c in enumerate(q):
-                qx = qx + c * (xv**i)
-            return xv * qx
+            return eval_silu_polycall(
+                np.asarray(x, dtype=np.float64), float(lo), float(hi), inputs
+            )
         if isinstance(func, tuple) and len(func) >= 5 and func[0] == "batchnorm":
             _, mean_key, var_key, gamma_key, beta_key = func[:5]
             eps = float(func[5]) if len(func) > 5 else 1e-5

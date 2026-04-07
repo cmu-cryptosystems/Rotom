@@ -1,24 +1,22 @@
 """CIFAR ResNet-20 TensorTerm e2e tests (SiLU via ``PolyCall('silu', ...)``, affine BN).
 
-By default ``tensor_ir.eval`` uses **exact** SiLU for ``PolyCall("silu", ...)``. For Toy
-e2e checks that must survive deep graphs, tests set
-``inputs["__rotom_silu_eval_mode"] = "poly"`` so **eval and Toy** share the same
-least-squares SiLU polynomial on each site's ``[lower_bound, upper_bound]``.
+By default ``tensor_ir.eval`` and Toy both call ``util.silu_polycall_eval.eval_silu_polycall``
+with the same ``inputs`` (poly degree / nodes pinned by ``populate_resnet20_inputs``) and
+bounds from each ``PolyCall("silu", ...)``. For PyTorch comparison (exact SiLU), set
+``inputs["__rotom_silu_eval_mode"] = "exact"``.
 
-- **Stem (checkpoint):** conv + BN + SiLU poly, DaCapo weights when available; Toy vs eval
-  and dense vs PyTorch ``act(bn(conv(x)))``.
-- **Stem (random init):** same IR without checkpoint (always runs in slow suite).
-- **Layer1:** skipped by default. Set ``ROTOM_RUN_RESNET_LAYER1_SILU_E2E=1`` to run Toy vs eval
-  on the three layer1 blocks (secret input = stem ``tensor_ir.eval``) and eval vs PyTorch on the
-  full stem+layer1 graph.
-- **Full graph:** opt-in via ``ROTOM_RUN_HEAVY_E2E=1`` (memory/time).
+- **Core coverage only:** stem, stem+layer1, and full end-to-end.
+- For each of stem and stem+layer1 we keep both comparisons:
+  - Toy vs ``tensor_ir.eval`` (same SiLU poly implementation)
+  - ``tensor_ir.eval`` vs PyTorch (exact SiLU at eval)
+- **Full graph:** Toy vs ``tensor_ir.eval`` is opt-in via ``ROTOM_RUN_HEAVY_E2E=1`` (memory/time).
 """
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Literal
 
 import numpy as np
 import pytest
@@ -27,13 +25,10 @@ import torch
 from assignment.assignment import LayoutAssignment
 from backends.toy import Toy
 from benchmarks.e2e.resnet import resnet20_tensor_ir as R
-from benchmarks.e2e.resnet.resnet_data import CKPT_FILE, load_checkpoint
 from benchmarks.e2e.resnet.resnet_model import resnet20
 from benchmarks.e2e.resnet.resnet20_tensor_ir import (
     build_resnet20_silu_poly_graph,
     build_resnet20_silu_poly_graph_through_layer1,
-    build_resnet20_silu_poly_graph_to_depth,
-    build_resnet20_silu_poly_layer1_only_graph,
     populate_resnet20_inputs,
 )
 from frontends.tensor import TensorTerm
@@ -51,40 +46,36 @@ _RUN_HEAVY_E2E = os.environ.get("ROTOM_RUN_HEAVY_E2E", "").strip().lower() in {
 }
 
 
-def _load_dacapo_weights(model: torch.nn.Module, ckpt_path: str) -> None:
-    ckpt = load_checkpoint(ckpt_path)
-    if ckpt is None or not isinstance(ckpt, dict) or "state_dict" not in ckpt:
-        raise FileNotFoundError(
-            f"Missing/invalid DaCapo checkpoint at {ckpt_path} (need dict with 'state_dict')."
-        )
-    state: Any = ckpt["state_dict"]
-    if not isinstance(state, dict):
-        raise TypeError(f"Unexpected 'state_dict' type: {type(state)}")
-    if any(isinstance(k, str) and k.startswith("module.") for k in state.keys()):
-        state = {k.replace("module.", "", 1): v for k, v in state.items()}
-    model.load_state_dict(state)
+def _resnet20_stem_ir_upto(
+    inputs: dict, stop: Literal["conv", "bn", "silu"]
+) -> TensorTerm:
+    """ResNet-20 stem prefix: ``conv1`` only, ``+ bn1`` (affine), or ``+ SiLU`` poly (full stem)."""
+    h, w = 32, 32
+    t = TensorTerm.Tensor("input", [3, 32, 32], True)
+    t = R._conv_same(t, "conv1_w", inputs, 1)
+    h, w = R._spatial_hw_after_conv3(h, w, 1)
+    if stop == "conv":
+        return t
+    t = R._bn_affine_hw(t, "bn1", 16, h, w, inputs)
+    if stop == "bn":
+        return t
+    return R._silu_poly(t)
 
 
 @pytest.mark.slow
 def test_resnet20_silu_poly_stem_toy_matches_tensor_eval() -> None:
-    """Stem + BN + SiLU: Toy matches ``tensor_ir.eval`` with shared poly SiLU approximation."""
+    """Stem (conv+BN+SiLU poly): Toy matches ``tensor_ir.eval``."""
     torch.manual_seed(0)
     model = resnet20(num_classes=10)
     model.eval()
 
     inputs: dict = {}
     populate_resnet20_inputs(model, inputs)
-    inputs["__rotom_silu_eval_mode"] = "poly"
 
     x = torch.randn(3, 32, 32, dtype=torch.float64)
     inputs["input"] = x.numpy()
 
-    h, w = 32, 32
-    t = TensorTerm.Tensor("input", [3, 32, 32], True)
-    t = R._conv_same(t, "conv1_w", inputs, 1)
-    h, w = R._spatial_hw_after_conv3(h, w, 1)
-    t = R._bn_affine_hw(t, "bn1", 16, h, w, inputs)
-    t = R._silu_poly(t)
+    t = _resnet20_stem_ir_upto(inputs, "silu")
 
     args = get_default_args()
     args.backend = "toy"
@@ -99,66 +90,38 @@ def test_resnet20_silu_poly_stem_toy_matches_tensor_eval() -> None:
     check_results(t, inputs, kernel, backend_results, 0, args)
 
 
-@pytest.mark.e2e
 @pytest.mark.slow
-def test_resnet20_silu_poly_stem_ckpt_matches_tensor_eval_and_pytorch() -> None:
-    """Stem + SiLU poly: Toy and ``tensor_ir.eval`` vs PyTorch (DaCapo checkpoint)."""
-    if not os.path.exists(CKPT_FILE):
-        pytest.skip(f"Missing checkpoint at {CKPT_FILE}")
-
+def test_resnet20_silu_poly_stem_tensor_eval_matches_pytorch() -> None:
+    """Stem (SiLU poly IR): ``tensor_ir.eval`` matches PyTorch (exact SiLU at eval)."""
     torch.manual_seed(0)
     model = resnet20(num_classes=10)
-    _load_dacapo_weights(model, CKPT_FILE)
     model.eval()
     model.double()
 
     inputs: dict = {}
     populate_resnet20_inputs(model, inputs)
+    inputs["__rotom_silu_eval_mode"] = "exact"
 
     x = torch.randn(1, 3, 32, 32, dtype=torch.float64)
     inputs["input"] = x[0].cpu().numpy()
 
-    h, w = 32, 32
-    t = TensorTerm.Tensor("input", [3, 32, 32], True)
-    t = R._conv_same(t, "conv1_w", inputs, 1)
-    h, w = R._spatial_hw_after_conv3(h, w, 1)
-    t = R._bn_affine_hw(t, "bn1", 16, h, w, inputs)
-    t = R._silu_poly(t)
+    t = _resnet20_stem_ir_upto(inputs, "silu")
+    dense = np.asarray(t.eval(inputs))
 
-    args = get_default_args()
-    args.backend = "toy"
-    args.n = _RESNET_TOY_N
-    args.rolls = True
-    args.net = "lan"
-    args.benchmark = "resnet20_silu_poly_stem"
-
-    kernel = LayoutAssignment(t, args).run()
-    circuit_ir = Lower(kernel).run()
-    backend_results = Toy(circuit_ir, inputs, args).run()
-    check_results(t, inputs, kernel, backend_results, 0, args)
-
-    dense = t.eval(inputs)
     with torch.no_grad():
         pt_stem = model.act_conv1(model.bn1(model.conv1(x)))[0].cpu().numpy()
+
     assert dense.shape == pt_stem.shape
     assert np.allclose(dense, pt_stem, rtol=1e-9, atol=1e-7)
 
 
 @pytest.mark.slow
-@pytest.mark.skip(
-    reason=(
-        "Layer1 SiLU e2e opt-in; set ROTOM_RUN_RESNET_LAYER1_SILU_E2E=1 to run "
-        "(Toy vs eval on layer1-only IR; PyTorch check on full stem+layer1)."
-    ),
-)
-def test_resnet20_silu_poly_layer1_toy_matches_tensor_eval() -> None:
-    """Layer1 only (three BasicBlocks): Toy matches ``tensor_ir.eval``.
+def test_resnet20_silu_poly_stem_layer1_fused_toy_matches_tensor_eval() -> None:
+    """Fused stem + all ``layer1`` blocks: Toy matches ``tensor_ir.eval``.
 
-    Activations are ``stem.eval`` on the same ``inputs`` (stem is covered by
-    ``test_resnet20_silu_poly_stem_toy_matches_tensor_eval``). A single IR that
-    fuses stem with layer1 tickles a Toy/lowering mismatch on the first layer1
-    conv input layout; compiling layer1 as its own graph avoids that while still
-    exercising every layer1 tensor op (conv, BN, SiLU poly, residual add).
+    One IR from ``input`` through three BasicBlocks needs channel dim 0 adjacent to leading
+    ``[G:*]`` after replication/rolls, or the first layer1 conv mismatches Toy. A small
+    ``channel_gap_align_weight`` encodes that packing preference in layout assignment.
     """
     torch.manual_seed(0)
     model = resnet20(num_classes=10)
@@ -166,21 +129,18 @@ def test_resnet20_silu_poly_layer1_toy_matches_tensor_eval() -> None:
 
     inputs: dict = {}
     populate_resnet20_inputs(model, inputs)
-    inputs["__rotom_silu_eval_mode"] = "poly"
-
     x = torch.randn(3, 32, 32, dtype=torch.float64)
     inputs["input"] = x.numpy()
 
-    stem_ir = build_resnet20_silu_poly_graph_to_depth(inputs, "stem")
-    inputs["layer1_only_in"] = np.asarray(stem_ir.eval(inputs), dtype=np.float64)
-    tensor_ir = build_resnet20_silu_poly_layer1_only_graph(inputs)
+    tensor_ir = build_resnet20_silu_poly_graph_through_layer1(inputs)
 
     args = get_default_args()
     args.backend = "toy"
     args.n = _RESNET_TOY_N
     args.rolls = True
     args.net = "lan"
-    args.benchmark = "resnet20_silu_poly_l1"
+    args.benchmark = "resnet20_silu_stem_layer1_fused"
+    args.channel_gap_align_weight = 0.5
 
     kernel = LayoutAssignment(tensor_ir, args).run()
     circuit_ir = Lower(kernel).run()
@@ -198,6 +158,7 @@ def test_resnet20_silu_poly_layer1_tensor_eval_matches_pytorch() -> None:
 
     inputs: dict = {}
     populate_resnet20_inputs(model, inputs)
+    inputs["__rotom_silu_eval_mode"] = "exact"
 
     x = torch.randn(1, 3, 32, 32, dtype=torch.float64)
     inputs["input"] = x[0].cpu().numpy()

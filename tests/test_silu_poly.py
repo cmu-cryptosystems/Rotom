@@ -1,8 +1,10 @@
 """SiLU-related plaintext tests.
 
-- **PolyCall(\"silu\", ...)**: Rotom's tensor eval and Toy backend use *exact* SiLU
-  (clipped sigmoid), not a truncated polynomial. Bounds on `poly_call` are for the
-  HE / lowering contract; they are not enforced in plaintext eval.
+- **PolyCall(\"silu\", ...)**: By default ``tensor_ir.eval`` and Toy use the same
+  least-squares polynomial on ``[lower_bound, upper_bound]`` (see
+  ``util.silu_polycall_eval``). ResNet e2e calls :func:`populate_resnet20_inputs`, which
+  pins poly degree / node count in ``inputs`` so eval and Toy cannot drift. Set
+  ``inputs[\"__rotom_silu_eval_mode\"] = \"exact\"`` to match reference SiLU (e.g. PyTorch).
 
 - **Coefficient polynomial** (`TensorEvaluator._eval_poly` with a list of coeffs):
   Evaluates ``sum_i c_i x^i`` in the **native** coordinate `x` (same ascending
@@ -17,11 +19,44 @@ import pytest
 from backends.toy import Toy
 from frontends.tensor import TensorTerm
 from frontends.tensor_evaluator import TensorEvaluator
+from util.silu_polycall_eval import (
+    DEFAULT_SILU_POLY_DEGREE,
+    DEFAULT_SILU_POLY_NODES,
+    SILU_POLY_DEGREE_KEY,
+    SILU_POLY_NODES_KEY,
+    apply_silu_poly_approx,
+)
+
+
+def test_populate_resnet20_inputs_pins_silu_poly_hyperparams() -> None:
+    from benchmarks.e2e.resnet.resnet_model import resnet20
+    from benchmarks.e2e.resnet.resnet20_tensor_ir import populate_resnet20_inputs
+
+    model = resnet20(num_classes=10)
+    inputs: dict = {}
+    populate_resnet20_inputs(model, inputs)
+    assert inputs[SILU_POLY_DEGREE_KEY] == DEFAULT_SILU_POLY_DEGREE
+    assert inputs[SILU_POLY_NODES_KEY] == DEFAULT_SILU_POLY_NODES
 
 
 def _reference_silu(x: np.ndarray) -> np.ndarray:
     x = np.asarray(x, dtype=np.float64)
     return x * (1.0 / (1.0 + np.exp(-np.clip(x, -40.0, 40.0))))
+
+
+def test_tensor_eval_poly_call_silu_default_matches_apply_silu_poly_approx():
+    """Default ``PolyCall("silu")`` eval is the shared polynomial (Toy-lowering semantics)."""
+    rng = np.random.RandomState(7)
+    x = rng.standard_normal((4, 4)).astype(np.float64)
+    lo, hi = -3.0, 5.0
+    name = "x"
+    term = TensorTerm.Tensor(name, list(x.shape), True).poly_call(
+        "silu", lower_bound=lo, upper_bound=hi
+    )
+    inputs = {name: x}
+    out = term.eval(inputs)
+    want = apply_silu_poly_approx(x, lo, hi, degree=11, n_nodes=80)
+    np.testing.assert_allclose(out, want, rtol=1e-14, atol=1e-14)
 
 
 @pytest.mark.parametrize(
@@ -40,7 +75,7 @@ def test_tensor_eval_poly_call_silu_matches_reference(shape):
     term = TensorTerm.Tensor(name, list(x.shape), True).poly_call(
         "silu", lower_bound=-8.0, upper_bound=8.0
     )
-    out = term.eval({name: x})
+    out = term.eval({name: x, "__rotom_silu_eval_mode": "exact"})
     expected = _reference_silu(x)
     np.testing.assert_allclose(out, expected, rtol=1e-14, atol=1e-14)
 
@@ -55,7 +90,7 @@ def test_tensor_eval_silu_edge_scalars(value):
     term = TensorTerm.Tensor(name, [], True).poly_call(
         "silu", lower_bound=-10.0, upper_bound=10.0
     )
-    out = term.eval({name: x})
+    out = term.eval({name: x, "__rotom_silu_eval_mode": "exact"})
     expected = _reference_silu(x)
     np.testing.assert_allclose(out, expected, rtol=1e-14, atol=1e-14)
 
@@ -63,7 +98,7 @@ def test_tensor_eval_silu_edge_scalars(value):
 def test_toy_poly_silu_matches_reference():
     # _apply_poly_to_vector only needs inputs for batchnorm; use bare instance.
     toy = object.__new__(Toy)
-    toy.inputs = {}
+    toy.inputs = {"__rotom_silu_eval_mode": "exact"}
     vec = np.array([-3.0, 0.0, 2.5, -40.0, 40.0], dtype=np.float64)
     got = toy._apply_poly_to_vector(vec, "silu")
     np.testing.assert_allclose(got, _reference_silu(vec), rtol=1e-14, atol=1e-14)
