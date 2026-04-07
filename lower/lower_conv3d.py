@@ -1,3 +1,5 @@
+import numpy as np
+
 from ir.analysis.shape import Shape
 from ir.dim import DimType
 from ir.he import HEOp, HETerm
@@ -5,6 +7,7 @@ from ir.layout import Layout
 from lower.layout_cts import LayoutCiphertexts, create_layout_without_dims
 from lower.lower_util import find_sum_dim, rotate_and_sum
 from util.layout_util import (
+    _get_apply_layout_plan,
     convert_layout_to_mask,
     get_cts_by_dim,
     get_dim_indices,
@@ -12,6 +15,88 @@ from util.layout_util import (
     get_segment,
 )
 from util.shape_util import get_term_shape
+
+
+def _slot_mask_conv3d_same_stride1(
+    *,
+    base_indices_ct,
+    rot_amt: int,
+    fd: int,
+    fh: int,
+    fw: int,
+    pad_front: int,
+    pad_top: int,
+    pad_left: int,
+    din: int,
+    hin: int,
+    win: int,
+    n: int,
+) -> list[int]:
+    """Per-slot mask for ``same`` conv3d, stride 1 (mirrors ``_slot_mask_conv2d_same_stride1``).
+
+    Toy rotation: ``out[s] = vec[(s + rot_amt) % n]``. Zero slots where the rotated
+    source would read an out-of-bounds neighbor or map outside the output box.
+    """
+    if (
+        isinstance(base_indices_ct, np.ndarray)
+        and base_indices_ct.ndim == 2
+        and base_indices_ct.shape[0] == n
+        and base_indices_ct.shape[1] >= 4
+        and base_indices_ct.dtype == np.int32
+    ):
+        idx = np.arange(n, dtype=np.int64)
+        src = (idx + int(rot_amt)) % n
+        rows = base_indices_ct[src].astype(np.int64, copy=False)
+        c0, du, hu, wu = rows[:, 0], rows[:, 1], rows[:, 2], rows[:, 3]
+        bad = (c0 < 0) | (du < 0) | (hu < 0) | (wu < 0)
+        bad |= (du >= din) | (hu >= hin) | (wu >= win)
+        o_d = du + int(pad_front) - int(fd)
+        o_h = hu + int(pad_top) - int(fh)
+        o_w = wu + int(pad_left) - int(fw)
+        bad |= (
+            (o_d < 0)
+            | (o_d >= din)
+            | (o_h < 0)
+            | (o_h >= hin)
+            | (o_w < 0)
+            | (o_w >= win)
+        )
+        return np.logical_not(bad).astype(np.int32).tolist()
+
+    mask: list[int] = [1] * n
+    for s in range(n):
+        src = (s + int(rot_amt)) % n
+        if src < 0 or src >= len(base_indices_ct):
+            mask[s] = 0
+            continue
+        idx = base_indices_ct[src]
+        if isinstance(idx, np.ndarray):
+            if idx.shape[0] < 4:
+                mask[s] = 0
+                continue
+            if int(idx[0]) < 0 or int(idx[1]) < 0 or int(idx[2]) < 0 or int(idx[3]) < 0:
+                mask[s] = 0
+                continue
+            du, hu, wu = int(idx[1]), int(idx[2]), int(idx[3])
+        else:
+            if not isinstance(idx, (list, tuple)) or len(idx) < 4:
+                mask[s] = 0
+                continue
+            if any(idx[i] is None for i in range(4)):
+                mask[s] = 0
+                continue
+            du, hu, wu = int(idx[1]), int(idx[2]), int(idx[3])
+        if du < 0 or du >= din or hu < 0 or hu >= hin or wu < 0 or wu >= win:
+            mask[s] = 0
+            continue
+        o_d = du + pad_front - fd
+        o_h = hu + pad_top - fh
+        o_w = wu + pad_left - fw
+        if o_d < 0 or o_d >= din or o_h < 0 or o_h >= hin or o_w < 0 or o_w >= win:
+            mask[s] = 0
+        else:
+            mask[s] = 1
+    return mask
 
 
 def lower_conv3d(env, kernel):
@@ -55,40 +140,56 @@ def lower_conv3d(env, kernel):
     rot_offset = -pad_front * d_stride - pad_top * h_stride - pad_left * w_stride
 
     k_d, k_h, k_w = b_shape[2], b_shape[3], b_shape[4]
+    _stride = kernel.layout.term.cs[2]
+    _a_shape = get_term_shape(kernel.cs[0].layout.term)
+
     rot_amts = []
     for i in range(k_d):
         for j in range(k_h):
             for k in range(k_w):
                 rot_amts.append(i * d_stride + j * h_stride + k * w_stride + rot_offset)
 
-    filter_masks = []
-    for i in range(k_d):
-        for j in range(k_h):
-            for k in range(k_w):
-                rot_d = i * d_stride
-                rot_h = j * h_stride
-                rot_w = k * w_stride
-                mask = [1] * kernel.cs[0].layout.n
+    filter_masks: list[list[int]] = []
+    base_by_ct: list | None = None
+    din = hin = win = 0
+    if int(_stride) != 1:
+        for i in range(k_d):
+            for j in range(k_h):
+                for k in range(k_w):
+                    rot_d = i * d_stride
+                    rot_h = j * h_stride
+                    rot_w = k * w_stride
+                    mask = [1] * kernel.cs[0].layout.n
 
-                segment_d = d_extent * d_stride
-                for loop in range(kernel.cs[0].layout.n // segment_d):
-                    for idx in range(segment_d):
-                        if not 0 <= idx + rot_d - (pad_front * d_stride) < segment_d:
-                            mask[loop * segment_d + idx] = 0
+                    segment_d = d_extent * d_stride
+                    for loop in range(kernel.cs[0].layout.n // segment_d):
+                        for idx in range(segment_d):
+                            if (
+                                not 0
+                                <= idx + rot_d - (pad_front * d_stride)
+                                < segment_d
+                            ):
+                                mask[loop * segment_d + idx] = 0
 
-                segment_h = h_extent * h_stride
-                for loop in range(kernel.cs[0].layout.n // segment_h):
-                    for idx in range(segment_h):
-                        if not 0 <= idx + rot_h - (pad_top * h_stride) < segment_h:
-                            mask[loop * segment_h + idx] = 0
+                    segment_h = h_extent * h_stride
+                    for loop in range(kernel.cs[0].layout.n // segment_h):
+                        for idx in range(segment_h):
+                            if not 0 <= idx + rot_h - (pad_top * h_stride) < segment_h:
+                                mask[loop * segment_h + idx] = 0
 
-                segment_w = w_extent * w_stride
-                for loop in range(kernel.cs[0].layout.n // segment_w):
-                    for idx in range(segment_w):
-                        if not 0 <= idx + rot_w - (pad_left * w_stride) < segment_w:
-                            mask[loop * segment_w + idx] = 0
+                    segment_w = w_extent * w_stride
+                    for loop in range(kernel.cs[0].layout.n // segment_w):
+                        for idx in range(segment_w):
+                            if not 0 <= idx + rot_w - (pad_left * w_stride) < segment_w:
+                                mask[loop * segment_w + idx] = 0
 
-                filter_masks.append(mask)
+                    filter_masks.append(mask)
+    else:
+        layout_a = kernel.cs[0].layout
+        layout_len = max(len(layout_a), layout_a.n)
+        plan = _get_apply_layout_plan(layout_a, 4, layout_len=layout_len)
+        base_by_ct = plan["base_indices_by_cts"]
+        din, hin, win = int(_a_shape[1]), int(_a_shape[2]), int(_a_shape[3])
 
     b_num_cts = kernel.cs[1].layout.num_ct()
     b_ct_dims = kernel.cs[1].layout.ct_dims
@@ -117,10 +218,42 @@ def lower_conv3d(env, kernel):
             else 0
         )
         filter_idx = f_d * flat_hw + f_h * flat_w + f_w
-        masks.append(filter_masks[filter_idx])
+        rot_amt = rot_amts[filter_idx]
+        a_idx = min(ct_idx, len(a_cs) - 1)
+        if int(_stride) == 1:
+            assert base_by_ct is not None
+            m = _slot_mask_conv3d_same_stride1(
+                base_indices_ct=base_by_ct[a_idx],
+                rot_amt=rot_amt,
+                fd=int(f_d),
+                fh=int(f_h),
+                fw=int(f_w),
+                pad_front=int(pad_front),
+                pad_top=int(pad_top),
+                pad_left=int(pad_left),
+                din=din,
+                hin=hin,
+                win=win,
+                n=kernel.cs[0].layout.n,
+            )
+        else:
+            m = filter_masks[filter_idx]
+        masks.append(m)
 
-    kernel.cs[1].layout.term.cs.append(masks)
-    kernel.cs[1].layout.term.cs.append(rot_amts)
+    if len(kernel.cs[1].layout.term.cs) <= 4:
+        kernel.cs[1].layout.term.cs.append(masks)
+    if len(kernel.cs[1].layout.term.cs) <= 5:
+        kernel.cs[1].layout.term.cs.append(rot_amts)
+
+    _mask_term_by_key: dict[bytes, HETerm] = {}
+    mask_terms: list[HETerm] = []
+    for m in masks:
+        k = bytes(m)
+        t = _mask_term_by_key.get(k)
+        if t is None:
+            t = HETerm.mask([m])
+            _mask_term_by_key[k] = t
+        mask_terms.append(t)
 
     dim_indices = get_dim_indices(b_ct_dims)
     dim_map = get_dim_map(b_ct_dims)
@@ -134,7 +267,9 @@ def lower_conv3d(env, kernel):
         filter_idx = f_d * flat_hw + f_h * flat_w + f_w
         rot_amt = rot_amts[filter_idx]
         a_idx = min(b_idx, len(a_cs) - 1)
-        cts[b_idx] = (a_cs[a_idx] << rot_amt) * b_ct
+        a_rot = a_cs[a_idx] << rot_amt
+        a_masked = a_rot * mask_terms[b_idx]
+        cts[b_idx] = a_masked * b_ct
 
     b_layout_cts = LayoutCiphertexts(layout=kernel.cs[1].layout, cts=cts)
     filter_ct_dims = [

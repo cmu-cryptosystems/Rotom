@@ -575,7 +575,8 @@ def _ct_index_rows_to_values(pt_tensor, ct_indices):
         coords = tuple(safe[:, j] for j in range(pt_tensor_ndim))
         vals = np.asarray(pt_tensor[coords], dtype=np.float64)
         vals[bad] = 0.0
-        return [_normalize_scalar_from_tensor(v) for v in vals]
+        # One vectorized copy to Python floats (faster than per-element normalize).
+        return vals.tolist()
 
     # Non-ndarray or empty: preserve exact legacy behavior.
     out = []
