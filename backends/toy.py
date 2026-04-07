@@ -8,6 +8,7 @@ from frontends.tensor import TensorOp
 from ir.he import HEOp, HETerm
 from ir.kernel import KernelOp
 from util.layout_util import *
+from util.silu_polycall_eval import eval_silu_polycall
 
 
 def _collect_het_nodes(root: HETerm) -> set[HETerm]:
@@ -294,13 +295,9 @@ class Toy:
         elif poly_func == "relu_exact" or poly_func == "relu":
             return np.where(vec > 0, vec, 0.0)
         elif poly_func == "silu":
-            # Plaintext exact SiLU (same as default ``TensorEvaluator`` for ``PolyCall("silu")``).
-            # Optional polynomialized mode for tests that want backend+eval agreement with an
-            # explicit SiLU polynomial approximation:
-            #   inputs["__rotom_silu_eval_mode"] == "poly"
-            x_clip = np.clip(vec, -40.0, 40.0)
-            sig = 1.0 / (1.0 + np.exp(-x_clip))
-            return vec * sig
+            # Bounds are only on the lowered ``POLY_CALL`` path; this helper is used without
+            # metadata in a few tests — use the same default interval as legacy string ``silu``.
+            return eval_silu_polycall(vec, -8.0, 8.0, getattr(self, "inputs", None))
         else:
             raise NotImplementedError(
                 f"Poly func {poly_func!r} not implemented for eval"
@@ -312,35 +309,11 @@ class Toy:
         metadata = term.cs[1]
         poly_func = metadata.get("poly_func", None)
         poly_channel = metadata.get("poly_channel", None)
-        if (
-            poly_func == "silu"
-            and self.inputs.get("__rotom_silu_eval_mode", "exact") == "poly"
-        ):
+        if poly_func == "silu":
             lo = float(metadata.get("lower_bound", -8.0))
             hi = float(metadata.get("upper_bound", 8.0))
-            degree = int(self.inputs.get("__rotom_silu_poly_degree", 11))
-            n_nodes = int(self.inputs.get("__rotom_silu_poly_nodes", 80))
-            if degree < 1:
-                raise ValueError("silu poly degree must be >= 1")
-            # silu(x) ≈ x * q(x) on [lo, hi] (match TensorEvaluator._silu_poly_ascending_coeffs).
-            j = np.arange(n_nodes, dtype=np.float64) + 0.5
-            t = np.cos(np.pi * j / n_nodes)
-            xs = 0.5 * (hi - lo) * t + 0.5 * (hi + lo)
-            ys = xs * (1.0 / (1.0 + np.exp(-np.clip(xs, -40.0, 40.0))))
-            q_deg = degree - 1
-            ratio = np.divide(
-                ys,
-                xs,
-                out=np.full_like(ys, 0.5),
-                where=np.abs(xs) > 1e-15,
-            )
-            high_to_low = np.polyfit(xs, ratio, q_deg)
-            q = [float(c) for c in high_to_low[::-1]]
-            xv = np.clip(self._as_np_vec(vec).astype(np.float64), lo, hi)
-            qx = np.zeros_like(xv, dtype=np.float64)
-            for i, c in enumerate(q):
-                qx = qx + c * (xv**i)
-            return xv * qx
+            vec64 = self._as_np_vec(vec).astype(np.float64)
+            return eval_silu_polycall(vec64, lo, hi, self.inputs)
         return self._apply_poly_to_vector(vec, poly_func, poly_channel=poly_channel)
 
     def eval_rescale(self, term):

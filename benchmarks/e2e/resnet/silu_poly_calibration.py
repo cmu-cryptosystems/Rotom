@@ -34,7 +34,7 @@ def silu_poly_ascending_coeffs(
 ) -> List[float]:
     """Ascending coeffs for q in ``silu(x) ≈ x * q(x)`` (total degree ``degree``).
 
-    See ``TensorEvaluator._silu_poly_ascending_coeffs`` for rationale (``f(0)=0``).
+    See ``util.silu_polycall_eval.silu_poly_ascending_coeffs`` for rationale (``f(0)=0``).
     """
     if degree < 1:
         raise ValueError("degree must be >= 1")

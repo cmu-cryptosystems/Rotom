@@ -16,6 +16,7 @@ The module works closely with the kernel IR to generate optimized HE circuits
 while maintaining correctness of the computation graph semantics.
 """
 
+import os
 from copy import deepcopy as copy
 
 # import frontend terms
@@ -56,6 +57,11 @@ from util.fuzz import Fuzz
 
 # import utility components
 from util.kernel_util import get_cs_op_kernels
+from util.layout_simplicity import (
+    channel_dim_leading_gap_alignment_penalty,
+    embedded_secret_3d_channel_gap_penalty,
+    layout_simplicity_penalty,
+)
 
 
 class LayoutAssignment:
@@ -78,6 +84,10 @@ class LayoutAssignment:
             including network type, BSGS flags, backend selection etc. If None, default values
             will be used (n=4096, rolls=False, net="lan", strassens=False, backend="toy",
             fuzz=False, fuzz_result=False, fn="default").
+
+        ``args.layout_simplicity_weight`` (or env ``ROTOM_LAYOUT_SIMPLICITY_WEIGHT`` if
+        the weight is left at ``0``) adds a small bias toward layouts with fewer
+        ``[G:*]`` slot groups and fewer ciphertext axes (see ``util.layout_simplicity``).
     """
 
     def __init__(self, comp, args=None):
@@ -103,6 +113,22 @@ class LayoutAssignment:
         )
         self.fuzzer = Fuzz(self.n)
         self.fn = args.fn if args and hasattr(args, "fn") else "default"
+
+        self.layout_simplicity_weight = 0.0
+        if args is not None and hasattr(args, "layout_simplicity_weight"):
+            self.layout_simplicity_weight = float(args.layout_simplicity_weight)
+        if self.layout_simplicity_weight == 0.0:
+            ev = os.environ.get("ROTOM_LAYOUT_SIMPLICITY_WEIGHT", "").strip()
+            if ev:
+                self.layout_simplicity_weight = float(ev)
+
+        self.channel_gap_align_weight = 0.0
+        if args is not None and hasattr(args, "channel_gap_align_weight"):
+            self.channel_gap_align_weight = float(args.channel_gap_align_weight)
+        if self.channel_gap_align_weight == 0.0:
+            ev = os.environ.get("ROTOM_CHANNEL_GAP_ALIGN_WEIGHT", "").strip()
+            if ev:
+                self.channel_gap_align_weight = float(ev)
 
         self.secret = Secret(self.comp)
         self.shape = Shape(self.comp)
@@ -345,6 +371,19 @@ class LayoutAssignment:
                 cs_shapes.append(self.shape.shapes[cs_term])
         return cs_shapes
 
+    def _child_kernel_sort_key(self, cs_term: TensorTerm, kernel: Kernel) -> tuple:
+        """Primary: cached subtree cost. Tie-break: CHW channel-after-``G`` alignment."""
+        ml = dimension_merging(kernel.layout)
+        cost = self.kernel_costs[cs_term][ml]
+        gap_pen = 0.0
+        if not os.environ.get("ROTOM_DISABLE_CHANNEL_GAP_TIEBREAK", "").strip():
+            if cs_term.op == TensorOp.TENSOR and self.secret.secret.get(cs_term, False):
+                sh = self.shape.padded_shapes.get(cs_term)
+                if sh is not None and len([x for x in sh if x > 1]) == 3:
+                    gap_pen = channel_dim_leading_gap_alignment_penalty(ml)
+        ls = ml.layout_str() if hasattr(ml, "layout_str") else str(ml)
+        return (cost, gap_pen, ls)
+
     def get_cs_kernels(self, term):
         """Gets the child kernels for a tensor term based on its operation type.
 
@@ -378,19 +417,8 @@ class LayoutAssignment:
                 a = self.get_last_kernels(self.kernels[term.cs[0]].values())
                 b = self.get_last_kernels(self.kernels[term.cs[1]].values())
 
-                # sort by cost
-                a = sorted(
-                    a,
-                    key=lambda x: self.kernel_costs[term.cs[0]][
-                        dimension_merging(x.layout)
-                    ],
-                )
-                b = sorted(
-                    b,
-                    key=lambda x: self.kernel_costs[term.cs[1]][
-                        dimension_merging(x.layout)
-                    ],
-                )
+                a = sorted(a, key=lambda x: self._child_kernel_sort_key(term.cs[0], x))
+                b = sorted(b, key=lambda x: self._child_kernel_sort_key(term.cs[1], x))
 
                 return [a, b]
             case (
@@ -609,17 +637,18 @@ class LayoutAssignment:
             cs_costs = 0
             for cs_kernel in cs_kernels:
                 cs_term = term.cs[cs_kernel.cs[0]]
-
-                if cs_kernel.layout in self.kernel_costs[cs_term]:
-                    cs_costs += self.kernel_costs[cs_term][
-                        dimension_merging(cs_kernel.layout)
-                    ]
+                merged_cs_layout = dimension_merging(cs_kernel.layout)
+                if cs_term not in self.kernel_costs:
+                    self.kernel_costs[cs_term] = {}
+                costs_for_cs = self.kernel_costs[cs_term]
+                # Keys are always merged layouts (see stores below and in this loop).
+                if merged_cs_layout in costs_for_cs:
+                    cs_costs += costs_for_cs[merged_cs_layout]
                 else:
                     cost = KernelCost(cs_kernel, self.network).total_cost()
-                    self.kernel_costs[cs_term][dimension_merging(cs_kernel.layout)] = (
-                        cost
-                    )
-                    cs_costs += cost
+                    # Do not overwrite an existing subtree total if another path registered it.
+                    costs_for_cs.setdefault(merged_cs_layout, cost)
+                    cs_costs += costs_for_cs[merged_cs_layout]
 
             cs_kernel_list = []
             for cs_kernel in cs_kernels:
@@ -631,6 +660,26 @@ class LayoutAssignment:
 
             # get total kernel cost
             kernel_cost = KernelCost(kernel, self.network).total_cost() + cs_costs
+            if self.layout_simplicity_weight:
+                kernel_cost += (
+                    self.layout_simplicity_weight
+                    * layout_simplicity_penalty(kernel.layout)
+                )
+            if self.channel_gap_align_weight:
+                if term.op == TensorOp.TENSOR and self.secret.secret.get(term, False):
+                    sh = self.shape.padded_shapes.get(term)
+                    if sh is not None and len([x for x in sh if x > 1]) == 3:
+                        kernel_cost += self.channel_gap_align_weight * (
+                            channel_dim_leading_gap_alignment_penalty(kernel.layout)
+                        )
+                elif term.op != TensorOp.TENSOR:
+                    kernel_cost += self.channel_gap_align_weight * (
+                        embedded_secret_3d_channel_gap_penalty(
+                            kernel,
+                            self.secret.secret,
+                            self.shape.padded_shapes,
+                        )
+                    )
             kernel_layout = dimension_merging(kernel.layout)
 
             # initialize
@@ -656,8 +705,29 @@ class LayoutAssignment:
         """
         assert term in self.kernels and term in self.kernel_costs
         assert self.kernels[term] and self.kernel_costs[term]
+
+        def _search_sort_key(kv: tuple) -> tuple:
+            layout_key, cost = kv
+            gap_pen = 0.0
+            if not os.environ.get("ROTOM_DISABLE_CHANNEL_GAP_TIEBREAK", "").strip():
+                t = getattr(layout_key, "term", None)
+                if (
+                    t is not None
+                    and t.op == TensorOp.TENSOR
+                    and self.secret.secret.get(t, False)
+                ):
+                    sh = self.shape.padded_shapes.get(t)
+                    if sh is not None and len([x for x in sh if x > 1]) == 3:
+                        gap_pen = channel_dim_leading_gap_alignment_penalty(layout_key)
+            ls = (
+                layout_key.layout_str()
+                if hasattr(layout_key, "layout_str")
+                else str(layout_key)
+            )
+            return (cost, gap_pen, ls)
+
         best_layout, _best_cost = min(
-            self.kernel_costs[term].items(), key=lambda kv: kv[1]
+            self.kernel_costs[term].items(), key=_search_sort_key
         )
         return self.kernels[term][best_layout]
 

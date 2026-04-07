@@ -1,7 +1,11 @@
 """TensorTerm IR for CIFAR ResNet-20 (SiLU via ``poly_call('silu', ...)``).
 
-``resnet_model.resnet20`` uses ``nn.SiLU``; dense ``tensor_ir.eval`` evaluates that call as
-exact SiLU (see ``TensorEvaluator``). Batch norm is plaintext ``x * scale + shift``. Global pooling
+``resnet_model.resnet20`` uses ``nn.SiLU``; by default ``tensor_ir.eval`` and Toy both call
+``util.silu_polycall_eval.eval_silu_polycall`` with the same ``inputs`` dict, bounds from each
+``PolyCall("silu", lo, hi)``, and poly degree/node count pinned by
+:func:`populate_resnet20_inputs`. Set ``inputs["__rotom_silu_eval_mode"] = "exact"`` to match
+PyTorch's exact SiLU. Batch norm
+is plaintext ``x * scale + shift``. Global pooling
 uses ``sum`` over H/W; ``fc`` weights are scaled by ``1/64`` so ``sum`` matches PyTorch
 ``avg_pool2d`` + ``Linear``.
 
@@ -16,6 +20,12 @@ from typing import Literal
 import numpy as np
 import torch.nn as nn
 from frontends.tensor import TensorTerm
+from util.silu_polycall_eval import (
+    DEFAULT_SILU_POLY_DEGREE,
+    DEFAULT_SILU_POLY_NODES,
+    SILU_POLY_DEGREE_KEY,
+    SILU_POLY_NODES_KEY,
+)
 
 
 def option_a_shortcut_weights(in_ch: int, out_ch: int, planes: int) -> np.ndarray:
@@ -93,7 +103,11 @@ def _fill_basic_block(
 
 
 def populate_resnet20_inputs(model: nn.Module, inputs: dict) -> None:
-    """Fill ``inputs`` with numpy weights for the ResNet-20 TensorTerm builders."""
+    """Fill ``inputs`` with numpy weights for the ResNet-20 TensorTerm builders.
+
+    Also sets ``SILU_POLY_DEGREE_KEY`` / ``SILU_POLY_NODES_KEY`` so ``tensor_ir.eval`` and
+    Toy use the same SiLU polynomial fit (see ``util.silu_polycall_eval``).
+    """
     inputs.clear()
     _fill_conv_weights(inputs, "conv1_w", model.conv1)
     _fill_bn_affine(inputs, "bn1", model.bn1)
@@ -117,9 +131,12 @@ def populate_resnet20_inputs(model: nn.Module, inputs: dict) -> None:
     for i in range(1, 3):
         _fill_basic_block(inputs, model.layer3[i], f"l3_{i}", 64)
 
+    inputs[SILU_POLY_DEGREE_KEY] = DEFAULT_SILU_POLY_DEGREE
+    inputs[SILU_POLY_NODES_KEY] = DEFAULT_SILU_POLY_NODES
+
 
 def _silu_poly(x: TensorTerm) -> TensorTerm:
-    # POLY_CALL("silu", …) for lowering; ``TensorEvaluator`` / Toy use exact SiLU for this name.
+    # POLY_CALL("silu", …) for lowering; eval/Toy default to the shared poly on [-20, 20].
     return x.poly_call("silu", -20.0, 20.0)
 
 
@@ -180,10 +197,9 @@ def build_resnet20_stem_plus_l1_0_block_graph(inputs: dict) -> TensorTerm:
     ``l1_0``. Expects ``populate_resnet20_inputs`` (or the same weight keys) and a
     secret ``"input"`` tensor ``[3, 32, 32]`` in ``inputs``.
 
-    ``tensor_ir.eval`` uses exact SiLU for the ``"silu"`` poly name; the Toy backend
-    uses a clipped polynomial, so stacked SiLUs do not match ``eval`` within the
-    usual 1e-2 gate—use for eval vs PyTorch checks or opt-in heavy e2e (see
-    ``tests/e2e/resnet/test_resnet_silu.py``).
+    With default ``poly`` SiLU mode, ``tensor_ir.eval`` matches Toy on this graph.
+    For eval vs PyTorch (exact SiLU), set ``inputs["__rotom_silu_eval_mode"] = "exact"``
+    (see ``tests/e2e/resnet/test_resnet_silu.py``).
     """
     h, w = 32, 32
     x = TensorTerm.Tensor("input", [3, 32, 32], True)
