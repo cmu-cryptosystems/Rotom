@@ -19,4 +19,5 @@ def get_default_args() -> Namespace:
         fn="",
         benchmark="",
         layout_simplicity_weight=0.0,
+        channel_gap_align_weight=0.0,
     )
