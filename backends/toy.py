@@ -86,6 +86,10 @@ def _toy_post_order(root: HETerm) -> list[HETerm]:
     return order
 
 
+# (lo, hi, degree, n_nodes) -> ascending q coefficients for silu poly branch
+_SILU_POLY_Q_CACHE: dict[tuple[float, float, int, int], list[float]] = {}
+
+
 def _packed_ct_lists_to_float64(packed_cts: list) -> np.ndarray:
     """One allocation: ``apply_layout`` / ``apply_punctured_layout`` output (list of slot lists) → ``float64``.
 
@@ -346,7 +350,9 @@ class Toy:
                     self.env[term] = self.eval_pack(term)
                 return self.env[term]
             case HEOp.PUNCTURED_PACK:
-                return self.eval_pack_punctured(term)
+                if term not in self.env:
+                    self.env[term] = self.eval_pack_punctured(term)
+                return self.env[term]
             case HEOp.CS_PACK:
                 return self.eval_cs_pack(term)
             case HEOp.CONST:

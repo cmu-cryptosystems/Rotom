@@ -34,6 +34,25 @@ def _slot_mask_conv2d_same_stride1(
     Zero slots where the source slot would supply an out-of-bounds (implicit) neighbor
     for some output cell, including across gap dims where packing wraps incorrectly.
     """
+    # Fast path: compact (n, ndims) int32 plan rows (common for ResNet-scale n).
+    if (
+        isinstance(base_indices_ct, np.ndarray)
+        and base_indices_ct.ndim == 2
+        and base_indices_ct.shape[0] == n
+        and base_indices_ct.shape[1] >= 3
+        and base_indices_ct.dtype == np.int32
+    ):
+        idx = np.arange(n, dtype=np.int64)
+        src = (idx + int(rot_amt)) % n
+        rows = base_indices_ct[src].astype(np.int64, copy=False)
+        c0, hu, wu = rows[:, 0], rows[:, 1], rows[:, 2]
+        bad = (c0 < 0) | (hu < 0) | (wu < 0)
+        bad |= (hu >= hin) | (wu >= win)
+        o_h = hu + int(pad_top) - int(fh)
+        o_w = wu + int(pad_left) - int(fw)
+        bad |= (o_h < 0) | (o_h >= hin) | (o_w < 0) | (o_w >= win)
+        return np.logical_not(bad).astype(np.int32).tolist()
+
     mask: list[int] = [1] * n
     for s in range(n):
         src = (s + int(rot_amt)) % n
@@ -210,7 +229,17 @@ def lower_conv2d(env, kernel):
     # Without this, rotations wrap around in the packed HE vector and leak values
     # from outside the valid padded region, which becomes visible for some layouts
     # (notably when H/W are separated by gap slot dims).
-    mask_terms = [HETerm.mask([m]) for m in masks]
+    # Share HETerm.mask nodes when slot mask vectors repeat (e.g. same filter tap
+    # across many ciphertexts). Key by packed bytes — masks are 0/1 per slot.
+    _mask_term_by_key: dict[bytes, HETerm] = {}
+    mask_terms: list[HETerm] = []
+    for m in masks:
+        k = bytes(m)
+        t = _mask_term_by_key.get(k)
+        if t is None:
+            t = HETerm.mask([m])
+            _mask_term_by_key[k] = t
+        mask_terms.append(t)
 
     # calculate the multiplications between ct
     # For each b_idx, use the already-aligned a_idx (same ct index) and rotate only
