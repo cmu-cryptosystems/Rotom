@@ -79,6 +79,38 @@ class Layout:
         if n > 1:
             self.slot_dims.insert(0, Dim.parse(f"G:{n}"))
 
+        # Coalesce adjacent gap (EMPTY) dimensions.
+        #
+        # Layout transformations like `create_layout_without_dims` can introduce
+        # neighboring gap dims (e.g. replacing a removed slot dim with `[G:..]`
+        # next to an existing slot gap). For EMPTY dims, stride does not affect
+        # masking semantics (indices are 0/None), so we can safely merge extents.
+        #
+        # Important: do not coalesce dims involved in rolls (identity-based),
+        # otherwise a roll could reference a dim that no longer exists.
+        in_roll = set()
+        for r in self.rolls:
+            in_roll.add(r.dim_to_roll)
+            in_roll.add(r.dim_to_roll_by)
+
+        def _coalesce_gaps(ds):
+            out = []
+            for d in ds:
+                if (
+                    out
+                    and d.dim_type == DimType.EMPTY
+                    and out[-1].dim_type == DimType.EMPTY
+                    and (d not in in_roll)
+                    and (out[-1] not in in_roll)
+                ):
+                    out[-1] = Dim(None, out[-1].extent * d.extent, 1, DimType.EMPTY)
+                else:
+                    out.append(d)
+            return out
+
+        self.ct_dims = _coalesce_gaps(self.ct_dims)
+        self.slot_dims = _coalesce_gaps(self.slot_dims)
+
         # remove empty dimensions from ct_dims
         self.ct_dims = [dim for dim in self.ct_dims if dim.dim_type != DimType.EMPTY]
 
