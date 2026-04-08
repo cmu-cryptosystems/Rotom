@@ -17,6 +17,7 @@ Key functions:
 
 from copy import deepcopy as copy
 
+from assignment.gen.gen_compaction import find_compaction
 from frontends.tensor_args import Conv2dArgs
 from ir.dim import Dim, DimType
 from ir.kernel import Kernel, KernelOp
@@ -284,6 +285,8 @@ def gen_conv2d_roll(term, cs_kernels, shapes):
 
         kernel = Kernel(KernelOp.CONV2D_ROLL, [a_kernel, b_kernel], output_layout)
         output_kernels.add(kernel)
+        if not kernel.layout.rolls:
+            output_kernels.add(find_compaction(kernel))
     return output_kernels
 
 
@@ -465,4 +468,6 @@ def gen_conv2d(term, cs_kernels, shapes):
 
         kernel = Kernel(KernelOp.CONV2D, [a_kernel, b_kernel], output_layout)
         output_kernels.add(kernel)
+        if not kernel.layout.rolls:
+            output_kernels.add(find_compaction(kernel))
     return output_kernels
