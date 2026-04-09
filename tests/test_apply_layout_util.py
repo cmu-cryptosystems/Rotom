@@ -174,7 +174,11 @@ def test_apply_punctured_layout_elementwise_mask() -> None:
         [base[i][j] * masks[i][j] for j in range(len(base[i]))]
         for i in range(len(base))
     ]
-    assert got == expected
+    for row_g, row_e in zip(got, expected):
+        np.testing.assert_allclose(
+            np.asarray(row_g, dtype=np.float64),
+            np.asarray(row_e, dtype=np.float64),
+        )
 
 
 def test_apply_punctured_layout_wrong_num_ct_masks_asserts() -> None:

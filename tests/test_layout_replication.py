@@ -19,7 +19,7 @@ def test_apply_layout_with_replicated_slot_dim():
 
     # One ciphertext with 4 slots: base pattern [1, 2] replicated over slots
     assert len(cts) == max(1, layout.num_ct())
-    assert cts[0] == [1, 2, 1, 2]
+    np.testing.assert_array_equal(cts[0], [1, 2, 1, 2])
 
 
 def test_apply_layout_with_replication_every_16_slots():

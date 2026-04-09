@@ -312,6 +312,15 @@ if __name__ == "__main__":
         default=False,
         help="Disable 128-bit security level for OpenFHE backend",
     )
+    parser.add_argument(
+        "--toy-ct-workers",
+        type=int,
+        default=1,
+        help=(
+            "Toy backend: threads for independent ciphertext DAG roots per kernel. "
+            "1 = sequential (default). 0 = use up to min(CPU count, number of roots)."
+        ),
+    )
     parser.add_argument("--fn", type=str, default="main")
     parser.add_argument(
         "--fhelipe",
