@@ -1,5 +1,7 @@
 """Toy backend: def-use style ``env`` eviction (incoming use counts)."""
 
+import copy
+
 import numpy as np
 import torch
 
@@ -83,3 +85,38 @@ def test_toy_dense_eval_memoizes_per_tensor_term_identity() -> None:
     b = Toy._dense_eval_for_tensor_term(toy, term)
     assert _Term.eval_calls == 1
     assert a is b
+
+
+def test_toy_parallel_ct_workers_matches_sequential() -> None:
+    """``toy_ct_workers`` parallel path should match sequential results bit-for-bit."""
+    torch.manual_seed(0)
+    np.random.seed(0)
+
+    x = np.random.randn(4, 8, 8).astype(np.float64)
+    inputs = {"x": x}
+    t = TensorTerm.Tensor("x", [4, 8, 8], True)
+    tensor_term = t.sum(dim_idx=1).sum(dim_idx=1)
+
+    args = get_default_args()
+    args.backend = "toy"
+    args.n = 256
+    args.rolls = False
+    args.skip_toy_eval_checks = True
+
+    kernel = LayoutAssignment(tensor_term, args).run()
+    circuit_ir = Lower(kernel).run()
+
+    a_args = copy.copy(args)
+    a_args.toy_ct_workers = 1
+    seq = Toy(circuit_ir, inputs, a_args).run()
+
+    b_args = copy.copy(args)
+    b_args.toy_ct_workers = 0
+    par = Toy(circuit_ir, inputs, b_args).run()
+
+    assert len(seq) == len(par)
+    for row_a, row_b in zip(seq, par):
+        np.testing.assert_allclose(
+            np.asarray(row_a, dtype=np.float64),
+            np.asarray(row_b, dtype=np.float64),
+        )

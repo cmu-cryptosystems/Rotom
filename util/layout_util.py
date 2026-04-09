@@ -575,8 +575,7 @@ def _ct_index_rows_to_values(pt_tensor, ct_indices):
         coords = tuple(safe[:, j] for j in range(pt_tensor_ndim))
         vals = np.asarray(pt_tensor[coords], dtype=np.float64)
         vals[bad] = 0.0
-        # One vectorized copy to Python floats (faster than per-element normalize).
-        return vals.tolist()
+        return vals
 
     # Non-ndarray or empty: preserve exact legacy behavior.
     out = []
@@ -593,6 +592,13 @@ def _ct_index_rows_to_values(pt_tensor, ct_indices):
         value = pt_tensor[tuple(effective_index[i] for i in range(pt_tensor_ndim))]
         out.append(_normalize_scalar_from_tensor(value))
     return out
+
+
+def _ct_layout_row_as_float64_ndarray(row) -> np.ndarray:
+    """Normalize one ciphertext slot row to a 1-D ``float64`` vector (no Python float list)."""
+    if isinstance(row, np.ndarray) and row.dtype == np.float64 and row.ndim == 1:
+        return row
+    return np.asarray(row, dtype=np.float64)
 
 
 def apply_layout(pt_tensor, layout):
@@ -616,10 +622,18 @@ def apply_layout(pt_tensor, layout):
     # - np.ndarray shaped (num_ct, n, ndims) with int32 and -1 sentinel (compact)
     if isinstance(base_indices_by_cts, np.ndarray):
         for i in range(base_indices_by_cts.shape[0]):
-            cts.append(_ct_index_rows_to_values(pt_tensor, base_indices_by_cts[i]))
+            cts.append(
+                _ct_layout_row_as_float64_ndarray(
+                    _ct_index_rows_to_values(pt_tensor, base_indices_by_cts[i])
+                )
+            )
     else:
         for ct_indices in base_indices_by_cts:
-            cts.append(_ct_index_rows_to_values(pt_tensor, ct_indices))
+            cts.append(
+                _ct_layout_row_as_float64_ndarray(
+                    _ct_index_rows_to_values(pt_tensor, ct_indices)
+                )
+            )
 
     if ct_inverse is None:
         return cts
@@ -838,7 +852,7 @@ def apply_punctured_layout(pt_tensor, layout):
     for i in range(len(cts)):
         c_arr = np.asarray(cts[i], dtype=np.float64)
         m_arr = np.asarray(masks[i], dtype=np.float64)
-        cts[i] = (c_arr * m_arr).tolist()
+        cts[i] = c_arr * m_arr
     return cts
 
 
