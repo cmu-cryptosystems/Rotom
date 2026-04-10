@@ -6,6 +6,7 @@ from util.layout_util import (
     align_dimension_extents_compact,
     align_dimension_extents_compact_skip_empty_gaps,
     dim_list_index,
+    get_dim_indices,
     get_cts_by_dim,
     get_dim_map,
     get_segments,
@@ -42,6 +43,7 @@ def lower_compact(env, kernel):
         return _lower_compact_zip(env, kernel, n)
 
     slot_dims = slot_dims_probe
+    current_slot_dims = list(slot_dims_probe)
     expanded_layout = Layout(
         kernel.cs[0].layout.term,
         kernel.cs[0].layout.rolls,
@@ -55,10 +57,12 @@ def lower_compact(env, kernel):
     slot_segments = get_segments(slot_dims)
     split_slot_dim_map = get_dim_map(slot_dims)
 
-    merge_outer_first = slot_ct_mismatch == len(expanded_layout.ct_dims)
+    remaining_ct_dims = list(expanded_layout.ct_dims)
+    merge_outer_first = slot_ct_mismatch == len(remaining_ct_dims)
+    target_cts = kernel.layout.num_ct()
 
-    while layout_cts.layout.ct_dims:
-        pending = [d for d in layout_cts.layout.ct_dims if d.dim is not None]
+    while remaining_ct_dims and len(layout_cts.cts) > target_cts:
+        pending = [d for d in remaining_ct_dims if d.dim is not None]
         if not pending:
             break
         if merge_outer_first:
@@ -68,7 +72,25 @@ def lower_compact(env, kernel):
 
         swap_dim_index = split_slot_dim_map[swap_dim]
         new_relevant_cts = {}
-        ct_groups = get_cts_by_dim(layout_cts, swap_dim)
+        ct_dim_index = dim_list_index(swap_dim, remaining_ct_dims)
+        dim_indices = get_dim_indices(remaining_ct_dims)
+        idxs = list(dim_indices[ct_dim_index])
+        idx_groups = []
+        while any(i is not None for i in idxs):
+            group = []
+            for i in range(swap_dim.extent):
+                for j in range(len(idxs)):
+                    if idxs[j] == i:
+                        group.append(j)
+                        idxs[j] = None
+                        break
+            idx_groups.append(group)
+
+        ct_keys = sorted(layout_cts.cts.keys())
+        ct_groups = [
+            [layout_cts.cts[ct_keys[idx]] for idx in idx_group]
+            for idx_group in idx_groups
+        ]
         for i, ct_group in enumerate(ct_groups):
             base = ct_group[0]
             for j in range(1, len(ct_group)):
@@ -77,19 +99,32 @@ def lower_compact(env, kernel):
                 base = base + rot_term
             new_relevant_cts[i] = base
 
-        new_cs_dims = expanded_layout.dims.copy()
-        new_ct_dims, new_slot_dims = separate_dims(new_cs_dims, n)
-        new_ct_dims.remove(swap_dim)
+        removed = False
+        next_remaining = []
+        for d in remaining_ct_dims:
+            if not removed and d == swap_dim:
+                removed = True
+                continue
+            next_remaining.append(d)
+        remaining_ct_dims = next_remaining
+        new_slot_dims = list(current_slot_dims)
         new_slot_dims[swap_dim_index] = swap_dim
+        current_slot_dims = new_slot_dims
         expanded_layout = Layout(
             expanded_layout.term,
             expanded_layout.rolls,
-            new_ct_dims + new_slot_dims,
+            remaining_ct_dims + new_slot_dims,
             n,
             expanded_layout.secret,
         )
 
         layout_cts = LayoutCiphertexts(layout=expanded_layout, cts=new_relevant_cts)
+
+    if len(layout_cts.cts) != target_cts:
+        raise AssertionError(
+            f"compact lowering ct mismatch: got {len(layout_cts.cts)}, expected {target_cts}; "
+            f"term={kernel.layout.term}"
+        )
 
     return LayoutCiphertexts(layout=kernel.layout, cts=layout_cts.cts)
 

@@ -60,6 +60,7 @@ from util.kernel_util import get_cs_op_kernels
 from util.layout_simplicity import (
     channel_dim_leading_gap_alignment_penalty,
     embedded_secret_3d_channel_gap_penalty,
+    embedded_secret_conv2d_input_channel_adjacent_gap_penalty,
     layout_simplicity_penalty,
 )
 
@@ -680,6 +681,13 @@ class LayoutAssignment:
                             self.shape.padded_shapes,
                         )
                     )
+                    if term.op == TensorOp.CONV2D:
+                        kernel_cost += self.channel_gap_align_weight * (
+                            embedded_secret_conv2d_input_channel_adjacent_gap_penalty(
+                                kernel,
+                                self.secret.secret,
+                            )
+                        )
             kernel_layout = dimension_merging(kernel.layout)
 
             # initialize

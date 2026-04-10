@@ -4,6 +4,8 @@ np.set_printoptions(legacy="1.25")
 
 from typing import Any, Literal
 
+from tqdm import tqdm
+
 from frontends.tensor import TensorOp
 from ir.he import HEOp, HETerm
 from ir.kernel import KernelOp
@@ -378,6 +380,8 @@ class Toy:
 
     def run(self):
         results = []
+        total_cts = sum(len(cts) for cts in self.circuit_ir.values())
+        pbar = tqdm(total=total_cts, desc="Toy", unit="ct", dynamic_ncols=True)
         for term, cts in self.circuit_ir.items():
             results = []
             # Sort by ciphertext index to ensure consistent ordering
@@ -390,6 +394,7 @@ class Toy:
                 else:
                     self._eval_ct_root_with_use_counts(ct)
                     results.append(self.env.pop(ct))
+                pbar.update(1)
 
             # Evaluate the tensor computation to get the expected result
             # skip checks for split rolls, replicate
@@ -453,6 +458,7 @@ class Toy:
                     all_close
                 ), f"Toy mismatch at {term.op}/{tensor_op}. Max diff: {max_diff}"
 
+        pbar.close()
         return results
 
     def fuzz(self):
