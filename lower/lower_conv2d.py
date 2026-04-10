@@ -144,7 +144,7 @@ def lower_conv2d(env, kernel):
             rot_amts.append(rot_0 + rot_1 + rot_offset)
 
     # Replicate filter masks for each CT in b layout - use layout to get filter position per ct_idx
-    b_num_cts = kernel.cs[1].layout.num_ct()
+    b_num_cts = len(b_cs)
     b_ct_dims = kernel.cs[1].layout.ct_dims
     _inner_stride = 1
     if b_ct_dims and b_ct_dims[-1].dim is None:
@@ -198,7 +198,7 @@ def lower_conv2d(env, kernel):
         )
         filter_idx = f_h * f_w_extent_masks + f_w
         rot_amt = rot_amts[filter_idx]
-        a_idx = min(ct_idx, len(a_cs) - 1)
+        a_idx = ct_idx
         if int(_stride) == 1:
             assert base_by_ct is not None
             m = _slot_mask_conv2d_same_stride1(
@@ -257,7 +257,7 @@ def lower_conv2d(env, kernel):
         f_w = dim_indices[dim_to_pos[3]][b_idx] if 3 in dim_to_pos else 0
         filter_idx = f_h * f_w_extent + f_w
         rot_amt = rot_amts[filter_idx]
-        a_idx = min(b_idx, len(a_cs) - 1)
+        a_idx = b_idx
         a_rot = a_cs[a_idx] << rot_amt
         a_masked = a_rot * mask_terms[b_idx]
         cts[b_idx] = a_masked * b_ct

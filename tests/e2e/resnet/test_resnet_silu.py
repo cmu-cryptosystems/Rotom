@@ -5,7 +5,7 @@ with the same ``inputs`` (poly degree / nodes pinned by ``populate_resnet20_inpu
 bounds from each ``PolyCall("silu", ...)``. For PyTorch comparison (exact SiLU), set
 ``inputs["__rotom_silu_eval_mode"] = "exact"``.
 
-- **Core coverage only:** stem, stem+layer1, stem+layer1+layer2, and full end-to-end.
+- **Core coverage only:** stem, stem+layer1, stem+layer1+layer2, stem through layer3, and full end-to-end.
 - For each of stem and stem+layer1 we keep both comparisons:
   - Toy vs ``tensor_ir.eval`` (same SiLU poly implementation)
   - ``tensor_ir.eval`` vs PyTorch (exact SiLU at eval)
@@ -30,6 +30,7 @@ from benchmarks.e2e.resnet.resnet20_tensor_ir import (
     build_resnet20_silu_poly_graph,
     build_resnet20_silu_poly_graph_through_layer1,
     build_resnet20_silu_poly_graph_through_layer2,
+    build_resnet20_silu_poly_graph_through_layer3,
     populate_resnet20_inputs,
 )
 from frontends.tensor import TensorTerm
@@ -173,6 +174,38 @@ def test_resnet20_silu_poly_stem_layer1_layer2_fused_toy_matches_tensor_eval() -
     args.rolls = True
     args.net = "lan"
     args.benchmark = "resnet20_silu_stem_layer1_layer2_fused"
+    args.channel_gap_align_weight = 0.5
+
+    kernel = LayoutAssignment(tensor_ir, args).run()
+    circuit_ir = Lower(kernel).run()
+    backend_results = Toy(circuit_ir, inputs, args).run()
+    check_results(tensor_ir, inputs, kernel, backend_results, 0, args)
+
+
+@pytest.mark.slow
+def test_resnet20_silu_poly_stem_through_layer3_fused_toy_matches_tensor_eval() -> None:
+    """Fused stem + layer1 + layer2 + layer3: Toy matches ``tensor_ir.eval``.
+
+    Output is ``[64, 8, 8]`` activations before pooling/FC. Expect long runtime (Toy
+    over the full prefix); same ``channel_gap_align_weight`` as other fused SiLU tests.
+    """
+    torch.manual_seed(0)
+    model = resnet20(num_classes=10)
+    model.eval()
+
+    inputs: dict = {}
+    populate_resnet20_inputs(model, inputs)
+    x = torch.randn(3, 32, 32, dtype=torch.float64)
+    inputs["input"] = x.numpy()
+
+    tensor_ir = build_resnet20_silu_poly_graph_through_layer3(inputs)
+
+    args = get_default_args()
+    args.backend = "toy"
+    args.n = _RESNET_TOY_N
+    args.rolls = True
+    args.net = "lan"
+    args.benchmark = "resnet20_silu_stem_through_layer3_fused"
     args.channel_gap_align_weight = 0.5
 
     kernel = LayoutAssignment(tensor_ir, args).run()
