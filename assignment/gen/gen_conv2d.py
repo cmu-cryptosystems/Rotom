@@ -422,7 +422,10 @@ def gen_conv2d(term, cs_kernels, shapes):
         # and add metada information to help with packing the weights
         for dim in a_kernel.layout.get_dims():
             if dim.dim == 0:
-                b_dims.append(Dim(1, dim.extent, 1))
+                # Match ciphertext packing of ``C_in`` to activation ``dim 0`` traversal,
+                # including stride when the channel axis is split (e.g. ``[0:32:2]``…).
+                # Using stride 1 here mis-pairs slots vs activations and breaks Toy/eval.
+                b_dims.append(Dim(1, dim.extent, dim.stride))
             elif dim.dim is not None:
                 b_dims.append(Dim(None, dim.extent, 1))
             elif dim.dim_type == DimType.EMPTY:

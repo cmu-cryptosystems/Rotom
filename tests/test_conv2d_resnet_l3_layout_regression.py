@@ -8,8 +8,10 @@ picks this **CONV2D output** layout for ``l3_0_conv1_w`` (stride-2, ``32→64``,
 ``[0:64:1];[G:32][1:8:1][G:4][2:8:1][G:4]``
 
 Output channel (logical dim ``0``) lives on the ciphertext axis (64 ciphertexts);
-spatial dims ``1``/``2`` are 8 with interleaved gap slots. This is the packing Toy
-currently disagrees with for dense ``tensor_ir.eval`` (see layer3 fused SiLU test).
+spatial dims ``1``/``2`` are 8 with interleaved gap slots. Layer3 Toy vs eval failures
+on ``l3_0_conv2`` were traced to ``gen_conv2d`` using unit stride on the weight
+``C_in`` slot axis while activations used a split channel stride (fixed by copying
+``dim.stride`` from activation ``dim 0`` onto ``Dim(1, …)``).
 
 The tests here pin that assignment choice and validate basic layout invariants so
 future changes to ``gen_conv2d`` / heuristics are explicit.
@@ -91,3 +93,43 @@ def test_resnet20_silu_through_layer3_l3_0_conv1_kernel_layout_matches_documente
 
     assert conv_k is not None, "expected a CONV2D kernel for weight name l3_0_conv1_w"
     assert conv_k.layout.layout_str() == RESNET20_L3_0_CONV1_OUTPUT_LAYOUT
+
+
+@pytest.mark.slow
+def test_resnet20_silu_through_layer3_l3_0_conv2_weight_stride_matches_activation_channel_split() -> (
+    None
+):
+    """``gen_conv2d`` must copy activation channel strides onto ``C_in`` (e.g. ``[1:32:2]``)."""
+    torch.manual_seed(0)
+    model = resnet20(num_classes=10)
+    model.eval()
+
+    inputs: dict = {}
+    populate_resnet20_inputs(model, inputs)
+    inputs["input"] = torch.randn(3, 32, 32, dtype=torch.float64).numpy()
+
+    tensor_ir = build_resnet20_silu_poly_graph_through_layer3(inputs)
+
+    args = get_default_args()
+    args.n = _RESNET_TOY_N
+    args.rolls = True
+    args.net = "lan"
+    args.benchmark = "resnet20_l3_conv2_stride_regression"
+    args.channel_gap_align_weight = 0.5
+
+    kernel = LayoutAssignment(tensor_ir, args).run()
+
+    conv_k = None
+    for k in kernel.post_order():
+        if k.op != KernelOp.CONV2D:
+            continue
+        term = k.layout.term
+        if not isinstance(term.cs[1], TensorTerm):
+            continue
+        if term.cs[1].op == TensorOp.TENSOR and term.cs[1].cs[0] == "l3_0_conv2_w":
+            conv_k = k
+            break
+
+    assert conv_k is not None, "expected CONV2D for l3_0_conv2_w"
+    b_str = conv_k.cs[1].layout.layout_str()
+    assert "[1:32:2]" in b_str, b_str

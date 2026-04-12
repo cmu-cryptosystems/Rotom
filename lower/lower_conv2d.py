@@ -1,3 +1,5 @@
+import os
+
 from ir.analysis.shape import Shape
 from ir.dim import DimType
 from ir.he import HEOp, HETerm
@@ -8,6 +10,7 @@ import numpy as np
 from util.layout_util import (
     _get_apply_layout_plan,
     convert_layout_to_mask,
+    dim_list_index,
     get_cts_by_dim,
     get_dim_indices,
     get_dim_map,
@@ -90,7 +93,12 @@ def _slot_mask_conv2d_same_stride1(
 
 
 def lower_conv2d(env, kernel):
-    """Lower CONV2D kernel to circuit IR."""
+    """Lower CONV2D kernel to circuit IR.
+
+    Multi-CT activations with ciphertext ``[R:…]`` replication (e.g. ResNet
+    ``l3_0_conv2`` input, ~576 CTs) share stride-1 masking/``rot_amts`` logic
+    with compact single-CT layouts; isolate producers before blaming Toy caches.
+    """
     a_cts = env[kernel.cs[0]]
     b_cts = env[kernel.cs[1]]
     assert a_cts.keys() == b_cts.keys()
@@ -306,17 +314,20 @@ def lower_conv2d(env, kernel):
 
     # Sum input-channel slot dimensions. Channel may be split across several slot
     # dims (same tensor dim index). Re-query find_sum_dim on the layout we update
-    # after each rotate_and_sum so Dim references stay valid; pick the remaining
-    # dim with the smallest slot stride (inner radix) first so get_segment agrees
-    # with the current slot_dims list (see dim_list_index / duplicate [G:n] gaps).
+    # after each rotate_and_sum so Dim references stay valid.
+    #
+    # Sum **inner** slot axes (larger index in ``slot_dims``) before **outer**
+    # ones: removing the outer fragment first coalesces gaps and changes
+    # ``get_segment`` / ``mul_offset`` for the inner axis (see
+    # ``tests/test_layout_dim_segment.py``).
     while True:
         _, slot_sum_dims = find_sum_dim(a_layout_cts.layout, 0)
         if not slot_sum_dims:
             break
         slot_dims_cur = a_layout_cts.layout.slot_dims
-        slot_sum_dim = min(
+        slot_sum_dim = max(
             slot_sum_dims,
-            key=lambda d: get_segment(d, slot_dims_cur)[2],
+            key=lambda d: dim_list_index(d, slot_dims_cur),
         )
         segment = get_segment(slot_sum_dim, slot_dims_cur)
         extent = segment[1]
@@ -335,6 +346,9 @@ def lower_conv2d(env, kernel):
         if dim.dim_type == DimType.EMPTY:
             needs_mask = True
             break
+    # Debug: ``ROTOM_SKIP_CONV2D_GAP_MASK=1`` skips the post-conv output gap mask.
+    if os.environ.get("ROTOM_SKIP_CONV2D_GAP_MASK", "").strip() == "1":
+        needs_mask = False
 
     if needs_mask:
         mask = HETerm.mask([convert_layout_to_mask(kernel.layout)])
