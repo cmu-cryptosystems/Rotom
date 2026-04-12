@@ -15,6 +15,10 @@ Slow Toy e2e tests call :func:`util.layout_util.apply_layout` many times; they e
 on-disk plan cache (see :func:`_enable_apply_layout_plan_disk_cache`) so the **second
 and later** full runs reuse pickled plans from
 ``$ROTOM_APPLY_LAYOUT_PLAN_CACHE_DIR`` (default ``~/.cache/rotom/apply_layout_plans``).
+
+They set ``args.skip_toy_eval_checks = True`` so :meth:`backends.toy.Toy.run` does not
+re-run ``tensor_ir.eval`` + ``apply_layout`` for **every** kernel; final correctness is
+still checked by :func:`util.checker.check_results`.
 """
 
 from __future__ import annotations
@@ -107,6 +111,7 @@ def test_resnet20_silu_poly_stem_toy_matches_tensor_eval() -> None:
     args.rolls = True
     args.net = "lan"
     args.benchmark = "resnet20_silu_poly_stem"
+    args.skip_toy_eval_checks = True
 
     kernel = LayoutAssignment(t, args).run()
     circuit_ir = Lower(kernel).run()
@@ -166,6 +171,7 @@ def test_resnet20_silu_poly_stem_layer1_fused_toy_matches_tensor_eval() -> None:
     args.net = "lan"
     args.benchmark = "resnet20_silu_stem_layer1_fused"
     args.channel_gap_align_weight = 0.5
+    args.skip_toy_eval_checks = True
 
     kernel = LayoutAssignment(tensor_ir, args).run()
     circuit_ir = Lower(kernel).run()
@@ -199,6 +205,7 @@ def test_resnet20_silu_poly_stem_layer1_layer2_fused_toy_matches_tensor_eval() -
     args.net = "lan"
     args.benchmark = "resnet20_silu_stem_layer1_layer2_fused"
     args.channel_gap_align_weight = 0.5
+    args.skip_toy_eval_checks = True
 
     kernel = LayoutAssignment(tensor_ir, args).run()
     circuit_ir = Lower(kernel).run()
@@ -233,6 +240,7 @@ def test_resnet20_silu_poly_stem_through_layer3_fused_toy_matches_tensor_eval() 
     args.net = "lan"
     args.benchmark = "resnet20_silu_stem_through_layer3_fused"
     args.channel_gap_align_weight = 0.5
+    args.skip_toy_eval_checks = True
 
     kernel = LayoutAssignment(tensor_ir, args).run()
     circuit_ir = Lower(kernel).run()
@@ -294,6 +302,7 @@ def test_resnet20_silu_poly_toy_matches_tensor_eval() -> None:
     args.rolls = True
     args.net = "lan"
     args.benchmark = "resnet20_silu_poly_l2_0"
+    args.skip_toy_eval_checks = True
 
     kernel = LayoutAssignment(tensor_ir, args).run()
     circuit_ir = Lower(kernel).run()
