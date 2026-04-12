@@ -183,20 +183,12 @@ def test_resnet20_silu_poly_stem_layer1_layer2_fused_toy_matches_tensor_eval() -
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(
-    reason=(
-        "Toy vs eval mismatch on layer3 stride-2 convs at chosen layouts "
-        "(e.g. ``[0:64:1];[G:32][1:8:1]…``); ``channel_gap_align_weight`` does not "
-        "steer assignment away. Remove xfail when ``lower_conv2d`` handles this case."
-    ),
-    raises=AssertionError,
-    strict=False,
-)
 def test_resnet20_silu_poly_stem_through_layer3_fused_toy_matches_tensor_eval() -> None:
     """Fused stem + layer1 + layer2 + layer3: Toy matches ``tensor_ir.eval``.
 
-    Output is ``[64, 8, 8]`` activations before pooling/FC. Expect long runtime (Toy
-    over the full prefix); same ``channel_gap_align_weight`` as other fused SiLU tests.
+    Output is ``[64, 8, 8]`` activations before pooling/FC. Toy over this prefix is
+    very slow (order ~1–2 hours on a typical machine); same
+    ``channel_gap_align_weight`` as other fused SiLU tests.
     """
     torch.manual_seed(0)
     model = resnet20(num_classes=10)
