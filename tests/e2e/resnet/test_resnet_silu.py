@@ -10,6 +10,11 @@ bounds from each ``PolyCall("silu", ...)``. For PyTorch comparison (exact SiLU),
   - Toy vs ``tensor_ir.eval`` (same SiLU poly implementation)
   - ``tensor_ir.eval`` vs PyTorch (exact SiLU at eval)
 - **Full graph:** Toy vs ``tensor_ir.eval`` is opt-in via ``ROTOM_RUN_HEAVY_E2E=1`` (memory/time).
+
+Slow Toy e2e tests call :func:`util.layout_util.apply_layout` many times; they enable an
+on-disk plan cache (see :func:`_enable_apply_layout_plan_disk_cache`) so the **second
+and later** full runs reuse pickled plans from
+``$ROTOM_APPLY_LAYOUT_PLAN_CACHE_DIR`` (default ``~/.cache/rotom/apply_layout_plans``).
 """
 
 from __future__ import annotations
@@ -48,6 +53,22 @@ _RUN_HEAVY_E2E = os.environ.get("ROTOM_RUN_HEAVY_E2E", "").strip().lower() in {
 }
 
 
+def _enable_apply_layout_plan_disk_cache() -> None:
+    """Persist expensive ``apply_layout`` precomputations across pytest invocations.
+
+    Plans are keyed by layout geometry (see ``layout_util._apply_layout_plan_cache_key``).
+    If ``ROTOM_APPLY_LAYOUT_PLAN_CACHE_DIR`` is already set, it is left unchanged.
+    """
+    os.environ.setdefault(
+        "ROTOM_APPLY_LAYOUT_PLAN_CACHE_DIR",
+        str(
+            Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+            / "rotom"
+            / "apply_layout_plans"
+        ),
+    )
+
+
 def _resnet20_stem_ir_upto(
     inputs: dict, stop: Literal["conv", "bn", "silu"]
 ) -> TensorTerm:
@@ -67,6 +88,7 @@ def _resnet20_stem_ir_upto(
 @pytest.mark.slow
 def test_resnet20_silu_poly_stem_toy_matches_tensor_eval() -> None:
     """Stem (conv+BN+SiLU poly): Toy matches ``tensor_ir.eval``."""
+    _enable_apply_layout_plan_disk_cache()
     torch.manual_seed(0)
     model = resnet20(num_classes=10)
     model.eval()
@@ -125,6 +147,7 @@ def test_resnet20_silu_poly_stem_layer1_fused_toy_matches_tensor_eval() -> None:
     ``[G:*]`` after replication/rolls, or the first layer1 conv mismatches Toy. A small
     ``channel_gap_align_weight`` encodes that packing preference in layout assignment.
     """
+    _enable_apply_layout_plan_disk_cache()
     torch.manual_seed(0)
     model = resnet20(num_classes=10)
     model.eval()
@@ -157,6 +180,7 @@ def test_resnet20_silu_poly_stem_layer1_layer2_fused_toy_matches_tensor_eval() -
     Includes layer2.0 stride-2 downsample and two 32→32 blocks on 16×16. Same layout
     hint as stem+layer1 fused (channel dim 0 near leading gap after rolls).
     """
+    _enable_apply_layout_plan_disk_cache()
     torch.manual_seed(0)
     model = resnet20(num_classes=10)
     model.eval()
@@ -190,6 +214,7 @@ def test_resnet20_silu_poly_stem_through_layer3_fused_toy_matches_tensor_eval() 
     very slow (order ~1–2 hours on a typical machine); same
     ``channel_gap_align_weight`` as other fused SiLU tests.
     """
+    _enable_apply_layout_plan_disk_cache()
     torch.manual_seed(0)
     model = resnet20(num_classes=10)
     model.eval()
@@ -250,18 +275,10 @@ def test_resnet20_silu_poly_layer1_tensor_eval_matches_pytorch() -> None:
 )
 def test_resnet20_silu_poly_toy_matches_tensor_eval() -> None:
     """Full SiLU-poly ResNet-20 tensor graph: layout, lower, Toy, then ``check_results``."""
+    _enable_apply_layout_plan_disk_cache()
     torch.manual_seed(0)
     model = resnet20(num_classes=10)
     model.eval()
-
-    os.environ.setdefault(
-        "ROTOM_APPLY_LAYOUT_PLAN_CACHE_DIR",
-        str(
-            Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
-            / "rotom"
-            / "apply_layout_plans"
-        ),
-    )
 
     inputs: dict = {}
     populate_resnet20_inputs(model, inputs)
