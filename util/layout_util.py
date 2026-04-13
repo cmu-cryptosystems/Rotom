@@ -2,6 +2,7 @@ from copy import copy as copy
 import hashlib
 import os
 import pickle
+import uuid
 from pathlib import Path
 
 import numpy as np
@@ -188,6 +189,47 @@ def align_dimension_extents_compact(a_dims, b_dims):
 
     split_b = []
     for b_dim in b_dims:
+        while b_dim.extent > min_extent:
+            split_1, split_2 = split_dim(b_dim, min_extent)
+            split_b.append(split_1)
+            b_dim = split_2
+        split_b.append(b_dim)
+    return split_a, split_b
+
+
+def align_dimension_extents_compact_skip_empty_gaps(a_dims, b_dims):
+    """Like :func:`align_dimension_extents_compact` but do not split EMPTY (gap) dims.
+
+    Used when ``a_dims`` / ``b_dims`` come from :meth:`Layout.get_dims` so logical
+    gaps are already coalesced; splitting ``[G:32]`` into many ``[G:2]`` would
+    desynchronize paired lists versus a target that keeps a single gap extent.
+    """
+    a_dim_len = prod(
+        [a_dim.extent for a_dim in a_dims if a_dim.dim_type == DimType.FILL]
+    )
+    b_dim_len = prod(
+        [b_dim.extent for b_dim in b_dims if b_dim.dim_type == DimType.FILL]
+    )
+    assert a_dim_len == b_dim_len
+
+    min_extent = 2
+
+    split_a = []
+    for a_dim in a_dims:
+        if a_dim.dim_type == DimType.EMPTY:
+            split_a.append(a_dim)
+            continue
+        while a_dim.extent > min_extent:
+            split_1, split_2 = split_dim(a_dim, min_extent)
+            split_a.append(split_1)
+            a_dim = split_2
+        split_a.append(a_dim)
+
+    split_b = []
+    for b_dim in b_dims:
+        if b_dim.dim_type == DimType.EMPTY:
+            split_b.append(b_dim)
+            continue
         while b_dim.extent > min_extent:
             split_1, split_2 = split_dim(b_dim, min_extent)
             split_b.append(split_1)
@@ -819,10 +861,23 @@ def _get_apply_layout_plan(layout, pt_tensor_ndim: int, *, layout_len: int) -> d
 
         if disk_dir:
             plan_path = Path(disk_dir).expanduser() / f"{key}.pkl"
-            tmp_path = plan_path.with_suffix(".pkl.tmp")
-            with open(tmp_path, "wb") as f:
-                pickle.dump(plan, f, protocol=pickle.HIGHEST_PROTOCOL)
-            os.replace(tmp_path, plan_path)
+            # Unique temp name: Toy multiprocessing runs many workers; a shared
+            # ``*.pkl.tmp`` caused one process to ``os.replace`` another's temp.
+            tmp_path = plan_path.parent / (
+                f"{plan_path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
+            )
+            try:
+                with open(tmp_path, "wb") as f:
+                    pickle.dump(plan, f, protocol=pickle.HIGHEST_PROTOCOL)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp_path, plan_path)
+            finally:
+                if tmp_path.exists():
+                    try:
+                        tmp_path.unlink()
+                    except OSError:
+                        pass
 
     _APPLY_LAYOUT_PLAN_CACHE[key] = plan
     return plan

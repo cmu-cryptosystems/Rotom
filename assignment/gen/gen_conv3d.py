@@ -155,7 +155,7 @@ def gen_conv3d(term, cs_kernels, shapes):
         # Build b layout to align with a layout geometry.
         for dim in a_kernel.layout.get_dims():
             if dim.dim == 0:
-                b_dims.append(Dim(1, dim.extent, 1))  # input channels
+                b_dims.append(Dim(1, dim.extent, dim.stride))
             elif dim.dim is not None:
                 b_dims.append(Dim(None, dim.extent, 1))
             elif dim.dim_type == DimType.EMPTY:

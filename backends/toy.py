@@ -1,8 +1,13 @@
+import multiprocessing as mp
+import sys
+from concurrent.futures import ProcessPoolExecutor
+from typing import Any, Literal
+
 import numpy as np
 
 np.set_printoptions(legacy="1.25")
 
-from typing import Any, Literal
+from tqdm import tqdm
 
 from frontends.tensor import TensorOp
 from ir.he import HEOp, HETerm
@@ -90,6 +95,61 @@ def _toy_post_order(root: HETerm) -> list[HETerm]:
 _SILU_POLY_Q_CACHE: dict[tuple[float, float, int, int], list[float]] = {}
 
 
+# --- optional multiprocessing (Linux + ``fork`` only; see ``Toy._ct_roots_parallel``) ---
+_mp_worker_toy: Any = None
+_mp_roots_for_workers: list | None = None
+
+
+def _toy_mp_worker_init(circuit_ir, inputs, args) -> None:
+    global _mp_worker_toy
+    _mp_worker_toy = Toy(circuit_ir, inputs, args)
+
+
+def _toy_mp_run_chunk(indices: list[int]) -> list[tuple[int, Any]]:
+    """Evaluate ciphertext roots whose global indices are ``indices``.
+
+    ``_mp_roots_for_workers`` must be set in the parent **before** forking workers
+    so children inherit the list via copy-on-write (avoids pickling the IR per task).
+    """
+    global _mp_worker_toy, _mp_roots_for_workers
+    assert _mp_worker_toy is not None and _mp_roots_for_workers is not None
+    toy = _mp_worker_toy
+    roots = _mp_roots_for_workers
+    local: list[tuple[int, Any]] = []
+    for i in indices:
+        ct = roots[i]
+        toy.env.clear()
+        toy._eval_ct_root_with_use_counts(ct)
+        local.append((i, toy.env.pop(ct)))
+    return local
+
+
+def _chunk_indices(n_items: int, num_workers: int) -> list[list[int]]:
+    w = min(num_workers, n_items)
+    if w < 1:
+        return []
+    base, rem = divmod(n_items, w)
+    chunks: list[list[int]] = []
+    start = 0
+    for i in range(w):
+        sz = base + (1 if i < rem else 0)
+        chunks.append(list(range(start, start + sz)))
+        start += sz
+    return chunks
+
+
+def _flatten_ct_roots(cts: dict) -> list[HETerm]:
+    roots: list[HETerm] = []
+    for ct_idx in sorted(cts.keys()):
+        ct = cts[ct_idx]
+        if isinstance(ct, list):
+            for c in ct:
+                roots.append(c)
+        else:
+            roots.append(ct)
+    return roots
+
+
 def _packed_ct_lists_to_float64(packed_cts: list) -> np.ndarray:
     """One allocation: ``apply_layout`` / ``apply_punctured_layout`` output (list of slot lists) → ``float64``.
 
@@ -113,6 +173,12 @@ class Toy:
         n: HE vector size
         env: Environment for storing intermediate results
         input_cache: Cache for packed input tensors
+
+    Parallelism:
+        On Linux, :meth:`run` and :meth:`fuzz` evaluate ciphertexts in a ``fork`` process
+        pool (default 8 workers via ``args.toy_mp_workers``, or ``--toy-mp-workers`` from
+        CLI). Set ``toy_mp_workers`` to ``1`` for single-process execution. Non-Linux
+        platforms always run single-process.
     """
 
     def __init__(self, circuit_ir, inputs, args):
@@ -162,6 +228,48 @@ class Toy:
                     remaining[c] -= 1
                     if remaining[c] == 0:
                         self.env.pop(c, None)
+
+    def _eval_ct_roots_sequential(self, roots: list[HETerm]) -> list[Any]:
+        out: list[Any] = []
+        for ct in roots:
+            self._eval_ct_root_with_use_counts(ct)
+            out.append(self.env.pop(ct))
+        return out
+
+    def _eval_ct_roots_parallel(
+        self, roots: list[HETerm], num_workers: int
+    ) -> list[Any]:
+        global _mp_roots_for_workers
+        n = len(roots)
+        workers = min(int(num_workers), n)
+        chunks = _chunk_indices(n, workers)
+        if len(chunks) <= 1:
+            return self._eval_ct_roots_sequential(roots)
+        _mp_roots_for_workers = roots
+        try:
+            ctx = mp.get_context("fork")
+            with ProcessPoolExecutor(
+                max_workers=len(chunks),
+                mp_context=ctx,
+                initializer=_toy_mp_worker_init,
+                initargs=(self.circuit_ir, self.inputs, self.args),
+            ) as ex:
+                parts = list(ex.map(_toy_mp_run_chunk, chunks))
+        finally:
+            _mp_roots_for_workers = None
+
+        flat: list[tuple[int, Any]] = []
+        for p in parts:
+            flat.extend(p)
+        flat.sort(key=lambda x: x[0])
+        return [v for _, v in flat]
+
+    def _eval_ct_roots(self, roots: list[HETerm]) -> list[Any]:
+        """Evaluate ciphertext roots in ``roots`` order (parallel on Linux when enabled)."""
+        nw = int(getattr(self.args, "toy_mp_workers", 8))
+        if nw <= 1 or sys.platform != "linux" or len(roots) <= 1:
+            return self._eval_ct_roots_sequential(roots)
+        return self._eval_ct_roots_parallel(roots, nw)
 
     def _as_np_vec(self, v):
         """Return a 1-D ``float64`` vector; avoid ``astype`` when already ``float64``."""
@@ -378,18 +486,12 @@ class Toy:
 
     def run(self):
         results = []
+        total_cts = sum(len(cts) for cts in self.circuit_ir.values())
+        pbar = tqdm(total=total_cts, desc="Toy", unit="ct", dynamic_ncols=True)
         for term, cts in self.circuit_ir.items():
-            results = []
-            # Sort by ciphertext index to ensure consistent ordering
-            for ct_idx in sorted(cts.keys()):
-                ct = cts[ct_idx]
-                if isinstance(ct, list):
-                    for c in ct:
-                        self._eval_ct_root_with_use_counts(c)
-                        results.append(self.env.pop(c))
-                else:
-                    self._eval_ct_root_with_use_counts(ct)
-                    results.append(self.env.pop(ct))
+            roots = _flatten_ct_roots(cts)
+            results = self._eval_ct_roots(roots)
+            pbar.update(len(roots))
 
             # Evaluate the tensor computation to get the expected result
             # skip checks for split rolls, replicate
@@ -453,22 +555,14 @@ class Toy:
                     all_close
                 ), f"Toy mismatch at {term.op}/{tensor_op}. Max diff: {max_diff}"
 
+        pbar.close()
         return results
 
     def fuzz(self):
         results = []
         for term, cts in self.circuit_ir.items():
-            results = []
-            # Sort by ciphertext index to ensure consistent ordering
-            for ct_idx in sorted(cts.keys()):
-                ct = cts[ct_idx]
-                if isinstance(ct, list):
-                    for c in ct:
-                        self._eval_ct_root_with_use_counts(c)
-                        results.append(self.env.pop(c))
-                else:
-                    self._eval_ct_root_with_use_counts(ct)
-                    results.append(self.env.pop(ct))
+            roots = _flatten_ct_roots(cts)
+            results = self._eval_ct_roots(roots)
 
             expected = apply_layout(
                 self._dense_eval_for_tensor_term(term.layout.term), term.layout

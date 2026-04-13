@@ -66,6 +66,50 @@ def embedded_secret_3d_channel_gap_penalty(
     return total
 
 
+def conv2d_input_channel_adjacent_gap_penalty(layout: Layout) -> float:
+    """Penalty for layouts where channel dim ``0`` is not adjacent to any slot gap.
+
+    Applied only for CONV2D input tensors in layout assignment. If there are no
+    ``DimType.EMPTY`` dimensions in ``slot_dims``, returns ``0.0`` (no preference).
+    If there are slot gaps, returns ``0.0`` iff dim ``0`` is present in slots and
+    directly adjacent to at least one gap; otherwise returns ``1.0``.
+    """
+    slot_dims = layout.slot_dims
+    gap_idxs = [i for i, d in enumerate(slot_dims) if d.dim_type == DimType.EMPTY]
+    if not gap_idxs:
+        return 0.0
+
+    channel_idx = None
+    for i, d in enumerate(slot_dims):
+        if d.dim == 0 and d.dim_type != DimType.EMPTY:
+            channel_idx = i
+            break
+    if channel_idx is None:
+        return 1.0
+
+    for g in gap_idxs:
+        if abs(g - channel_idx) == 1:
+            return 0.0
+    return 1.0
+
+
+def embedded_secret_conv2d_input_channel_adjacent_gap_penalty(
+    kernel, secret_map: dict
+) -> float:
+    """Sum :func:`conv2d_input_channel_adjacent_gap_penalty` over embedded secret tensors."""
+    from ir.kernel import KernelOp
+
+    total = 0.0
+    for k in kernel.post_order():
+        if k.op != KernelOp.TENSOR:
+            continue
+        term = k.layout.term
+        if not secret_map.get(term, False):
+            continue
+        total += conv2d_input_channel_adjacent_gap_penalty(k.layout)
+    return total
+
+
 def layout_simplicity_penalty(layout: Layout) -> float:
     """Return a non-negative score; larger means more structural fragmentation.
 

@@ -422,7 +422,7 @@ def gen_conv2d(term, cs_kernels, shapes):
         # and add metada information to help with packing the weights
         for dim in a_kernel.layout.get_dims():
             if dim.dim == 0:
-                b_dims.append(Dim(1, dim.extent, 1))
+                b_dims.append(Dim(1, dim.extent, dim.stride))
             elif dim.dim is not None:
                 b_dims.append(Dim(None, dim.extent, 1))
             elif dim.dim_type == DimType.EMPTY:

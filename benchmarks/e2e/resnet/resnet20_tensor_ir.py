@@ -175,6 +175,20 @@ def build_resnet20_silu_poly_graph_through_layer1(inputs: dict) -> TensorTerm:
     return build_resnet20_silu_poly_graph_to_depth(inputs, "l1")
 
 
+def build_resnet20_silu_poly_graph_through_layer2(inputs: dict) -> TensorTerm:
+    """Stem + layer1 + layer2 (stride-2 block0 + two stride-1 blocks) with SiLU poly."""
+    return build_resnet20_silu_poly_graph_to_depth(inputs, "l2")
+
+
+def build_resnet20_silu_poly_graph_through_layer3(inputs: dict) -> TensorTerm:
+    """Stem through layer3 (stride-2 l3.0 + two 64→64 blocks on 8×8) with SiLU poly.
+
+    Stops before global pooling and the FC head (see ``depth == "l3"`` in
+    :func:`build_resnet20_silu_poly_graph_to_depth`).
+    """
+    return build_resnet20_silu_poly_graph_to_depth(inputs, "l3")
+
+
 def build_resnet20_stem_plus_layer1_convs_only(inputs: dict) -> TensorTerm:
     """Stem conv + all six layer1 3×3 convs (no BN, SiLU, or residual).
 
