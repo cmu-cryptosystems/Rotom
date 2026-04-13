@@ -1,5 +1,3 @@
-import os
-
 from ir.analysis.shape import Shape
 from ir.dim import DimType
 from ir.he import HEOp, HETerm
@@ -93,12 +91,7 @@ def _slot_mask_conv2d_same_stride1(
 
 
 def lower_conv2d(env, kernel):
-    """Lower CONV2D kernel to circuit IR.
-
-    Multi-CT activations with ciphertext ``[R:…]`` replication (e.g. ResNet
-    ``l3_0_conv2`` input, ~576 CTs) share stride-1 masking/``rot_amts`` logic
-    with compact single-CT layouts; isolate producers before blaming Toy caches.
-    """
+    """Lower CONV2D kernel to circuit IR."""
     a_cts = env[kernel.cs[0]]
     b_cts = env[kernel.cs[1]]
     assert a_cts.keys() == b_cts.keys()
@@ -318,8 +311,7 @@ def lower_conv2d(env, kernel):
     #
     # Sum **inner** slot axes (larger index in ``slot_dims``) before **outer**
     # ones: removing the outer fragment first coalesces gaps and changes
-    # ``get_segment`` / ``mul_offset`` for the inner axis (see
-    # ``tests/test_layout_dim_segment.py``).
+    # ``get_segment`` / ``mul_offset`` for the inner axis.
     while True:
         _, slot_sum_dims = find_sum_dim(a_layout_cts.layout, 0)
         if not slot_sum_dims:
@@ -346,9 +338,6 @@ def lower_conv2d(env, kernel):
         if dim.dim_type == DimType.EMPTY:
             needs_mask = True
             break
-    # Debug: ``ROTOM_SKIP_CONV2D_GAP_MASK=1`` skips the post-conv output gap mask.
-    if os.environ.get("ROTOM_SKIP_CONV2D_GAP_MASK", "").strip() == "1":
-        needs_mask = False
 
     if needs_mask:
         mask = HETerm.mask([convert_layout_to_mask(kernel.layout)])
