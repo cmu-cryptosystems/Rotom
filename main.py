@@ -325,6 +325,15 @@ if __name__ == "__main__":
         default=None,
         help="Path to viaduct benchmark file",
     )
+    parser.add_argument(
+        "--toy-mp-workers",
+        type=int,
+        default=8,
+        help=(
+            "Toy backend: number of process workers for ciphertext eval (Linux + fork only). "
+            "Use 1 to force single-process."
+        ),
+    )
     args = parser.parse_args()
 
     main(args)

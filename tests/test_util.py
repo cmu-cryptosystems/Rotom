@@ -23,4 +23,6 @@ def get_default_args() -> Namespace:
         # Toy.run(): skip per-kernel dense eval + apply_layout self-checks (see backends/toy.py).
         # End-to-end tests that call check_results() still validate the final output.
         skip_toy_eval_checks=False,
+        # Toy.run() / fuzz(): Linux fork process pool size; 1 disables parallelism.
+        toy_mp_workers=8,
     )
