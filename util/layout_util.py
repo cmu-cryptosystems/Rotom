@@ -2,6 +2,7 @@ from copy import copy as copy
 import hashlib
 import os
 import pickle
+import uuid
 from pathlib import Path
 
 import numpy as np
@@ -860,10 +861,23 @@ def _get_apply_layout_plan(layout, pt_tensor_ndim: int, *, layout_len: int) -> d
 
         if disk_dir:
             plan_path = Path(disk_dir).expanduser() / f"{key}.pkl"
-            tmp_path = plan_path.with_suffix(".pkl.tmp")
-            with open(tmp_path, "wb") as f:
-                pickle.dump(plan, f, protocol=pickle.HIGHEST_PROTOCOL)
-            os.replace(tmp_path, plan_path)
+            # Unique temp name: Toy multiprocessing runs many workers; a shared
+            # ``*.pkl.tmp`` caused one process to ``os.replace`` another's temp.
+            tmp_path = plan_path.parent / (
+                f"{plan_path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
+            )
+            try:
+                with open(tmp_path, "wb") as f:
+                    pickle.dump(plan, f, protocol=pickle.HIGHEST_PROTOCOL)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp_path, plan_path)
+            finally:
+                if tmp_path.exists():
+                    try:
+                        tmp_path.unlink()
+                    except OSError:
+                        pass
 
     _APPLY_LAYOUT_PLAN_CACHE[key] = plan
     return plan
