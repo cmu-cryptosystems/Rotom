@@ -505,3 +505,69 @@ def test_conv2d_same_multichannel_io_dense_channel_layout(backend, c_in, c_out):
     results, kernel = run_compiler_and_backend(y, inputs, args, backend)
     expected_cts = apply_layout(expected, kernel.layout)
     assert_results_equal(expected_cts, results, backend)
+
+
+def test_conv2d_depthwise_same_diagonal_channels(backend):
+    """Depth-wise style conv: each output channel uses only its matching input channel."""
+    args = get_default_args()
+    args.n = 256
+    args.rolls = True
+    args.conv_roll = False
+    args.benchmark = "conv2d_depthwise_same_diag"
+
+    c_in = c_out = 4
+    h = w = 8
+    k = 3
+    a = TensorTerm.Tensor("a", [c_in, h, w], True)
+    b = TensorTerm.Tensor("b", [c_out, c_in, k, k], False)
+    y = TensorTerm.conv2d(a, b, 1, "same")
+
+    rng = np.random.default_rng(1234)
+    weights = np.zeros((c_out, c_in, k, k), dtype=np.float64)
+    for c in range(c_in):
+        weights[c, c, :, :] = rng.normal(size=(k, k))
+
+    inputs = {
+        "a": rng.normal(size=(c_in, h, w)).astype(np.float64),
+        "b": weights,
+    }
+
+    expected = y.eval(inputs)
+    results, kernel = run_compiler_and_backend(y, inputs, args, backend)
+    expected_cts = apply_layout(expected, kernel.layout)
+    assert_results_equal(expected_cts, results, backend)
+
+
+def test_conv2d_depthwise_channel_multiplier_two(backend):
+    """Depth-wise style conv with multiplier=2 (2 output maps per input channel)."""
+    args = get_default_args()
+    args.n = 256
+    args.rolls = True
+    args.conv_roll = False
+    args.benchmark = "conv2d_depthwise_multiplier2"
+
+    c_in = 3
+    channel_multiplier = 2
+    c_out = c_in * channel_multiplier
+    h = w = 8
+    k = 3
+    a = TensorTerm.Tensor("a", [c_in, h, w], True)
+    b = TensorTerm.Tensor("b", [c_out, c_in, k, k], False)
+    y = TensorTerm.conv2d(a, b, 1, "same")
+
+    rng = np.random.default_rng(5678)
+    weights = np.zeros((c_out, c_in, k, k), dtype=np.float64)
+    for c in range(c_in):
+        for m in range(channel_multiplier):
+            out_c = c * channel_multiplier + m
+            weights[out_c, c, :, :] = rng.normal(size=(k, k))
+
+    inputs = {
+        "a": rng.normal(size=(c_in, h, w)).astype(np.float64),
+        "b": weights,
+    }
+
+    expected = y.eval(inputs)
+    results, kernel = run_compiler_and_backend(y, inputs, args, backend)
+    expected_cts = apply_layout(expected, kernel.layout)
+    assert_results_equal(expected_cts, results, backend)
