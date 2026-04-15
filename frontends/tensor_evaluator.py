@@ -295,6 +295,10 @@ class TensorEvaluator:
         op_name = getattr(op, "value", op)
         match op_name:
             case "Tensor":
+                # Plaintext tensors must not be padded to a larger logical shape:
+                # e.g. an fc weight (64, 10) would become (64, 16) and change matmul output width.
+                if not bool(term.cs[2]):
+                    return np.asarray(inputs[term.cs[0]], dtype=np.float64)
                 shape = inputs[term.cs[0]].shape
                 rounded_shape = [self._round_to_ceiling_power_of_2(s) for s in shape]
                 padding = [0] * len(shape)

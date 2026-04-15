@@ -65,10 +65,15 @@ def lower_compact(env, kernel):
         pending = [d for d in remaining_ct_dims if d.dim is not None]
         if not pending:
             break
+        candidates = [d for d in pending if any(d == s for s in slot_dims)]
+        if not candidates:
+            # Some alignments expose ct splits absent from target slot axes.
+            # In that case, fall back to the legacy zip-based lowering path.
+            return _lower_compact_zip(env, kernel, n)
         if merge_outer_first:
-            swap_dim = max(pending, key=lambda d: dim_list_index(d, slot_dims))
+            swap_dim = max(candidates, key=lambda d: dim_list_index(d, slot_dims))
         else:
-            swap_dim = min(pending, key=lambda d: dim_list_index(d, slot_dims))
+            swap_dim = min(candidates, key=lambda d: dim_list_index(d, slot_dims))
 
         swap_dim_index = split_slot_dim_map[swap_dim]
         new_relevant_cts = {}
