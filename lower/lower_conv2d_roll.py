@@ -44,10 +44,6 @@ def lower_conv2d_roll(env, kernel):
     shape.run()
 
     conv_term = kernel.layout.term
-    if int(Conv2dArgs.from_term(conv_term).groups) != 1:
-        raise NotImplementedError(
-            "Grouped conv2d lowering is not implemented; use groups=1 for Lower/Toy."
-        )
     pad_list = Conv2dArgs.get_computed_padding(conv_term)
     if pad_list is None or len(pad_list) != 4:
         raise RuntimeError(

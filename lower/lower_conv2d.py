@@ -98,10 +98,6 @@ def lower_conv2d(env, kernel):
     assert a_cts.keys() == b_cts.keys()
 
     conv_term = kernel.layout.term
-    if int(Conv2dArgs.from_term(conv_term).groups) != 1:
-        raise NotImplementedError(
-            "Grouped conv2d lowering is not implemented; use groups=1 for Lower/Toy."
-        )
     pad_list = Conv2dArgs.get_computed_padding(conv_term)
     if pad_list is None or len(pad_list) != 4:
         raise RuntimeError(
@@ -233,10 +229,11 @@ def lower_conv2d(env, kernel):
     # precomputed conv masks from `layout.term.cs[4]`. Preserve that convention.
     # Only attach if not already present to avoid unbounded growth when lowering
     # is invoked multiple times in the same process.
-    if len(kernel.cs[1].layout.term.cs) <= 4:
-        kernel.cs[1].layout.term.cs.append(masks)
-    if len(kernel.cs[1].layout.term.cs) <= 5:
-        kernel.cs[1].layout.term.cs.append(rot_amts)
+    b_term_cs = kernel.cs[1].layout.term.cs
+    while len(b_term_cs) <= 5:
+        b_term_cs.append(None)
+    b_term_cs[4] = masks
+    b_term_cs[5] = rot_amts
 
     # Apply per-filter padding masks during conv lowering.
     # Without this, rotations wrap around in the packed HE vector and leak values

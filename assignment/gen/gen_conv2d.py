@@ -129,7 +129,7 @@ def add_replicated_dimensions_roll(a_shape, b_shape):
     # C_out (output channels) is handled separately in the output layout
 
     replicated_dims = {}
-    c_in = b_shape[1]  # Number of input channels
+    c_in = a_shape[0]  # Logical input channels (full C_in, not C_in/groups)
     _h_f = b_shape[2]  # Filter height (unused; for documentation)
     _w_f = b_shape[3]  # Filter width (unused; for documentation)
 
@@ -155,11 +155,7 @@ def gen_conv2d_roll(term, cs_kernels, shapes):
     b_shape = shapes[1]
 
     args = Conv2dArgs.from_term(term)
-    if int(args.groups) != 1:
-        raise NotImplementedError(
-            "Conv2d with groups != 1 is supported for tensor_ir.eval / shape analysis only; "
-            "layout generation (gen_conv2d_roll) currently requires groups=1."
-        )
+    _attach_grouped_filter_metadata(args, a_shape, b_shape)
     # find padding
     padding = calculate_padding(a_shape, b_shape, args.stride, args.padding)
     term.cs.append(padding)
@@ -307,7 +303,7 @@ def add_replicated_dimensions(a_shape, b_shape):
     replicated_dims = []
     b_dims = []
     c_out = b_shape[0]  # Number of output channels
-    c_in = b_shape[1]  # Number of input channels
+    c_in = a_shape[0]  # Logical input channels (full C_in, not C_in/groups)
     h_f = b_shape[2]  # Filter height
     w_f = b_shape[3]  # Filter width
 
@@ -405,11 +401,7 @@ def gen_conv2d(term, cs_kernels, shapes):
     b_shape = shapes[1]
 
     args = Conv2dArgs.from_term(term)
-    if int(args.groups) != 1:
-        raise NotImplementedError(
-            "Conv2d with groups != 1 is supported for tensor_ir.eval / shape analysis only; "
-            "layout generation (gen_conv2d) currently requires groups=1."
-        )
+    _attach_grouped_filter_metadata(args, a_shape, b_shape)
     # find padding
     padding = calculate_padding(a_shape, b_shape, args.stride, args.padding)
     term.cs.append(padding)
@@ -481,3 +473,35 @@ def gen_conv2d(term, cs_kernels, shapes):
         if not kernel.layout.rolls:
             output_kernels.add(find_compaction(kernel))
     return output_kernels
+
+
+def _attach_grouped_filter_metadata(args, a_shape, b_shape):
+    """Tag grouped-conv filters so packing can expand ``[C_out, C_in/groups, kH, kW]`` to full ``C_in``.
+
+    Layout generation aligns filter channel traversal to the logical input channel axis.
+    For grouped conv, that logical axis is full ``C_in`` while the stored weight tensor
+    uses ``C_in/groups``. Packing uses this metadata to inject zeroed cross-group slices.
+    """
+    g = int(args.groups)
+    if g == 1:
+        return
+    c_in = int(a_shape[0])
+    c_out = int(b_shape[0])
+    c_in_g = int(b_shape[1])
+    if c_in % g != 0 or c_out % g != 0:
+        raise ValueError(
+            f"conv2d groups={g} must divide C_in={c_in} and C_out={c_out} during layout generation"
+        )
+    meta = {
+        "__rotom_grouped_conv_filter__": True,
+        "groups": g,
+        "in_channels": c_in,
+        "out_channels": c_out,
+        "in_channels_per_group": c_in_g,
+    }
+    # TensorTerm cs is mutable; append once or refresh existing tag in place.
+    for i, c in enumerate(args.filter.cs):
+        if isinstance(c, dict) and c.get("__rotom_grouped_conv_filter__"):
+            args.filter.cs[i] = meta
+            return
+    args.filter.cs.append(meta)

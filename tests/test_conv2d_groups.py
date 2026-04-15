@@ -10,6 +10,9 @@ import torch.nn.functional as F
 from frontends.tensor import TensorTerm
 from frontends.tensor_args import Conv2dArgs
 from ir.analysis.shape import Shape
+from tests.conftest import assert_results_equal, run_compiler_and_backend
+from tests.test_util import get_default_args
+from util.layout_util import apply_layout
 
 
 def _eval_term(term: TensorTerm, inputs: dict) -> np.ndarray:
@@ -112,3 +115,53 @@ def test_conv2d_groups_one_equivalent_to_ungrouped() -> None:
     ya = _eval_term(a, inputs)
     yb = _eval_term(b, inputs)
     assert np.allclose(ya, yb, rtol=0, atol=0)
+
+
+def test_grouped_conv2d_lowering_toy_matches_eval() -> None:
+    """Grouped conv2d compiles through lowering and matches dense eval on Toy."""
+    rng = np.random.default_rng(7)
+    cin, cout, g = 4, 8, 2
+    h = w = 8
+    x = rng.standard_normal((cin, h, w)).astype(np.float64)
+    wgt = rng.standard_normal((cout, cin // g, 3, 3)).astype(np.float64)
+
+    inp = TensorTerm.Tensor("x", [cin, h, w], True)
+    wt = TensorTerm.Tensor("w", list(wgt.shape), False)
+    term = TensorTerm.conv2d(inp, wt, 1, "same", groups=g)
+    expected = term.eval({"x": x, "w": wgt})
+
+    args = get_default_args()
+    args.backend = "toy"
+    args.n = 2048
+    args.rolls = True
+    args.conv_roll = False
+    args.benchmark = "grouped_conv2d_toy"
+
+    results, kernel = run_compiler_and_backend(term, {"x": x, "w": wgt}, args, "toy")
+    expected_cts = apply_layout(expected, kernel.layout)
+    assert_results_equal(expected_cts, results, "toy")
+
+
+def test_depthwise_conv2d_lowering_toy_matches_eval() -> None:
+    """Depthwise grouped conv (groups=C_in) lowers and matches eval on Toy."""
+    rng = np.random.default_rng(8)
+    c = 8
+    h = w = 8
+    x = rng.standard_normal((c, h, w)).astype(np.float64)
+    wgt = rng.standard_normal((c, 1, 3, 3)).astype(np.float64)
+
+    inp = TensorTerm.Tensor("x", [c, h, w], True)
+    wt = TensorTerm.Tensor("w", list(wgt.shape), False)
+    term = TensorTerm.conv2d(inp, wt, 1, "same", groups=c)
+    expected = term.eval({"x": x, "w": wgt})
+
+    args = get_default_args()
+    args.backend = "toy"
+    args.n = 2048
+    args.rolls = True
+    args.conv_roll = False
+    args.benchmark = "depthwise_conv2d_toy"
+
+    results, kernel = run_compiler_and_backend(term, {"x": x, "w": wgt}, args, "toy")
+    expected_cts = apply_layout(expected, kernel.layout)
+    assert_results_equal(expected_cts, results, "toy")

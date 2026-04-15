@@ -182,7 +182,7 @@ class Shape:
                 logical_b = self.get_shape(args.filter)
                 logical_a = self.get_shape(args.input)
 
-                _c_i = a_shape[0]
+                _c_i = logical_a[0]
                 h_i = logical_a[1]
                 w_i = logical_a[2]
                 g = int(args.groups)
@@ -350,14 +350,16 @@ class Shape:
                 g = int(args.groups)
                 if g < 1:
                     raise ValueError("conv2d groups must be >= 1")
-                if a_shape[0] % g != 0 or b_shape[0] % g != 0:
+                logical_a = copy(self.get_shape(a))
+                logical_b = copy(self.get_shape(b))
+                if logical_a[0] % g != 0 or logical_b[0] % g != 0:
                     raise ValueError(
-                        f"conv2d groups={g} must divide input channels {a_shape[0]} and output channels {b_shape[0]}"
+                        f"conv2d groups={g} must divide input channels {logical_a[0]} and output channels {logical_b[0]}"
                     )
-                if len(b_shape) == 4 and b_shape[1] != a_shape[0] // g:
+                if len(logical_b) == 4 and logical_b[1] != logical_a[0] // g:
                     raise ValueError(
                         "conv2d grouped weight must have shape[1] == C_in / groups "
-                        f"(expected {a_shape[0] // g}, got {b_shape[1]})"
+                        f"(expected {logical_a[0] // g}, got {logical_b[1]})"
                     )
 
                 c_o = b_shape[0]

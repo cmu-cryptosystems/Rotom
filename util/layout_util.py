@@ -637,8 +637,59 @@ def _ct_index_rows_to_values(pt_tensor, ct_indices):
     return out
 
 
+def _maybe_expand_grouped_conv_filter(pt_tensor, layout):
+    """Expand grouped conv filter weights to full logical ``C_in`` for layout packing."""
+    term = getattr(layout, "term", None)
+    if term is None or not hasattr(term, "cs"):
+        return pt_tensor
+    grouped_meta = None
+    for c in term.cs:
+        if isinstance(c, dict) and c.get("__rotom_grouped_conv_filter__"):
+            grouped_meta = c
+            break
+    if grouped_meta is None:
+        return pt_tensor
+
+    arr = np.asarray(pt_tensor, dtype=np.float64)
+    if arr.ndim != 4:
+        return arr
+
+    groups = int(grouped_meta["groups"])
+    c_in = int(grouped_meta["in_channels"])
+    c_out = int(grouped_meta["out_channels"])
+    c_in_g = int(grouped_meta["in_channels_per_group"])
+    if groups <= 1:
+        return arr
+    if arr.shape[0] != c_out or arr.shape[1] != c_in_g:
+        raise ValueError(
+            "Grouped conv filter metadata does not match runtime weight tensor shape: "
+            f"expected [{c_out}, {c_in_g}, kH, kW], got {list(arr.shape)}"
+        )
+    if c_in % groups != 0 or c_out % groups != 0:
+        raise ValueError(
+            f"Invalid grouped conv metadata: groups={groups}, C_in={c_in}, C_out={c_out}"
+        )
+
+    expanded = np.zeros((c_out, c_in, arr.shape[2], arr.shape[3]), dtype=np.float64)
+    cin_per_group = c_in // groups
+    cout_per_group = c_out // groups
+    if c_in_g != cin_per_group:
+        raise ValueError(
+            "Grouped conv filter has mismatched C_in/groups: "
+            f"metadata={c_in_g}, expected={cin_per_group}"
+        )
+    for g in range(groups):
+        out_lo = g * cout_per_group
+        out_hi = (g + 1) * cout_per_group
+        in_lo = g * cin_per_group
+        in_hi = (g + 1) * cin_per_group
+        expanded[out_lo:out_hi, in_lo:in_hi, :, :] = arr[out_lo:out_hi, :, :, :]
+    return expanded
+
+
 def apply_layout(pt_tensor, layout):
     """apply a layout to a pt tensor"""
+    pt_tensor = _maybe_expand_grouped_conv_filter(pt_tensor, layout)
     layout_len = max(len(layout), layout.n)
     # get base_term indices
     pt_tensor_ndim = np.ndim(pt_tensor)
