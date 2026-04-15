@@ -155,6 +155,11 @@ def gen_conv2d_roll(term, cs_kernels, shapes):
     b_shape = shapes[1]
 
     args = Conv2dArgs.from_term(term)
+    if int(args.groups) != 1:
+        raise NotImplementedError(
+            "Conv2d with groups != 1 is supported for tensor_ir.eval / shape analysis only; "
+            "layout generation (gen_conv2d_roll) currently requires groups=1."
+        )
     # find padding
     padding = calculate_padding(a_shape, b_shape, args.stride, args.padding)
     term.cs.append(padding)
@@ -400,6 +405,11 @@ def gen_conv2d(term, cs_kernels, shapes):
     b_shape = shapes[1]
 
     args = Conv2dArgs.from_term(term)
+    if int(args.groups) != 1:
+        raise NotImplementedError(
+            "Conv2d with groups != 1 is supported for tensor_ir.eval / shape analysis only; "
+            "layout generation (gen_conv2d) currently requires groups=1."
+        )
     # find padding
     padding = calculate_padding(a_shape, b_shape, args.stride, args.padding)
     term.cs.append(padding)

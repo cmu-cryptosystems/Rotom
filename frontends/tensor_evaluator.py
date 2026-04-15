@@ -35,6 +35,7 @@ class TensorEvaluator:
         filter_tensor: np.ndarray,
         stride: int,
         padding: str,
+        groups: int = 1,
     ) -> np.ndarray:
         input_shape = input_tensor.shape
         filter_shape = filter_tensor.shape
@@ -120,9 +121,27 @@ class TensorEvaluator:
                 )
             input_tensor = padded_input_tensor
 
-        output_tensor = np.zeros(output_shape)
-        for in_c in range(input_shape[0]):
-            for out_c in range(output_shape[0]):
+        groups = int(groups)
+        if groups < 1:
+            raise ValueError("groups must be >= 1")
+        c_in, c_out = input_shape[0], filter_shape[0]
+        if c_in % groups != 0 or c_out % groups != 0:
+            raise ValueError(
+                f"in_channels={c_in} and out_channels={c_out} must be divisible by groups={groups}"
+            )
+        cin_g = c_in // groups
+        cout_g = c_out // groups
+        if filter_shape[1] != cin_g:
+            raise ValueError(
+                f"grouped conv expects weight shape[1] == C_in/groups ({cin_g}), got {filter_shape[1]}"
+            )
+
+        output_tensor = np.zeros(output_shape, dtype=np.float64)
+        for out_c in range(c_out):
+            g = out_c // cout_g
+            in_base = g * cin_g
+            for ic_rel in range(cin_g):
+                ic = in_base + ic_rel
                 for i in range(output_shape[1]):
                     for j in range(output_shape[2]):
                         i_start = i * stride
@@ -134,13 +153,12 @@ class TensorEvaluator:
                         for x in range(i_start, i_end):
                             row = []
                             for y in range(j_start, j_end):
-                                row.append(input_tensor[in_c][x][y])
+                                row.append(input_tensor[ic][x][y])
                             patch.append(row)
-                        patch = np.array(patch)
+                        patch = np.array(patch, dtype=np.float64)
 
-                        f_in_idx = min(in_c, filter_shape[1] - 1)
                         output_tensor[out_c][i][j] += np.sum(
-                            patch * filter_tensor[out_c][f_in_idx]
+                            patch * filter_tensor[out_c, ic_rel]
                         )
 
         return output_tensor
@@ -295,6 +313,10 @@ class TensorEvaluator:
         op_name = getattr(op, "value", op)
         match op_name:
             case "Tensor":
+                # Plaintext tensors must not be padded to a larger logical shape:
+                # e.g. an fc weight (N, 10) becomes (N, 16) and widens matmul output.
+                if not bool(term.cs[2]):
+                    return np.asarray(inputs[term.cs[0]], dtype=np.float64)
                 shape = inputs[term.cs[0]].shape
                 rounded_shape = [self._round_to_ceiling_power_of_2(s) for s in shape]
                 padding = [0] * len(shape)
@@ -335,7 +357,11 @@ class TensorEvaluator:
 
                 args = Conv2dArgs.from_term(term)
                 return self._eval_conv2d(
-                    env[args.input], env[args.filter], args.stride, args.padding
+                    env[args.input],
+                    env[args.filter],
+                    args.stride,
+                    args.padding,
+                    args.groups,
                 )
             case "Conv3D":
                 from .tensor_args import Conv3dArgs

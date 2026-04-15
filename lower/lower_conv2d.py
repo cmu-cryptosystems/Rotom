@@ -1,3 +1,4 @@
+from frontends.tensor_args import Conv2dArgs
 from ir.analysis.shape import Shape
 from ir.dim import DimType
 from ir.he import HEOp, HETerm
@@ -96,6 +97,17 @@ def lower_conv2d(env, kernel):
     b_cts = env[kernel.cs[1]]
     assert a_cts.keys() == b_cts.keys()
 
+    conv_term = kernel.layout.term
+    if int(Conv2dArgs.from_term(conv_term).groups) != 1:
+        raise NotImplementedError(
+            "Grouped conv2d lowering is not implemented; use groups=1 for Lower/Toy."
+        )
+    pad_list = Conv2dArgs.get_computed_padding(conv_term)
+    if pad_list is None or len(pad_list) != 4:
+        raise RuntimeError(
+            "conv2d kernel term is missing precomputed padding from layout gen"
+        )
+
     shape = Shape(kernel.layout.term)
     shape.run()
 
@@ -116,10 +128,10 @@ def lower_conv2d(env, kernel):
     _a_shape = get_term_shape(kernel.cs[0].layout.term)
     b_shape = get_term_shape(kernel.cs[1].layout.term)
 
-    pad_top = kernel.layout.term.cs[4][0]
-    _pad_bottom = kernel.layout.term.cs[4][1]
-    pad_left = kernel.layout.term.cs[4][2]
-    _pad_right = kernel.layout.term.cs[4][3]
+    pad_top = int(pad_list[0])
+    _pad_bottom = int(pad_list[1])
+    pad_left = int(pad_list[2])
+    _pad_right = int(pad_list[3])
     _stride = kernel.layout.term.cs[2]
 
     # calculate rotation amounts for input ciphertexts

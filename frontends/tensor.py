@@ -500,15 +500,17 @@ class TensorTerm:
         stride: int,
         padding: str,
         layout: Optional[str] = None,
+        groups: int = 1,
     ) -> "TensorTerm":
         """Create a 2D convolution operation.
 
         Args:
             a (TensorTerm): Input tensor
-            b (TensorTerm): Filter tensor
+            b (TensorTerm): Filter tensor ``[C_out, C_in / groups, K_h, K_w]`` when ``groups > 1``
             stride (int): Stride of the convolution
             padding (str): Padding mode ("valid" or "same")
             layout (str, optional): Tensor layout string for the result
+            groups (int): PyTorch-style grouped convolution (default ``1``).
 
         Returns:
             TensorTerm: A new tensor term representing the convolution
@@ -517,7 +519,10 @@ class TensorTerm:
             >>> c = TensorTerm.conv2d(input, filter, 1, "same")
             >>> d = TensorTerm.conv2d(input, filter, 1, "same", layout="[0:32:1][1:32:1][2:64:1]")
         """
-        return TensorTerm(TensorOp.CONV2D, [a, b, stride, padding], layout)
+        cs: List[Any] = [a, b, stride, padding]
+        if int(groups) != 1:
+            cs.append(int(groups))
+        return TensorTerm(TensorOp.CONV2D, cs, layout)
 
     @staticmethod
     def conv3d(

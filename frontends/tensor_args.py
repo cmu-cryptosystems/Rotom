@@ -10,8 +10,16 @@ Import from here when you need to read term.cs in a type-safe way without
 pulling in the full tensor frontend (e.g. lower, assignment, ir/analysis).
 """
 
+import numbers
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
+
+
+def _is_conv2d_padding_list(value: Any) -> bool:
+    """True if ``value`` is the ``[pad_top, pad_bottom, pad_left, pad_right]`` tuple from layout gen."""
+    if not isinstance(value, (list, tuple)) or len(value) != 4:
+        return False
+    return all(isinstance(x, numbers.Real) for x in value)
 
 
 @dataclass(frozen=True)
@@ -33,29 +41,44 @@ class PolyCallArgs:
 
 @dataclass(frozen=True)
 class Conv2dArgs:
-    """Structured view of a CONV2D term (term.cs = [input, filter, stride, padding]).
-    After assignment, term.cs may have computed padding at index 4; use get_computed_padding(term).
+    """Structured view of a CONV2D term.
+
+    Wire format:
+
+    - ``[input, filter, stride, padding]`` — ``groups == 1``.
+    - ``[input, filter, stride, padding, groups]`` — explicit ``groups`` (before layout gen appends padding).
+    - After :func:`assignment.gen.gen_conv2d.gen_conv2d`, padding is appended:
+
+      - ``[..., padding_list]`` if ``groups == 1`` (padding at index 4), or
+      - ``[..., groups, padding_list]`` if ``groups != 1`` (padding at index 5).
     """
 
     input: Any
     filter: Any  # noqa: A003
     stride: int
     padding: str
+    groups: int = 1
 
     @classmethod
     def from_term(cls, term: Any) -> "Conv2dArgs":
+        groups = 1
+        if len(term.cs) > 4 and not _is_conv2d_padding_list(term.cs[4]):
+            groups = int(term.cs[4])
         return cls(
             input=term.cs[0],
             filter=term.cs[1],
-            stride=term.cs[2],
+            stride=int(term.cs[2]),
             padding=term.cs[3],
+            groups=groups,
         )
 
     @staticmethod
     def get_computed_padding(term: Any) -> Optional[List[int]]:
-        """Return [pad_top, pad_bottom, pad_left, pad_right] if set by assignment (term.cs[4])."""
-        if len(term.cs) > 4:
-            return term.cs[4]
+        """Return ``[pad_top, pad_bottom, pad_left, pad_right]`` if set by layout generation."""
+        if len(term.cs) > 5 and _is_conv2d_padding_list(term.cs[5]):
+            return [int(x) for x in term.cs[5]]
+        if len(term.cs) > 4 and _is_conv2d_padding_list(term.cs[4]):
+            return [int(x) for x in term.cs[4]]
         return None
 
 
