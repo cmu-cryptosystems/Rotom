@@ -567,6 +567,7 @@ class LayoutAssignment:
         assert kernels
 
         new_kernels = []
+        mismatch_details = []
         for kernel in kernels:
             shape = self.shape.padded_shapes[kernel.layout.term]
             kernel_shape_map = {}
@@ -616,18 +617,26 @@ class LayoutAssignment:
                     new_kernels.append(kernel)
                     continue
 
-                # Helpful context when this trips (e.g. extents-1 axes / non-dense dim indices).
+                # Keep searching: a term can have multiple candidate kernels and some
+                # may be shape-compatible even when others are not.
                 layout_dims = [
                     (d.dim, d.extent, getattr(d, "dim_type", None))
                     for d in kernel.layout.get_dims()
                 ]
-                raise ValueError(
+                mismatch_details.append(
                     f"kernel shape {kernel_shape} does not match expected shape {shape}; "
                     f"term_op={kernel.layout.term.op}; layout_dims={layout_dims}"
                 )
+                continue
 
             new_kernels.append(kernel)
-        assert new_kernels
+        if not new_kernels:
+            detail = (
+                mismatch_details[0]
+                if mismatch_details
+                else "no candidate kernels survived"
+            )
+            raise ValueError(detail)
         return new_kernels
 
     def update_kernels(self, term, kernels):
