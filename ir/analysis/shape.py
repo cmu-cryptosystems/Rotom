@@ -25,6 +25,24 @@ from frontends.tensor_args import (
 from util.util import round_to_ceiling_power_of_2
 
 
+def _avg_pool_out_hw(
+    h_i: int, w_i: int, k: int, s: int, padding: str
+) -> tuple[int, int]:
+    if padding == "valid":
+        h_o = (h_i - k) // s + 1
+        w_o = (w_i - k) // s + 1
+    elif padding == "same":
+        if s == 1:
+            h_o, w_o = h_i, w_i
+        else:
+            p = k // 2
+            h_o = (h_i + 2 * p - k) // s + 1
+            w_o = (w_i + 2 * p - k) // s + 1
+    else:
+        raise NotImplementedError(f"unknown padding: {padding!r}")
+    return h_o, w_o
+
+
 class Shape:
     def __init__(self, comp):
         self.comp = comp
@@ -284,6 +302,19 @@ class Shape:
                 out = copy(cs_shapes[0])
                 out[axis] = sum(s[axis] for s in cs_shapes)
                 return out
+            case TensorOp.CUMSUM:
+                return copy(self.padded_shapes[term.cs[0]])
+            case TensorOp.AVG_POOL2D:
+                a_shape = copy(self.padded_shapes[term.cs[0]])
+                k, s, pad = int(term.cs[1]), int(term.cs[2]), term.cs[3]
+                h_o, w_o = _avg_pool_out_hw(
+                    int(a_shape[1]), int(a_shape[2]), k, s, str(pad)
+                )
+                return [
+                    int(a_shape[0]),
+                    round_to_ceiling_power_of_2(h_o),
+                    round_to_ceiling_power_of_2(w_o),
+                ]
             case _:
                 raise NotImplementedError(term.op)
 
@@ -461,6 +492,15 @@ class Shape:
                 out = copy(cs_shapes[0])
                 out[axis] = sum(s[axis] for s in cs_shapes)
                 return out
+            case TensorOp.CUMSUM:
+                return copy(self.get_shape(term.cs[0]))
+            case TensorOp.AVG_POOL2D:
+                a_shape = copy(self.get_shape(term.cs[0]))
+                k, s, pad = int(term.cs[1]), int(term.cs[2]), term.cs[3]
+                h_o, w_o = _avg_pool_out_hw(
+                    int(a_shape[1]), int(a_shape[2]), k, s, str(pad)
+                )
+                return [int(a_shape[0]), h_o, w_o]
             case _:
                 raise NotImplementedError(term.op)
 

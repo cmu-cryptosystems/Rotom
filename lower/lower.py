@@ -49,6 +49,8 @@ from lower.lower_sub import lower_sub
 from lower.lower_sum import lower_sum
 from lower.lower_tensor import lower_tensor
 from lower.lower_tile import lower_tile
+from lower.lower_cumsum import lower_cumsum
+from lower.lower_avg_pool2d import lower_avg_pool2d
 from lower.lower_transpose import lower_transpose
 
 
@@ -118,6 +120,10 @@ class Lower:
                     self.env[term] = lower_index(self.env, term)
                 case KernelOp.TILE:
                     self.env[term] = lower_tile(self.env, term)
+                case KernelOp.CUMSUM:
+                    self.env[term] = lower_cumsum(self.env, term)
+                case KernelOp.AVG_POOL2D:
+                    self.env[term] = lower_avg_pool2d(self.env, term)
                 case KernelOp.CONCAT:
                     self.env[term] = lower_concat(self.env, term)
                 case KernelOp.SELECT:

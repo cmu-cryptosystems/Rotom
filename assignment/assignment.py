@@ -25,6 +25,8 @@ from assignment.gen.gen_binop import gen_binop
 from assignment.gen.gen_block_matmul import gen_block_matmul
 from assignment.gen.gen_const import gen_const
 from assignment.gen.gen_concat import gen_concat
+from assignment.gen.gen_cumsum import gen_cumsum
+from assignment.gen.gen_avg_pool2d import gen_avg_pool2d
 from assignment.gen.gen_conv2d import gen_conv2d, gen_conv2d_roll
 from assignment.gen.gen_conv3d import gen_conv3d
 from assignment.gen.gen_index import gen_index
@@ -203,6 +205,11 @@ class LayoutAssignment:
                 kernels = gen_tile(term, cs_kernels[0])
             case TensorOp.CONCAT:
                 kernels = gen_concat(term, cs_kernels)
+            case TensorOp.CUMSUM:
+                kernels = gen_cumsum(term, cs_kernels[0])
+            case TensorOp.AVG_POOL2D:
+                cs_shapes = self.get_unpadded_cs_shapes(term)
+                kernels = gen_avg_pool2d(term, cs_kernels[0], cs_shapes)
             case TensorOp.BLOCK_MATMUL:
                 kernels = gen_block_matmul(term, cs_kernels)
             case TensorOp.POLY_CALL | TensorOp.HARD_SWISH:
@@ -452,6 +459,8 @@ class LayoutAssignment:
                 | TensorOp.PERMUTE
                 | TensorOp.INDEX
                 | TensorOp.TILE
+                | TensorOp.CUMSUM
+                | TensorOp.AVG_POOL2D
                 | TensorOp.RESCALE
             ):
                 return [self.get_last_kernels(self.kernels[term.cs[0]].values())]

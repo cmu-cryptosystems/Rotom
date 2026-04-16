@@ -54,6 +54,8 @@ class Secret:
                 | TensorOp.POLY_CALL
                 | TensorOp.HARD_SWISH
                 | TensorOp.TILE
+                | TensorOp.CUMSUM
+                | TensorOp.AVG_POOL2D
                 | TensorOp.RESHAPE
                 | TensorOp.PERMUTE
                 | TensorOp.INDEX
@@ -127,6 +129,8 @@ class Secret:
                 | TensorOp.POLY_CALL
                 | TensorOp.HARD_SWISH
                 | TensorOp.TILE
+                | TensorOp.CUMSUM
+                | TensorOp.AVG_POOL2D
                 | TensorOp.RESHAPE
                 | TensorOp.PERMUTE
                 | TensorOp.INDEX
