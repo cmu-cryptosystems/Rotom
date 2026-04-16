@@ -52,6 +52,8 @@ class Secret:
                 | TensorOp.SUM
                 | TensorOp.PRODUCT
                 | TensorOp.POLY_CALL
+                | TensorOp.HARD_SWISH
+                | TensorOp.TILE
                 | TensorOp.RESHAPE
                 | TensorOp.PERMUTE
                 | TensorOp.INDEX
@@ -121,6 +123,8 @@ class Secret:
                 TensorOp.TRANSPOSE
                 | TensorOp.SUM
                 | TensorOp.POLY_CALL
+                | TensorOp.HARD_SWISH
+                | TensorOp.TILE
                 | TensorOp.RESHAPE
                 | TensorOp.PERMUTE
                 | TensorOp.INDEX

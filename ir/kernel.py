@@ -77,6 +77,7 @@ class KernelOp(Enum):
     COMBINE = "COMBINE"
     REORDER = "REORDER"
     RESCALE = "RESCALE"
+    TILE = "TILE"
 
 
 class Kernel:
@@ -185,7 +186,13 @@ class Kernel:
             ):
                 seen.add(self)
                 return [self], seen
-            case KernelOp.SUM | KernelOp.PRODUCT | KernelOp.INDEX | KernelOp.RESCALE:
+            case (
+                KernelOp.SUM
+                | KernelOp.PRODUCT
+                | KernelOp.INDEX
+                | KernelOp.RESCALE
+                | KernelOp.TILE
+            ):
                 res = []
                 _res, _seen = self.cs[0].helper_post_order(seen)
                 res += _res

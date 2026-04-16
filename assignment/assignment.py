@@ -199,7 +199,7 @@ class LayoutAssignment:
                 kernels = gen_index(term, cs_kernels[0])
             case TensorOp.BLOCK_MATMUL:
                 kernels = gen_block_matmul(term, cs_kernels)
-            case TensorOp.POLY_CALL:
+            case TensorOp.POLY_CALL | TensorOp.HARD_SWISH:
                 kernels = gen_poly_call(term, cs_kernels[0])
             case _:
                 raise NotImplementedError(term.op)
@@ -425,6 +425,7 @@ class LayoutAssignment:
             case (
                 TensorOp.TRANSPOSE
                 | TensorOp.POLY_CALL
+                | TensorOp.HARD_SWISH
                 | TensorOp.SUM
                 | TensorOp.RESHAPE
                 | TensorOp.PERMUTE

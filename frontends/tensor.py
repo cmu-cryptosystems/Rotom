@@ -583,7 +583,19 @@ class TensorTerm:
     def avg_pool2d(
         self, kernel: int, stride: int, padding: str, layout: Optional[str] = None
     ) -> "TensorTerm":
-        """Average pool over spatial dimensions H/W."""
+        """Average pool over spatial dimensions H/W.
+
+        For 2x2 / stride=2 / valid, desugar into slice-index + elementwise ops so
+        existing assignment/lowering can run end-to-end.
+        """
+        if kernel == 2 and stride == 2 and padding == "valid":
+            x00 = self[(slice(None), slice(0, None, 2), slice(0, None, 2))]
+            x01 = self[(slice(None), slice(0, None, 2), slice(1, None, 2))]
+            x10 = self[(slice(None), slice(1, None, 2), slice(0, None, 2))]
+            x11 = self[(slice(None), slice(1, None, 2), slice(1, None, 2))]
+            out = (x00 + x01 + x10 + x11) * (1.0 / 4.0)
+            out.layout = layout
+            return out
         return TensorTerm(TensorOp.AVG_POOL2D, [self, kernel, stride, padding], layout)
 
     def hard_swish(self, layout: Optional[str] = None) -> "TensorTerm":

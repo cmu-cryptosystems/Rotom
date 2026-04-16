@@ -267,9 +267,17 @@ class Shape:
                 dim_idx = term.cs[1]
                 result_shape = a_shape[:dim_idx] + a_shape[dim_idx + 1 :]
                 return result_shape
-            case TensorOp.RESCALE | TensorOp.POLY_CALL:
+            case TensorOp.RESCALE | TensorOp.POLY_CALL | TensorOp.HARD_SWISH:
                 # Preserves the shape of the input tensor
                 return copy(self.padded_shapes[term.cs[0]])
+            case TensorOp.TILE:
+                a_shape = copy(self.padded_shapes[term.cs[0]])
+                reps = term.cs[1]
+                if len(reps) != len(a_shape):
+                    raise ValueError(
+                        "TILE reps rank must match input rank for padded shape"
+                    )
+                return [a_shape[i] * int(reps[i]) for i in range(len(a_shape))]
             case _:
                 raise NotImplementedError(term.op)
 
@@ -433,8 +441,14 @@ class Shape:
                 dim_idx = term.cs[1]
                 result_shape = a_shape[:dim_idx] + a_shape[dim_idx + 1 :]
                 return result_shape
-            case TensorOp.POLY_CALL:
+            case TensorOp.POLY_CALL | TensorOp.HARD_SWISH:
                 return copy(self.get_shape(term.cs[0]))
+            case TensorOp.TILE:
+                a_shape = copy(self.get_shape(term.cs[0]))
+                reps = term.cs[1]
+                if len(reps) != len(a_shape):
+                    raise ValueError("TILE reps rank must match input rank")
+                return [a_shape[i] * int(reps[i]) for i in range(len(a_shape))]
             case _:
                 raise NotImplementedError(term.op)
 

@@ -410,6 +410,8 @@ class Toy:
             # Bounds are only on the lowered ``POLY_CALL`` path; this helper is used without
             # metadata in a few tests — use the same default interval as legacy string ``silu``.
             return eval_silu_polycall(vec, -8.0, 8.0, getattr(self, "inputs", None))
+        elif poly_func == "hard_swish":
+            return vec * np.clip(vec + 3.0, 0.0, 6.0) / 6.0
         else:
             raise NotImplementedError(
                 f"Poly func {poly_func!r} not implemented for eval"
