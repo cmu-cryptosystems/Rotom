@@ -41,14 +41,19 @@ class Conv2dArgs:
     filter: Any  # noqa: A003
     stride: int
     padding: str
+    groups: Any
 
     @classmethod
     def from_term(cls, term: Any) -> "Conv2dArgs":
+        groups = 1
+        if len(term.cs) > 4:
+            groups = term.cs[4]
         return cls(
             input=term.cs[0],
             filter=term.cs[1],
             stride=term.cs[2],
             padding=term.cs[3],
+            groups=groups,
         )
 
     @staticmethod

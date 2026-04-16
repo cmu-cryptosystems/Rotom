@@ -219,6 +219,51 @@ class TestStaticMethodsLayout:
         assert result.layout == layout
         assert result.op == TensorOp.CONV2D
 
+    def test_depthwise_conv2d_with_layout(self):
+        """Test depthwise conv2d with layout parameter."""
+        a = TensorTerm.Tensor("a", [8, 32, 32], True)
+        b = TensorTerm.Tensor("b", [1, 3, 3, 8], False)
+        layout = "[0:8:1][1:32:1][2:32:1]"
+        result = TensorTerm.depthwise_conv2d(a, b, 1, "same", layout=layout)
+        assert result.layout == layout
+        assert result.op == TensorOp.CONV2D
+
+    def test_concat_with_layout(self):
+        a = TensorTerm.Tensor("a", [4, 4], True)
+        b = TensorTerm.Tensor("b", [4, 4], True)
+        layout = "[0:8:1][1:4:1]"
+        result = TensorTerm.concat([a, b], axis=0, layout=layout)
+        assert result.layout == layout
+        assert result.op == TensorOp.CONCAT
+
+    def test_tile_with_layout(self):
+        a = TensorTerm.Tensor("a", [4, 4], True)
+        layout = "[0:4:1][1:8:1]"
+        result = a.tile([1, 2], layout=layout)
+        assert result.layout == layout
+        assert result.op == TensorOp.TILE
+
+    def test_cumsum_with_layout(self):
+        a = TensorTerm.Tensor("a", [4, 4], True)
+        layout = "[0:4:1][1:4:1]"
+        result = a.cumsum(1, layout=layout)
+        assert result.layout == layout
+        assert result.op == TensorOp.CUMSUM
+
+    def test_avg_pool2d_with_layout(self):
+        a = TensorTerm.Tensor("a", [8, 32, 32], True)
+        layout = "[0:8:1][1:16:1][2:16:1]"
+        result = a.avg_pool2d(kernel=2, stride=2, padding="valid", layout=layout)
+        assert result.layout == layout
+        assert result.op == TensorOp.AVG_POOL2D
+
+    def test_hard_swish_with_layout(self):
+        a = TensorTerm.Tensor("a", [4, 4], True)
+        layout = "[0:4:1][1:4:1]"
+        result = a.hard_swish(layout=layout)
+        assert result.layout == layout
+        assert result.op == TensorOp.HARD_SWISH
+
 
 class TestLayoutStringFormats:
     """Test various layout string formats."""

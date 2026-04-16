@@ -437,6 +437,86 @@ class TestConvolutionEvaluation:
         )
         np.testing.assert_array_equal(result, expected)
 
+    def test_depthwise_conv2d_evaluation(self):
+        """Test depthwise 2D convolution with TFLite-style filter layout."""
+        input_tensor = TensorTerm.Tensor("input", [2, 3, 3], True)
+        # TFLite-style depthwise filter: [1, Kh, Kw, Cin] with multiplier=1
+        depthwise_filter = TensorTerm.Tensor("dw_filter", [1, 2, 2, 2], False)
+        conv = TensorTerm.depthwise_conv2d(input_tensor, depthwise_filter, 1, "valid")
+
+        inputs = {
+            "input": np.array(
+                [
+                    [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+                    [[9, 8, 7], [6, 5, 4], [3, 2, 1]],
+                ]
+            ),
+            "dw_filter": np.array(
+                [
+                    [
+                        [[1, 0], [0, 1]],
+                        [[0, 1], [1, 0]],
+                    ]
+                ]
+            ),
+        }
+        result = conv.eval(inputs)
+        expected = np.array(
+            [
+                [[6, 8], [12, 14]],
+                [[14, 12], [8, 6]],
+            ]
+        )
+        np.testing.assert_array_equal(result, expected)
+
+
+class TestExtendedFrontendOpsEvaluation:
+    """Test newly added frontend op evaluation semantics."""
+
+    def test_concat_evaluation(self):
+        a = TensorTerm.Tensor("a", [2, 2], True)
+        b = TensorTerm.Tensor("b", [2, 2], True)
+        c = TensorTerm.concat([a, b], axis=0)
+        inputs = {"a": np.array([[1, 2], [3, 4]]), "b": np.array([[5, 6], [7, 8]])}
+        result = c.eval(inputs)
+        np.testing.assert_array_equal(
+            result, np.array([[1, 2], [3, 4], [5, 6], [7, 8]])
+        )
+
+    def test_tile_evaluation(self):
+        a = TensorTerm.Tensor("a", [2, 2], True)
+        t = a.tile([1, 2])
+        inputs = {"a": np.array([[1, 2], [3, 4]])}
+        result = t.eval(inputs)
+        np.testing.assert_array_equal(result, np.array([[1, 2, 1, 2], [3, 4, 3, 4]]))
+
+    def test_cumsum_evaluation(self):
+        a = TensorTerm.Tensor("a", [2, 3], True)
+        s = a.cumsum(axis=1)
+        inputs = {"a": np.array([[1, 2, 3], [4, 5, 6]])}
+        result = s.eval(inputs)
+        np.testing.assert_array_equal(result, np.array([[1, 3, 6], [4, 9, 15]]))
+
+    def test_avg_pool2d_evaluation(self):
+        a = TensorTerm.Tensor("a", [1, 4, 4], True)
+        p = a.avg_pool2d(kernel=2, stride=2, padding="valid")
+        inputs = {
+            "a": np.array(
+                [[[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16]]]
+            )
+        }
+        result = p.eval(inputs)
+        np.testing.assert_array_equal(result, np.array([[[3.5, 5.5], [11.5, 13.5]]]))
+
+    def test_hard_swish_evaluation(self):
+        a = TensorTerm.Tensor("a", [5], True)
+        h = a.hard_swish()
+        x = np.array([-4.0, -3.0, 0.0, 3.0, 4.0])
+        inputs = {"a": x}
+        result = h.eval(inputs)
+        expected = x * np.clip(x + 3.0, 0.0, 6.0) / 6.0
+        np.testing.assert_allclose(result, expected)
+
 
 class TestComplexComputationEvaluation:
     """Test evaluation of complex tensor computations."""

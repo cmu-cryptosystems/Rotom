@@ -77,6 +77,11 @@ class TensorOp(Enum):
     PERMUTE = "Permute"  # permute dims
     INDEX = "Index"
     RESCALE = "Rescale"  # scale division
+    CONCAT = "Concat"  # concatenate tensors along axis
+    TILE = "Tile"  # repeat tensor by reps per dimension
+    CUMSUM = "CumSum"  # cumulative sum along axis
+    AVG_POOL2D = "AvgPool2D"  # average pooling over H/W
+    HARD_SWISH = "HardSwish"  # x * relu6(x + 3) / 6
 
 
 class TensorTerm:
@@ -499,6 +504,7 @@ class TensorTerm:
         b: "TensorTerm",
         stride: int,
         padding: str,
+        groups: int = 1,
         layout: Optional[str] = None,
     ) -> "TensorTerm":
         """Create a 2D convolution operation.
@@ -517,7 +523,18 @@ class TensorTerm:
             >>> c = TensorTerm.conv2d(input, filter, 1, "same")
             >>> d = TensorTerm.conv2d(input, filter, 1, "same", layout="[0:32:1][1:32:1][2:64:1]")
         """
-        return TensorTerm(TensorOp.CONV2D, [a, b, stride, padding], layout)
+        return TensorTerm(TensorOp.CONV2D, [a, b, stride, padding, groups], layout)
+
+    @staticmethod
+    def depthwise_conv2d(
+        a: "TensorTerm",
+        b: "TensorTerm",
+        stride: int,
+        padding: str,
+        layout: Optional[str] = None,
+    ) -> "TensorTerm":
+        """Create a depthwise 2D convolution operation."""
+        return TensorTerm(TensorOp.CONV2D, [a, b, stride, padding, "depthwise"], layout)
 
     @staticmethod
     def conv3d(
@@ -537,6 +554,41 @@ class TensorTerm:
         - `padding` is "valid" or "same".
         """
         return TensorTerm(TensorOp.CONV3D, [a, b, stride, padding], layout)
+
+    @staticmethod
+    def concat(
+        tensors: List["TensorTerm"], axis: int, layout: Optional[str] = None
+    ) -> "TensorTerm":
+        """Concatenate tensors along a specified axis."""
+        if not tensors:
+            raise ValueError("concat requires at least one tensor")
+        if len(tensors) == 1:
+            return tensors[0]
+        return TensorTerm(TensorOp.CONCAT, [tensors, axis], layout)
+
+    def tile(self, reps: List[int], layout: Optional[str] = None) -> "TensorTerm":
+        """Tile tensor with repetition factors per dimension."""
+        return TensorTerm(TensorOp.TILE, [self, reps], layout)
+
+    def cumsum(
+        self,
+        axis: int,
+        exclusive: bool = False,
+        reverse: bool = False,
+        layout: Optional[str] = None,
+    ) -> "TensorTerm":
+        """Cumulative sum along one axis."""
+        return TensorTerm(TensorOp.CUMSUM, [self, axis, exclusive, reverse], layout)
+
+    def avg_pool2d(
+        self, kernel: int, stride: int, padding: str, layout: Optional[str] = None
+    ) -> "TensorTerm":
+        """Average pool over spatial dimensions H/W."""
+        return TensorTerm(TensorOp.AVG_POOL2D, [self, kernel, stride, padding], layout)
+
+    def hard_swish(self, layout: Optional[str] = None) -> "TensorTerm":
+        """Hard-swish activation."""
+        return TensorTerm(TensorOp.HARD_SWISH, [self], layout)
 
     def helper_post_order(self, seen):
         """Helper routine for post-order traversal.
