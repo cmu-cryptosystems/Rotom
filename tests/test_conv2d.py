@@ -571,3 +571,106 @@ def test_conv2d_depthwise_channel_multiplier_two(backend):
     results, kernel = run_compiler_and_backend(y, inputs, args, backend)
     expected_cts = apply_layout(expected, kernel.layout)
     assert_results_equal(expected_cts, results, backend)
+
+
+@pytest.mark.parametrize("stride,padding", [(2, "same"), (1, "same")])
+def test_conv2d_depthwise_multiplier_two_varied_stride(backend, stride, padding):
+    """Depth-wise style conv (multiplier=2) across nontrivial stride settings."""
+    args = get_default_args()
+    args.n = 512
+    args.rolls = True
+    args.conv_roll = False
+    args.benchmark = f"conv2d_depthwise_m2_s{stride}"
+
+    c_in = 4
+    channel_multiplier = 2
+    c_out = c_in * channel_multiplier
+    h = w = 8
+    k = 3
+    a = TensorTerm.Tensor("a", [c_in, h, w], True)
+    b = TensorTerm.Tensor("b", [c_out, c_in, k, k], False)
+    y = TensorTerm.conv2d(a, b, stride, padding)
+
+    rng = np.random.default_rng(9100 + stride)
+    weights = np.zeros((c_out, c_in, k, k), dtype=np.float64)
+    for c in range(c_in):
+        for m in range(channel_multiplier):
+            out_c = c * channel_multiplier + m
+            weights[out_c, c, :, :] = rng.normal(size=(k, k))
+
+    inputs = {
+        "a": rng.normal(size=(c_in, h, w)).astype(np.float64),
+        "b": weights,
+    }
+
+    expected = y.eval(inputs)
+    results, kernel = run_compiler_and_backend(y, inputs, args, backend)
+    expected_cts = apply_layout(expected, kernel.layout)
+    assert_results_equal(expected_cts, results, backend)
+
+
+def test_conv2d_depthwise_same_large_kernel(backend):
+    """Depth-wise style conv with larger 5x5 kernels under same padding."""
+    args = get_default_args()
+    args.n = 256
+    args.rolls = True
+    args.conv_roll = False
+    args.benchmark = "conv2d_depthwise_same_k5"
+
+    c_in = c_out = 4
+    h = w = 8
+    k = 5
+    a = TensorTerm.Tensor("a", [c_in, h, w], True)
+    b = TensorTerm.Tensor("b", [c_out, c_in, k, k], False)
+    y = TensorTerm.conv2d(a, b, 1, "same")
+
+    rng = np.random.default_rng(9200)
+    weights = np.zeros((c_out, c_in, k, k), dtype=np.float64)
+    for c in range(c_in):
+        weights[c, c, :, :] = rng.normal(size=(k, k))
+
+    inputs = {
+        "a": rng.normal(size=(c_in, h, w)).astype(np.float64),
+        "b": weights,
+    }
+
+    expected = y.eval(inputs)
+    results, kernel = run_compiler_and_backend(y, inputs, args, backend)
+    expected_cts = apply_layout(expected, kernel.layout)
+    assert_results_equal(expected_cts, results, backend)
+
+
+def test_conv2d_depthwise_split_channel_gap_layout_multiplier_two(backend):
+    """Depth-wise style conv from split-channel + gap layout with multiplier=2."""
+    args = get_default_args()
+    args.n = 512
+    args.rolls = True
+    args.conv_roll = False
+    args.benchmark = "conv2d_depthwise_split_gap_m2"
+
+    c_in = 4
+    channel_multiplier = 2
+    c_out = c_in * channel_multiplier
+    h = w = 8
+    k = 3
+    input_layout = "[0:2:32][1:8:1][2:8:1][G:2][0:2:16]"
+    a = TensorTerm.Tensor("a", [c_in, h, w], True, layout=input_layout)
+    b = TensorTerm.Tensor("b", [c_out, c_in, k, k], False)
+    y = TensorTerm.conv2d(a, b, 1, "same")
+
+    rng = np.random.default_rng(9300)
+    weights = np.zeros((c_out, c_in, k, k), dtype=np.float64)
+    for c in range(c_in):
+        for m in range(channel_multiplier):
+            out_c = c * channel_multiplier + m
+            weights[out_c, c, :, :] = rng.normal(size=(k, k))
+
+    inputs = {
+        "a": rng.normal(size=(c_in, h, w)).astype(np.float64),
+        "b": weights,
+    }
+
+    expected = y.eval(inputs)
+    results, kernel = run_compiler_and_backend(y, inputs, args, backend)
+    expected_cts = apply_layout(expected, kernel.layout)
+    assert_results_equal(expected_cts, results, backend)
