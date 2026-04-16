@@ -435,12 +435,16 @@ def get_cts_by_dim(layout_cts, dim):
                     break
         groups.append(group)
 
+    ct_keys = sorted(cts.keys())
     ct_groups = []
     for group in groups:
         ct_group = []
         for g in group:
-            ct_group.append(cts[g])
-        ct_groups.append(ct_group)
+            if g >= len(ct_keys):
+                continue
+            ct_group.append(cts[ct_keys[g]])
+        if ct_group:
+            ct_groups.append(ct_group)
     return ct_groups
 
 

@@ -184,13 +184,13 @@ class TestTensorShapeOperations:
         result = self.a.sum(0)
         inputs = {self.a.name: self.a.data}
         eval_result = result.eval(inputs)
-        expected = np.array([5, 7, 9, 0])  # Padded to power of 2
+        expected = np.array([5, 7, 9])
         assert np.array_equal(eval_result, expected)
 
         # Sum along dimension 1 (keepdims=False)
         result = self.a.sum(1)
         eval_result = result.eval(inputs)
-        expected = np.array([6, 15])  # padded to power of 2
+        expected = np.array([6, 15])
         assert np.array_equal(eval_result, expected)
 
         # Sum all elements (repeated sum over dim 0; keepdims=False -> scalar)
@@ -231,7 +231,7 @@ class TestTensorShapeOperations:
         result = self.a.transpose()
         inputs = {self.a.name: self.a.data}
         eval_result = result.eval(inputs)
-        expected = np.array([[1, 4], [2, 5], [3, 6], [0, 0]])  # Padded to power of 2
+        expected = np.array([[1, 4], [2, 5], [3, 6]])
         assert np.array_equal(eval_result, expected)
 
         # Test T property
@@ -244,7 +244,7 @@ class TestTensorShapeOperations:
         result = self.a.reshape(3, 2)
         inputs = {self.a.name: self.a.data}
         eval_result = result.eval(inputs)
-        expected = np.array([[1, 2], [3, 0], [4, 5], [6, 0]])  # Padded to power of 2
+        expected = np.array([[1, 2], [3, 4], [5, 6]])
         assert np.array_equal(eval_result, expected)
 
         # Test view (alias for reshape)
@@ -257,7 +257,7 @@ class TestTensorShapeOperations:
         result = self.a.permute(1, 0)
         inputs = {self.a.name: self.a.data}
         eval_result = result.eval(inputs)
-        expected = np.array([[1, 4], [2, 5], [3, 6], [0, 0]])  # Padded to power of 2
+        expected = np.array([[1, 4], [2, 5], [3, 6]])
         assert np.array_equal(eval_result, expected)
 
     def test_squeeze_unsqueeze_operations(self):
@@ -292,7 +292,7 @@ class TestTensorShapeOperations:
         result = self.a[0]
         inputs = {self.a.name: self.a.data}
         eval_result = result.eval(inputs)
-        expected = np.array([1, 2, 3, 0])  # Padded to power of 2
+        expected = np.array([1, 2, 3])
         assert np.array_equal(eval_result, expected)
 
 

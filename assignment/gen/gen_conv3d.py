@@ -101,6 +101,29 @@ def _materialized_tensor_shape(output_layout):
     return [shape_map.get(i, 1) for i in range(max(shape_map.keys()) + 1)]
 
 
+def _pad_output_channel_dim0_to_p2_3d(output_dims, logical_c_out):
+    """Same as conv2d: sole FILL dim 0 extent widened to ceil_p2(logical C_out)."""
+    logical_c_out = int(logical_c_out)
+    if logical_c_out <= 1:
+        return output_dims
+    padded = round_to_ceiling_power_of_2(logical_c_out)
+    if padded == logical_c_out:
+        return output_dims
+    dim0_fills = [
+        (i, d)
+        for i, d in enumerate(output_dims)
+        if d.dim == 0 and d.dim_type == DimType.FILL
+    ]
+    if len(dim0_fills) != 1:
+        return output_dims
+    i, d = dim0_fills[0]
+    if int(d.extent) != logical_c_out:
+        return output_dims
+    out = list(output_dims)
+    out[i] = Dim(0, padded, d.stride, d.dim_type)
+    return out
+
+
 def _conv3d_output_dims_zip(a_dims, b_dims, d_o_p2, h_o_p2, w_o_p2, stride):
     output_dims = []
     spatial_out_done = {1: False, 2: False, 3: False}
@@ -199,10 +222,12 @@ def gen_conv3d(term, cs_kernels, shapes):
         if output_dims is None:
             continue
 
+        output_dims = _pad_output_channel_dim0_to_p2_3d(output_dims, b_shape[0])
         output_layout = Layout(
             term, [], output_dims, a_kernel.layout.n, a_kernel.layout.secret
         )
-        expected = [b_shape[0], d_o_p2, h_o_p2, w_o_p2]
+        c_out_p2 = round_to_ceiling_power_of_2(int(b_shape[0]))
+        expected = [c_out_p2, d_o_p2, h_o_p2, w_o_p2]
         if _materialized_tensor_shape(output_layout) != expected:
             continue
 

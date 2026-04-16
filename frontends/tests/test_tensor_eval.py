@@ -20,8 +20,7 @@ class TestTensorEvaluation:
         inputs = {"a": np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])}
 
         result = a.eval(inputs)
-        # Tensor gets padded to power of 2: (3,3) -> (4,4)
-        expected = np.array([[1, 2, 3, 0], [4, 5, 6, 0], [7, 8, 9, 0], [0, 0, 0, 0]])
+        expected = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
 
         np.testing.assert_array_equal(result, expected)
 
@@ -145,8 +144,7 @@ class TestMatrixOperationsEvaluation:
         inputs = {"a": np.array([[1, 2, 3], [4, 5, 6]])}
 
         result = b.eval(inputs)
-        # Input gets padded to (2,4), then transposed to (4,2)
-        expected = np.array([[1, 4], [2, 5], [3, 6], [0, 0]])
+        expected = np.array([[1, 4], [2, 5], [3, 6]])
 
         np.testing.assert_array_equal(result, expected)
 
@@ -158,8 +156,7 @@ class TestMatrixOperationsEvaluation:
         inputs = {"a": np.array([[1, 2, 3], [4, 5, 6]])}
 
         result = b.eval(inputs)
-        # Input gets padded to (2,4), then transposed to (4,2)
-        expected = np.array([[1, 4], [2, 5], [3, 6], [0, 0]])
+        expected = np.array([[1, 4], [2, 5], [3, 6]])
 
         np.testing.assert_array_equal(result, expected)
 
@@ -175,8 +172,7 @@ class TestReductionOperationsEvaluation:
         inputs = {"a": np.array([[1, 2, 3], [4, 5, 6]])}
 
         result = b.eval(inputs)
-        # Input gets padded to (2,4), then sum along dim 0
-        expected = np.array([5, 7, 9, 0])
+        expected = np.array([5, 7, 9])
 
         np.testing.assert_array_equal(result, expected)
 
@@ -188,8 +184,7 @@ class TestReductionOperationsEvaluation:
         inputs = {"a": np.array([[1, 2, 3], [4, 5, 6]])}
 
         result = b.eval(inputs)
-        # Input gets padded to (2,4), then sum along dim 0
-        expected = np.array([5, 7, 9, 0])
+        expected = np.array([5, 7, 9])
 
         np.testing.assert_array_equal(result, expected)
 
@@ -201,12 +196,12 @@ class TestReductionOperationsEvaluation:
 
         # Sum along dimension 0
         sum_0 = a.sum(0).eval(inputs)
-        expected_0 = np.array([5, 7, 9, 0])  # padded to (2,4) first
+        expected_0 = np.array([5, 7, 9])
         np.testing.assert_array_equal(sum_0, expected_0)
 
         # Sum along dimension 1
         sum_1 = a.sum(1).eval(inputs)
-        expected_1 = np.array([6, 15])  # padded input
+        expected_1 = np.array([6, 15])
         np.testing.assert_array_equal(sum_1, expected_1)
 
 
@@ -221,8 +216,7 @@ class TestShapeOperationsEvaluation:
         inputs = {"a": np.array([[1, 2, 3], [4, 5, 6]])}
 
         result = b.eval(inputs)
-        # Input gets padded to (2,4), then reshaped to (4,2) due to power-of-2 rounding
-        expected = np.array([[1, 2], [3, 0], [4, 5], [6, 0]])
+        expected = np.array([[1, 2], [3, 4], [5, 6]])
 
         np.testing.assert_array_equal(result, expected)
 
@@ -234,8 +228,7 @@ class TestShapeOperationsEvaluation:
         inputs = {"a": np.array([[1, 2, 3], [4, 5, 6]])}
 
         result = b.eval(inputs)
-        # Input gets padded to (2,4), then reshaped to (4,2) due to power-of-2 rounding
-        expected = np.array([[1, 2], [3, 0], [4, 5], [6, 0]])
+        expected = np.array([[1, 2], [3, 4], [5, 6]])
 
         np.testing.assert_array_equal(result, expected)
 
@@ -247,8 +240,7 @@ class TestShapeOperationsEvaluation:
         inputs = {"a": np.array([[1, 2, 3], [4, 5, 6]])}
 
         result = b.eval(inputs)
-        # Input gets padded to (2,4), then permuted to (4,2)
-        expected = np.array([[1, 4], [2, 5], [3, 6], [0, 0]])
+        expected = np.array([[1, 4], [2, 5], [3, 6]])
 
         np.testing.assert_array_equal(result, expected)
 
@@ -260,8 +252,7 @@ class TestShapeOperationsEvaluation:
         inputs = {"a": np.array([[1, 2, 3], [4, 5, 6]])}
 
         result = b.eval(inputs)
-        # Input gets padded to (2,4), then permuted to (4,2)
-        expected = np.array([[1, 4], [2, 5], [3, 6], [0, 0]])
+        expected = np.array([[1, 4], [2, 5], [3, 6]])
 
         np.testing.assert_array_equal(result, expected)
 
@@ -277,8 +268,7 @@ class TestIndexingEvaluation:
         inputs = {"a": np.array([[1, 2, 3], [4, 5, 6]])}
 
         result = b.eval(inputs)
-        # Input gets padded to (2,4), then indexed
-        expected = np.array([1, 2, 3, 0])
+        expected = np.array([1, 2, 3])
 
         np.testing.assert_array_equal(result, expected)
 
@@ -290,8 +280,7 @@ class TestIndexingEvaluation:
         inputs = {"a": np.array([[1, 2, 3], [4, 5, 6]])}
 
         result = b.eval(inputs)
-        # Input gets padded to (2,4), then indexed
-        expected = np.array([1, 2, 3, 0])
+        expected = np.array([1, 2, 3])
 
         np.testing.assert_array_equal(result, expected)
 
@@ -303,8 +292,7 @@ class TestIndexingEvaluation:
         inputs = {"a": np.array([[1, 2, 3], [4, 5, 6]])}
 
         result = b.eval(inputs)
-        # Input gets padded to (2,4), then sliced
-        expected = np.array([[1, 2, 3, 0]])
+        expected = np.array([[1, 2, 3]])
         np.testing.assert_array_equal(result, expected)
 
     def test_slice_indexing_cols(self):
@@ -315,7 +303,6 @@ class TestIndexingEvaluation:
         inputs = {"a": np.array([[1, 2, 3], [4, 5, 6]])}
 
         result = b.eval(inputs)
-        # Input gets padded to (2,4), then sliced
         expected = np.array([[2, 3], [5, 6]])
         np.testing.assert_array_equal(result, expected)
 
@@ -327,8 +314,7 @@ class TestIndexingEvaluation:
         inputs = {"a": np.array([[1, 2, 3], [4, 5, 6]])}
 
         result = b.eval(inputs)
-        # Input gets padded to (2,4), then indexed
-        expected = np.array([4, 5, 6, 0])
+        expected = np.array([4, 5, 6])
         np.testing.assert_array_equal(result, expected)
 
 
@@ -478,7 +464,6 @@ class TestComplexComputationEvaluation:
 
         eval_result = result.eval(inputs)
         # Expected: (2,3) @ (3,4) @ (4,2) = (2,2)
-        # All tensors get padded to power of 2, but operations preserve their natural output shapes
         expected = np.array([[24, 24], [60, 60]])
 
         np.testing.assert_array_equal(eval_result, expected)
@@ -496,50 +481,30 @@ class TestComplexComputationEvaluation:
         inputs = {"a": np.array([[1, 2], [3, 4]]), "b": np.array([[1, 0], [0, 1]])}
 
         eval_result = step3.eval(inputs)
-        # All operations work on padded inputs but preserve natural output shapes
         expected = np.array([[2, 5], [5, 8]])
 
         np.testing.assert_array_equal(eval_result, expected)
 
 
-class TestPowerOfTwoPadding:
-    """Test the power-of-two padding functionality."""
+class TestTensorEvalLogicalShapes:
+    """``Tensor.eval`` returns ``inputs`` arrays unchanged (no layout / p2 padding)."""
 
-    def test_padding_1d_tensor(self):
-        """Test padding of 1D tensor to power of 2."""
+    def test_1d_tensor_loads_logical(self):
         a = TensorTerm.Tensor("a", [3], True)
-
         inputs = {"a": np.array([1, 2, 3])}
-
         result = a.eval(inputs)
-        # Should pad from 3 to 4 (next power of 2)
-        expected = np.array([1, 2, 3, 0])
+        np.testing.assert_array_equal(result, inputs["a"])
 
-        np.testing.assert_array_equal(result, expected)
-
-    def test_padding_2d_tensor(self):
-        """Test padding of 2D tensor to power of 2."""
+    def test_2d_tensor_loads_logical(self):
         a = TensorTerm.Tensor("a", [3, 5], True)
-
         inputs = {
             "a": np.array([[1, 2, 3, 4, 5], [6, 7, 8, 9, 10], [11, 12, 13, 14, 15]])
         }
-
         result = a.eval(inputs)
-        # Should pad from (3,5) to (4,8)
-        expected = np.array(
-            [
-                [1, 2, 3, 4, 5, 0, 0, 0],
-                [6, 7, 8, 9, 10, 0, 0, 0],
-                [11, 12, 13, 14, 15, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-            ]
-        )
-
-        np.testing.assert_array_equal(result, expected)
+        np.testing.assert_array_equal(result, inputs["a"])
 
     def test_no_padding_already_power_of_two(self):
-        """Test that no padding is applied when already power of 2."""
+        """Power-of-two logical shape is still just a plain load."""
         a = TensorTerm.Tensor("a", [4, 4], True)
 
         inputs = {
@@ -583,14 +548,11 @@ class TestEdgeCases:
     """Test edge cases in evaluation."""
 
     def test_empty_tensor_evaluation(self):
-        """Test evaluation with empty tensor should raise an error."""
+        """Empty input array evaluates to an empty ndarray."""
         a = TensorTerm.Tensor("a", [0], True)
-
         inputs = {"a": np.array([])}
-
-        # Empty tensor should raise an error
-        with pytest.raises(ValueError, match="Input must be a positive number"):
-            a.eval(inputs)
+        result = a.eval(inputs)
+        np.testing.assert_array_equal(result, np.array([]))
 
     def test_scalar_tensor_evaluation(self):
         """Test evaluation with scalar tensor."""

@@ -150,6 +150,23 @@ def _flatten_ct_roots(cts: dict) -> list[HETerm]:
     return roots
 
 
+def _toy_vec_all_zero(vec) -> bool:
+    """True if ``vec`` is a length-``n`` ciphertext vector with no nonzero entries.
+
+    Used to skip redundant work for padded conv channels / masked slots where the
+    other branch is exactly zero (plaintext sim only; same numeric result).
+    """
+    if vec is None:
+        return True
+    if isinstance(vec, np.ndarray):
+        return vec.size == 0 or not np.any(vec)
+    try:
+        arr = np.asarray(vec, dtype=np.float64)
+    except Exception:
+        return False
+    return arr.size == 0 or not np.any(arr)
+
+
 def _packed_ct_lists_to_float64(packed_cts: list) -> np.ndarray:
     """One allocation: ``apply_layout`` / ``apply_punctured_layout`` output (list of slot lists) → ``float64``.
 
@@ -388,16 +405,34 @@ class Toy:
     def eval_rot(self, term):
         """positive == left rotate"""
         vector = self.env[term.cs[0]]
+        if _toy_vec_all_zero(vector):
+            return self._as_np_vec(vector)
         return np.roll(vector, -int(term.cs[1]))
 
     def eval_add(self, term):
-        return self.env[term.cs[0]] + self.env[term.cs[1]]
+        a = self.env[term.cs[0]]
+        b = self.env[term.cs[1]]
+        if _toy_vec_all_zero(b):
+            return self._as_np_vec(a)
+        if _toy_vec_all_zero(a):
+            return self._as_np_vec(b)
+        return a + b
 
     def eval_sub(self, term):
-        return self.env[term.cs[0]] - self.env[term.cs[1]]
+        a = self.env[term.cs[0]]
+        b = self.env[term.cs[1]]
+        if _toy_vec_all_zero(b):
+            return self._as_np_vec(a)
+        if _toy_vec_all_zero(a):
+            return self._as_np_vec(-self._as_np_vec(b))
+        return a - b
 
     def eval_mul(self, term):
-        return self.env[term.cs[0]] * self.env[term.cs[1]]
+        a = self.env[term.cs[0]]
+        b = self.env[term.cs[1]]
+        if _toy_vec_all_zero(a) or _toy_vec_all_zero(b):
+            return np.zeros(self.n, dtype=np.float64)
+        return a * b
 
     def _apply_poly_to_vector(self, vec, poly_func, poly_channel=None):
         """Apply POLY_* element-wise to a 1D vector. Uses self.inputs for batchnorm."""

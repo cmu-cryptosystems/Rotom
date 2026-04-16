@@ -1,7 +1,8 @@
 """TensorTerm evaluation helpers.
 
-This module contains `TensorEvaluator`, which implements the concrete
-evaluation semantics for the Tensor frontend IR defined in `tensor.py`.
+``TensorEvaluator`` is a **plaintext numpy clone** of the tensor program: it runs the
+same ops on ``inputs`` with ordinary ndarray semantics. It does not model ciphertext,
+ring dimension, or layout padding—that lives in assignment / lowering / backends.
 """
 
 from __future__ import annotations
@@ -15,19 +16,14 @@ from util.silu_polycall_eval import eval_silu_polycall
 
 
 class TensorEvaluator:
-    """Evaluate TensorTerm graphs.
+    """Plaintext numpy reference for ``TensorTerm`` graphs.
 
-    This class implements the concrete evaluation semantics for the Tensor IR.
-    Keeping evaluation logic separate from `TensorTerm` makes it easier to:
-      - add new ops without bloating the IR node
-      - plug in alternative evaluators (e.g. debug vs optimized numpy)
+    Each op is implemented with the obvious numpy meaning (same as you would write by
+    hand for the declared shapes). ``Tensor`` loads arrays from ``inputs`` as-is.
+
+    Keeping this in ``TensorEvaluator`` (instead of on ``TensorTerm``) keeps the IR thin
+    and allows alternate evaluators (debug, symbolic, etc.) later.
     """
-
-    @staticmethod
-    def _round_to_ceiling_power_of_2(n: int) -> int:
-        if n <= 0:
-            raise ValueError("Input must be a positive number.")
-        return 1 if n == 1 else 2 ** math.ceil(math.log2(n))
 
     @staticmethod
     def _eval_conv2d(
@@ -313,33 +309,7 @@ class TensorEvaluator:
         op_name = getattr(op, "value", op)
         match op_name:
             case "Tensor":
-                # Plaintext tensors must not be padded to a larger logical shape:
-                # e.g. an fc weight (N, 10) becomes (N, 16) and widens matmul output.
-                if not bool(term.cs[2]):
-                    return np.asarray(inputs[term.cs[0]], dtype=np.float64)
-                shape = inputs[term.cs[0]].shape
-                rounded_shape = [self._round_to_ceiling_power_of_2(s) for s in shape]
-                padding = [0] * len(shape)
-                for i, (a, b) in enumerate(zip(shape, rounded_shape)):
-                    padding[i] = b - a
-
-                if len(padding) == 1:
-                    padded_tensor = np.pad(
-                        inputs[term.cs[0]],
-                        pad_width=((0, padding[0])),
-                        mode="constant",
-                        constant_values=0,
-                    )
-                elif len(padding) == 2:
-                    padded_tensor = np.pad(
-                        inputs[term.cs[0]],
-                        pad_width=((0, padding[0]), (0, padding[1])),
-                        mode="constant",
-                        constant_values=0,
-                    )
-                else:
-                    return np.array(inputs[term.cs[0]])
-                return np.array(padded_tensor)
+                return np.asarray(inputs[term.cs[0]], dtype=np.float64)
             case "Add":
                 return env[term.cs[0]] + env[term.cs[1]]
             case "Sub":
@@ -400,7 +370,7 @@ class TensorEvaluator:
                     shape[i] = s
                 del shape[args.dim]
                 for k, v in args.shape.items():
-                    shape[k] = self._round_to_ceiling_power_of_2(v)
+                    shape[k] = int(v)
                 shape_list = [shape[k] for k in sorted(shape.keys())]
                 return tensor.reshape(shape_list)
             case "Permute":

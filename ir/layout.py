@@ -1,11 +1,19 @@
 """Layout class for packing tensor elements into HE vectors."""
 
-import math
 import re
 
 from ir.dim import Dim, DimType
 from ir.roll import Roll
 from util.util import prod
+
+
+def _is_pow2_int(value) -> bool:
+    """Return True iff value is a positive power-of-two integer."""
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        return False
+    return v > 0 and (v & (v - 1)) == 0
 
 
 class Layout:
@@ -114,10 +122,19 @@ class Layout:
         # remove empty dimensions from ct_dims
         self.ct_dims = [dim for dim in self.ct_dims if dim.dim_type != DimType.EMPTY]
 
-        # assert slot dimensions have powers of two extents
+        # Enforce slot stride invariants for semantic correctness.
+        # Slot dims must keep power-of-two extents/strides for rotation arithmetic.
+        # CT dims may carry non-p2 strides from logical tensor indexing; those must
+        # not be migrated blindly into slot dims by compaction.
         for dim in self.slot_dims:
-            assert math.log2(dim.extent).is_integer()
-            assert math.log2(dim.stride).is_integer()
+            if not _is_pow2_int(dim.extent):
+                raise ValueError(
+                    f"invalid slot dim extent (must be power-of-two): {dim.extent} for dim={dim}"
+                )
+            if not _is_pow2_int(dim.stride):
+                raise ValueError(
+                    f"invalid slot dim stride (must be power-of-two): {dim.stride} for dim={dim}"
+                )
 
         # assert no duplicate dimensions are added
         seen_dims = set()
@@ -216,7 +233,11 @@ class Layout:
 
     def get_dims(self):
         """Return the list of ciphertext and slot dimensions"""
-        return self.ct_dims + self.slot_dims
+        return [
+            dim
+            for dim in (self.ct_dims + self.slot_dims)
+            if not (dim.dim_type == DimType.EMPTY and dim.extent == 1)
+        ]
 
     @staticmethod
     def from_string(layout_str, n, secret=False):

@@ -21,6 +21,22 @@ from ir.roll import Roll
 from util.util import get_dim_map_by_dim, next_non_empty_dim, split_dim
 
 
+def _is_pow2_int(v) -> bool:
+    try:
+        n = int(v)
+    except (TypeError, ValueError):
+        return False
+    return n > 0 and (n & (n - 1)) == 0
+
+
+def _is_valid_compaction_dims(new_ct_dims, new_slot_dims) -> bool:
+    # Keep slot invariants strict.
+    for d in new_slot_dims:
+        if not _is_pow2_int(d.extent) or not _is_pow2_int(d.stride):
+            return False
+    return True
+
+
 def compact_ct_dim(ct_dim, slot_dims):
     """Compacts a ciphertext dimension within slot dimensions.
 
@@ -67,7 +83,7 @@ def compact_ct_dim(ct_dim, slot_dims):
             else:
                 # if the gap dimension is smaller than the ct_extent,
                 # then compact a little and continue
-                new_slot_dim = Dim(ct_dim.dim, slot_dim.extent, ct_dim.stride)
+                new_slot_dim = Dim(ct_dim.dim, slot_dim.extent, ct_stride)
                 new_slot_dims.append(new_slot_dim)
                 ct_stride *= slot_dim.extent
             ct_extent //= slot_dim.extent
@@ -207,16 +223,22 @@ def find_compaction(kernel):
         # all_new_dims = self.naive_compaction(layout.ct_dims, layout.slot_dims)
         all_new_dims = compaction_heuristic(layout.ct_dims, layout.slot_dims)
         for new_ct_dims, new_slot_dims in all_new_dims:
-            compacted_layout = dimension_merging(
-                Layout(
-                    layout.term,
-                    layout.rolls,
-                    new_ct_dims + new_slot_dims,
-                    layout.n,
-                    layout.secret,
+            if not _is_valid_compaction_dims(new_ct_dims, new_slot_dims):
+                continue
+            try:
+                compacted_layout = dimension_merging(
+                    Layout(
+                        layout.term,
+                        layout.rolls,
+                        new_ct_dims + new_slot_dims,
+                        layout.n,
+                        layout.secret,
+                    )
                 )
-            )
-            return Kernel(KernelOp.COMPACT, [kernel], compacted_layout)
+                return Kernel(KernelOp.COMPACT, [kernel], compacted_layout)
+            except (AssertionError, ValueError):
+                continue
+        return kernel
     elif layout.ct_dims and layout.rolls:
         if len(layout.rolls) > 1:
             raise NotImplementedError("what to do with multiple rolls?")
@@ -234,9 +256,12 @@ def find_compaction(kernel):
             else:
                 raise NotImplementedError("other types of rolls")
 
-            compacted_layout = dimension_merging(
-                Layout(layout.term, [new_roll], new_dims, layout.n, layout.secret)
-            )
-            return Kernel(KernelOp.COMPACT, [kernel], compacted_layout)
+            try:
+                compacted_layout = dimension_merging(
+                    Layout(layout.term, [new_roll], new_dims, layout.n, layout.secret)
+                )
+                return Kernel(KernelOp.COMPACT, [kernel], compacted_layout)
+            except (AssertionError, ValueError):
+                return kernel
     else:
         return kernel

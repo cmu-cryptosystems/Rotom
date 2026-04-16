@@ -8,12 +8,42 @@ import torch
 
 from benchmarks.e2e.mobilenet.mobilenet_model import mobilenet_small
 from benchmarks.e2e.mobilenet.mobilenet_tensor_ir import (
+    build_mobilenet_small_linear_head_graph,
     build_mobilenet_small_silu_poly_graph_to_depth,
     populate_mobilenet_small_inputs,
 )
 from tests.conftest import assert_results_equal, run_compiler_and_backend
 from tests.test_util import get_default_args
 from util.layout_util import apply_layout
+
+
+def test_mobilenet_small_linear_head_toy_lowering_matches_eval() -> None:
+    """Linear head ``feat @ fc + fc_b`` compiles and matches dense eval on Toy."""
+    torch.manual_seed(11)
+    np.random.seed(11)
+
+    model = mobilenet_small(num_classes=10)
+    model.eval()
+    model.double()
+
+    inputs: dict = {}
+    populate_mobilenet_small_inputs(model, inputs)
+    inputs["feat"] = torch.randn(1, 32, dtype=torch.float64).numpy()
+
+    tensor_ir = build_mobilenet_small_linear_head_graph(inputs)
+    expected = np.asarray(tensor_ir.eval(inputs))
+
+    args = get_default_args()
+    args.backend = "toy"
+    args.n = 512
+    args.rolls = False
+    args.conv_roll = False
+    args.toy_mp_workers = 1
+    args.benchmark = "mobilenet_small_linear_head_toy"
+
+    results, kernel = run_compiler_and_backend(tensor_ir, inputs, args, "toy")
+    expected_cts = apply_layout(expected, kernel.layout)
+    assert_results_equal(expected_cts, results, "toy")
 
 
 @pytest.mark.slow

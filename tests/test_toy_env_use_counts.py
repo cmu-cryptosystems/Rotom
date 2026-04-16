@@ -83,3 +83,46 @@ def test_toy_dense_eval_memoizes_per_tensor_term_identity() -> None:
     b = Toy._dense_eval_for_tensor_term(toy, term)
     assert _Term.eval_calls == 1
     assert a is b
+
+
+def test_toy_zero_short_circuit_mul_add_rot_sub() -> None:
+    """Padded-channel / mask zeros: Toy must match full numpy but may skip inner work."""
+    from ir.he import HEOp, HETerm
+
+    from backends.toy import Toy, _toy_vec_all_zero
+
+    n = 128
+    args = get_default_args()
+    args.n = n
+    args.skip_toy_eval_checks = True
+
+    rng = np.random.default_rng(42)
+    a = rng.standard_normal(n).astype(np.float64)
+    z = np.zeros(n, dtype=np.float64)
+
+    assert _toy_vec_all_zero(z)
+    assert not _toy_vec_all_zero(a)
+
+    toy = Toy({}, {}, args)
+    # HETerm identity is hash-based; two ZERO_MASK leaves with empty cs collide.
+    inner = HETerm(HEOp.ZERO_MASK, [], False, "")
+    leaf_a = HETerm(HEOp.CS, [inner], True, "wrap_a")
+    leaf_z = HETerm(HEOp.CS, [inner], True, "wrap_z")
+    assert leaf_a != leaf_z
+    toy.env[leaf_a] = a
+    toy.env[leaf_z] = z
+
+    mul_t = HETerm(HEOp.MUL, [leaf_a, leaf_z], True, "")
+    assert np.allclose(toy.eval_mul(mul_t), a * z)
+
+    add_t = HETerm(HEOp.ADD, [leaf_a, leaf_z], True, "")
+    assert np.allclose(toy.eval_add(add_t), a + z)
+
+    sub_t = HETerm(HEOp.SUB, [leaf_a, leaf_z], True, "")
+    assert np.allclose(toy.eval_sub(sub_t), a - z)
+
+    rot_inner = HETerm(HEOp.ZERO_MASK, [], False, "rz")
+    rot_wrap = HETerm(HEOp.CS, [rot_inner], True, "wrap_rot_z")
+    toy.env[rot_wrap] = z
+    rot_t = HETerm(HEOp.ROT, [rot_wrap, 17], True, "")
+    assert np.allclose(toy.eval_rot(rot_t), np.roll(z, -17))

@@ -30,6 +30,7 @@ def lower_compact(env, kernel):
     vs initial ciphertext rank (see below).
     """
     n = kernel.layout.n
+    target_cts = kernel.layout.num_ct()
 
     dims, cs_dims = align_dimension_extents_compact_skip_empty_gaps(
         copy(kernel.layout.get_dims()),
@@ -40,7 +41,21 @@ def lower_compact(env, kernel):
     slot_ct_mismatch = len(slot_dims_probe) - len(cs_slot_probe)
 
     if slot_ct_mismatch <= 1:
-        return _lower_compact_zip(env, kernel, n)
+        zip_dims, zip_cs_dims = align_dimension_extents_compact(
+            copy(kernel.layout.dims), copy(kernel.cs[0].layout.dims)
+        )
+        zip_expanded_layout = Layout(
+            kernel.cs[0].layout.term,
+            kernel.cs[0].layout.rolls,
+            zip_cs_dims,
+            n,
+            kernel.cs[0].layout.secret,
+        )
+        input_ct_count = len(env[kernel.cs[0]].cts)
+        if zip_expanded_layout.num_ct() == input_ct_count:
+            zip_result = _lower_compact_zip(env, kernel, n)
+            if len(zip_result.cts) == target_cts:
+                return zip_result
 
     slot_dims = slot_dims_probe
     current_slot_dims = list(slot_dims_probe)
@@ -59,10 +74,12 @@ def lower_compact(env, kernel):
 
     remaining_ct_dims = list(expanded_layout.ct_dims)
     merge_outer_first = slot_ct_mismatch == len(remaining_ct_dims)
-    target_cts = kernel.layout.num_ct()
-
     while remaining_ct_dims and len(layout_cts.cts) > target_cts:
-        pending = [d for d in remaining_ct_dims if d.dim is not None]
+        pending = [
+            d
+            for d in remaining_ct_dims
+            if d.dim is not None and any(d == sd for sd in slot_dims)
+        ]
         if not pending:
             break
         if merge_outer_first:
@@ -87,10 +104,15 @@ def lower_compact(env, kernel):
             idx_groups.append(group)
 
         ct_keys = sorted(layout_cts.cts.keys())
-        ct_groups = [
-            [layout_cts.cts[ct_keys[idx]] for idx in idx_group]
-            for idx_group in idx_groups
-        ]
+        ct_groups = []
+        for idx_group in idx_groups:
+            group_terms = []
+            for idx in idx_group:
+                if idx >= len(ct_keys):
+                    continue
+                group_terms.append(layout_cts.cts[ct_keys[idx]])
+            if group_terms:
+                ct_groups.append(group_terms)
         for i, ct_group in enumerate(ct_groups):
             base = ct_group[0]
             for j in range(1, len(ct_group)):
@@ -158,6 +180,10 @@ def _lower_compact_zip(env, kernel, n):
     for swap_slot in swaps:
         swap_dim = swap_slot[0]
         if swap_dim.dim is None:
+            continue
+        # Zip pairing can drift when gap dims are coalesced/filtered; only merge
+        # along dimensions that are currently ciphertext axes.
+        if swap_dim not in expanded_layout.ct_dims:
             continue
         swap_dim_index = split_slot_dim_map[swap_dim]
         new_relevant_cts = {}

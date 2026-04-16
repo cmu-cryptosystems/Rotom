@@ -256,7 +256,7 @@ def gen_conv2d_roll(term, cs_kernels, shapes):
         # find output layout after convolution
         output_dims = []
 
-        # Add output channel dimension if C_out > 1
+        # Add output channel dimension if C_out > 1 (padded to p2 for layout / shape analysis).
         c_out = b_shape[0]
         if c_out > 1:
             # Calculate stride for channel dimension (product of spatial dimensions)
@@ -264,7 +264,8 @@ def gen_conv2d_roll(term, cs_kernels, shapes):
             for dim in a_kernel.layout.slot_dims:
                 if dim.dim and dim.dim > 0:  # Spatial dimensions (1, 2)
                     spatial_extent *= dim.extent
-            output_dims.append(Dim(0, c_out, spatial_extent))
+            c_out_pad = round_to_ceiling_power_of_2(int(c_out))
+            output_dims.append(Dim(0, c_out_pad, spatial_extent))
 
         # Add remaining dimensions (spatial and any others)
         # For single output (C_out=1), just copy all dims from input
@@ -287,7 +288,10 @@ def gen_conv2d_roll(term, cs_kernels, shapes):
         kernel = Kernel(KernelOp.CONV2D_ROLL, [a_kernel, b_kernel], output_layout)
         output_kernels.add(kernel)
         if not kernel.layout.rolls:
-            output_kernels.add(find_compaction(kernel))
+            compact = find_compaction(kernel)
+            exp_roll = list(_materialized_tensor_shape(output_layout))
+            if _materialized_tensor_shape(compact.layout) == exp_roll:
+                output_kernels.add(compact)
     return output_kernels
 
 
@@ -368,6 +372,34 @@ def _materialized_tensor_shape(output_layout):
     if not shape_map:
         return []
     return [shape_map.get(i, 1) for i in range(max(shape_map.keys()) + 1)]
+
+
+def _pad_output_channel_dim0_to_p2(output_dims, logical_c_out):
+    """Widen the sole FILL dim-0 extent from logical ``C_out`` to ``ceil_p2(C_out)``.
+
+    Layout dims prefer power-of-two extents; semantic channel count stays
+    ``logical_c_out`` (eval / filter weights) while padded slots are zero or masked
+    downstream. Must match ``Shape.get_padded_shape`` for CONV2D outputs.
+    """
+    logical_c_out = int(logical_c_out)
+    if logical_c_out <= 1:
+        return output_dims
+    padded = round_to_ceiling_power_of_2(logical_c_out)
+    if padded == logical_c_out:
+        return output_dims
+    dim0_fills = [
+        (i, d)
+        for i, d in enumerate(output_dims)
+        if d.dim == 0 and d.dim_type == DimType.FILL
+    ]
+    if len(dim0_fills) != 1:
+        return output_dims
+    i, d = dim0_fills[0]
+    if int(d.extent) != logical_c_out:
+        return output_dims
+    out = list(output_dims)
+    out[i] = Dim(0, padded, d.stride, d.dim_type)
+    return out
 
 
 def gen_conv2d(term, cs_kernels, shapes):
@@ -459,11 +491,13 @@ def gen_conv2d(term, cs_kernels, shapes):
         )
         if output_dims is None:
             continue
+        output_dims = _pad_output_channel_dim0_to_p2(output_dims, b_shape[0])
         output_layout = Layout(
             term, [], output_dims, a_kernel.layout.n, a_kernel.layout.secret
         )
 
-        expected = [b_shape[0], h_o_p2, w_o_p2]
+        c_out_p2 = round_to_ceiling_power_of_2(int(b_shape[0]))
+        expected = [c_out_p2, h_o_p2, w_o_p2]
         kernel_shape = _materialized_tensor_shape(output_layout)
         if kernel_shape != expected:
             continue
@@ -471,7 +505,9 @@ def gen_conv2d(term, cs_kernels, shapes):
         kernel = Kernel(KernelOp.CONV2D, [a_kernel, b_kernel], output_layout)
         output_kernels.add(kernel)
         if not kernel.layout.rolls:
-            output_kernels.add(find_compaction(kernel))
+            compact = find_compaction(kernel)
+            if _materialized_tensor_shape(compact.layout) == expected:
+                output_kernels.add(compact)
     return output_kernels
 
 

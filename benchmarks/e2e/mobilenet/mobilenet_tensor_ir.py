@@ -121,3 +121,16 @@ def build_mobilenet_small_silu_poly_graph_to_depth(
 def build_mobilenet_small_silu_poly_graph(inputs: dict) -> TensorTerm:
     """Full graph to logits (same as ``depth=\"full\"``)."""
     return build_mobilenet_small_silu_poly_graph_to_depth(inputs, "full")
+
+
+def build_mobilenet_small_linear_head_graph(inputs: dict) -> TensorTerm:
+    """Classifier only: ``feat @ fc + fc_b`` (same ``fc`` / ``fc_b`` as :func:`populate_mobilenet_small_inputs`).
+
+    ``feat`` is a secret rank-2 tensor ``[1, 32]`` matching pooled features before ``nn.Linear(32, 10)``.
+    The caller must set ``inputs[\"feat\"]`` (and populate weights via ``populate_mobilenet_small_inputs``).
+    """
+    fcb = np.asarray(inputs["fc_b"])
+    x = TensorTerm.Tensor("feat", [1, 32], True)
+    return x @ _w_tensor(inputs, "fc") + TensorTerm.Tensor(
+        "fc_b", list(fcb.shape), False
+    )

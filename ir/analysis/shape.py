@@ -198,8 +198,9 @@ class Shape:
                         f"(expected {_c_i // g}, got {logical_b[1]})"
                     )
 
-                # Logical output channels (match layout gen / eval; filter c_out is not p2-padded).
-                c_o = logical_b[0]
+                # Logical output channels from the filter; padded layout shape rounds C_out
+                # to the next power of two (extra slots are zero / masked in lowering and backends).
+                c_o = round_to_ceiling_power_of_2(int(logical_b[0]))
                 # Use logical filter spatial sizes (declared shape), not power-of-2-padded filter.
                 if len(logical_b) == 4:
                     f_h, f_w = logical_b[2], logical_b[3]
@@ -237,8 +238,8 @@ class Shape:
                 logical_a = self.get_shape(args.input)
 
                 d_i, h_i, w_i = logical_a[1], logical_a[2], logical_a[3]
-                # Logical output channels (layout gen uses unpadded filter c_out).
-                c_o = logical_b[0]
+                # Padded output channels (ceil power of two of logical filter C_out).
+                c_o = round_to_ceiling_power_of_2(int(logical_b[0]))
                 # Use logical filter spatial sizes, not padded filter.
                 k_d, k_h, k_w = logical_b[2], logical_b[3], logical_b[4]
                 stride = args.stride
@@ -278,7 +279,7 @@ class Shape:
                 a_shape = copy(self.padded_shapes[term.cs[0]])
                 dim_idx = term.cs[1]
                 result_shape = a_shape[:dim_idx] + a_shape[dim_idx + 1 :]
-                return result_shape
+                return [round_to_ceiling_power_of_2(int(s)) for s in result_shape]
             case TensorOp.RESCALE | TensorOp.POLY_CALL:
                 # Preserves the shape of the input tensor
                 return copy(self.padded_shapes[term.cs[0]])
