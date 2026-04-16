@@ -47,7 +47,9 @@ class Conv2dArgs:
     def from_term(cls, term: Any) -> "Conv2dArgs":
         groups = 1
         if len(term.cs) > 4:
-            groups = term.cs[4]
+            cs4 = term.cs[4]
+            if isinstance(cs4, (int, str)):
+                groups = cs4
         return cls(
             input=term.cs[0],
             filter=term.cs[1],
@@ -59,7 +61,9 @@ class Conv2dArgs:
     @staticmethod
     def get_computed_padding(term: Any) -> Optional[List[int]]:
         """Return [pad_top, pad_bottom, pad_left, pad_right] if set by assignment (term.cs[4])."""
-        if len(term.cs) > 4:
+        if len(term.cs) > 5 and isinstance(term.cs[5], list):
+            return term.cs[5]
+        if len(term.cs) > 4 and isinstance(term.cs[4], list):
             return term.cs[4]
         return None
 

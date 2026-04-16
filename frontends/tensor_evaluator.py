@@ -24,6 +24,19 @@ class TensorEvaluator:
     """
 
     @staticmethod
+    def _trim_to_declared_shape(x: np.ndarray, term: Any) -> np.ndarray:
+        """Trim evaluator output to the declared placeholder shape when available."""
+        src = term.cs[0] if hasattr(term, "cs") and term.cs else None
+        if src is not None and getattr(src, "op", None) is not None:
+            src_op_name = getattr(getattr(src, "op"), "value", getattr(src, "op"))
+            if src_op_name == "Tensor":
+                declared = tuple(int(v) for v in src.cs[1])
+                if x.ndim == len(declared):
+                    slices = tuple(slice(0, d) for d in declared)
+                    return np.asarray(x)[slices]
+        return x
+
+    @staticmethod
     def _round_to_ceiling_power_of_2(n: int) -> int:
         if n <= 0:
             raise ValueError("Input must be a positive number.")
@@ -43,12 +56,7 @@ class TensorEvaluator:
 
         # Support TFLite-style depthwise filter [1, Kh, Kw, C_in*mult] in addition to
         # Rotom-style filter [C_out, C_per_group, Kh, Kw].
-        if (
-            len(filter_shape) == 4
-            and filter_shape[0] == 1
-            and isinstance(groups, (int, str))
-            and (groups == "depthwise" or (isinstance(groups, int) and groups == c_in))
-        ):
+        if len(filter_shape) == 4 and filter_shape[0] == 1 and groups == "depthwise":
             mult = int(filter_shape[3]) // c_in
             if mult <= 0 or (mult * c_in) != int(filter_shape[3]):
                 raise ValueError(
@@ -498,7 +506,7 @@ class TensorEvaluator:
                     y = y - x
                 if reverse:
                     y = np.flip(y, axis=axis)
-                return y
+                return self._trim_to_declared_shape(y, term)
             case "AvgPool2D":
                 return self._eval_avg_pool2d(
                     env[term.cs[0]],
@@ -508,7 +516,8 @@ class TensorEvaluator:
                 )
             case "HardSwish":
                 x = np.asarray(env[term.cs[0]], dtype=np.float64)
-                return x * np.clip(x + 3.0, 0.0, 6.0) / 6.0
+                y = x * np.clip(x + 3.0, 0.0, 6.0) / 6.0
+                return self._trim_to_declared_shape(y, term)
             case _:
                 raise NotImplementedError(op_name)
 

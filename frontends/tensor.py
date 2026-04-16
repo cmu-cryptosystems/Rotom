@@ -504,7 +504,7 @@ class TensorTerm:
         b: "TensorTerm",
         stride: int,
         padding: str,
-        groups: int = 1,
+        groups: int | str = 1,
         layout: Optional[str] = None,
     ) -> "TensorTerm":
         """Create a 2D convolution operation.
@@ -523,6 +523,14 @@ class TensorTerm:
             >>> c = TensorTerm.conv2d(input, filter, 1, "same")
             >>> d = TensorTerm.conv2d(input, filter, 1, "same", layout="[0:32:1][1:32:1][2:64:1]")
         """
+        # Backward compatibility: older callsites passed layout as the 5th positional arg.
+        if (
+            layout is None
+            and isinstance(groups, str)
+            and (groups.startswith("[") or groups.startswith("roll("))
+        ):
+            layout = groups
+            groups = 1
         return TensorTerm(TensorOp.CONV2D, [a, b, stride, padding, groups], layout)
 
     @staticmethod
@@ -588,7 +596,7 @@ class TensorTerm:
         For 2x2 / stride=2 / valid, desugar into slice-index + elementwise ops so
         existing assignment/lowering can run end-to-end.
         """
-        if kernel == 2 and stride == 2 and padding == "valid":
+        if kernel == 2 and stride == 2 and padding == "valid" and layout is None:
             x00 = self[(slice(None), slice(0, None, 2), slice(0, None, 2))]
             x01 = self[(slice(None), slice(0, None, 2), slice(1, None, 2))]
             x10 = self[(slice(None), slice(1, None, 2), slice(0, None, 2))]

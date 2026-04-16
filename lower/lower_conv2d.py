@@ -2,6 +2,7 @@ from ir.analysis.shape import Shape
 from ir.dim import DimType
 from ir.he import HEOp, HETerm
 from ir.layout import Layout
+from frontends.tensor_args import Conv2dArgs
 from lower.layout_cts import LayoutCiphertexts, create_layout_without_dims
 from lower.lower_util import find_sum_dim, rotate_and_sum
 import numpy as np
@@ -116,10 +117,13 @@ def lower_conv2d(env, kernel):
     _a_shape = get_term_shape(kernel.cs[0].layout.term)
     b_shape = get_term_shape(kernel.cs[1].layout.term)
 
-    pad_top = kernel.layout.term.cs[4][0]
-    _pad_bottom = kernel.layout.term.cs[4][1]
-    pad_left = kernel.layout.term.cs[4][2]
-    _pad_right = kernel.layout.term.cs[4][3]
+    computed_padding = Conv2dArgs.get_computed_padding(kernel.layout.term)
+    if computed_padding is None:
+        raise ValueError("conv2d lowering requires precomputed padding metadata")
+    pad_top = computed_padding[0]
+    _pad_bottom = computed_padding[1]
+    pad_left = computed_padding[2]
+    _pad_right = computed_padding[3]
     _stride = kernel.layout.term.cs[2]
 
     # calculate rotation amounts for input ciphertexts

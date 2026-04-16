@@ -18,6 +18,7 @@ from ir.dim import DimType
 from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
 from ir.layout_utils import dimension_merging
+from util.shape_util import get_term_shape
 
 
 def gen_index(term, kernels):
@@ -58,7 +59,7 @@ def gen_index(term, kernels):
     for kernel in kernels:
         # no rolls
         if not kernel.layout.rolls:
-            input_shape = term.cs[0].cs[1]
+            input_shape = get_term_shape(term.cs[0])
             rank = len(input_shape)
             idx_items = _normalize_index_spec(term.cs[1], rank)
             # Map old logical dim -> new logical dim after integer-index removals.
