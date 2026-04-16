@@ -1,5 +1,6 @@
 from copy import deepcopy as copy
 
+from ir.dim import Dim
 from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
 from ir.layout_utils import dimension_merging
@@ -25,6 +26,34 @@ def gen_tile(term, kernels):
             r = reps[d.dim]
             if r > 1:
                 new_dims[i].extent *= r
+
+        # If a tiled logical dim was absent in layout (common when its input extent==1),
+        # materialize it explicitly.
+        existing_dims = {d.dim for d in new_dims if d.dim is not None}
+        for logical_dim, r in enumerate(reps):
+            if r <= 1 or logical_dim in existing_dims:
+                continue
+
+            higher = [d for d in new_dims if d.dim is not None and d.dim > logical_dim]
+            if higher:
+                next_dim = min(higher, key=lambda d: d.dim)
+                stride = int(next_dim.stride) * int(next_dim.extent)
+            else:
+                stride = 1
+
+            insert_at = None
+            for idx, d in enumerate(new_dims):
+                if d.dim is not None and d.dim > logical_dim:
+                    insert_at = idx
+                    break
+            if insert_at is None:
+                for idx, d in enumerate(new_dims):
+                    if d.dim is None:
+                        insert_at = idx
+                        break
+            if insert_at is None:
+                insert_at = len(new_dims)
+            new_dims.insert(insert_at, Dim(logical_dim, r, stride))
 
         tiled_layout = dimension_merging(
             Layout(

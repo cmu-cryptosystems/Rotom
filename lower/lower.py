@@ -47,6 +47,7 @@ from lower.lower_select import lower_select
 from lower.lower_sub import lower_sub
 from lower.lower_sum import lower_sum
 from lower.lower_tensor import lower_tensor
+from lower.lower_tile import lower_tile
 from lower.lower_transpose import lower_transpose
 
 
@@ -114,6 +115,8 @@ class Lower:
                     self.env[term] = lower_compact(self.env, term)
                 case KernelOp.INDEX:
                     self.env[term] = lower_index(self.env, term)
+                case KernelOp.TILE:
+                    self.env[term] = lower_tile(self.env, term)
                 case KernelOp.SELECT:
                     self.env[term] = lower_select(self.env, term)
                 case KernelOp.COMBINE:

@@ -34,6 +34,7 @@ from assignment.gen.gen_reshape import gen_reshape
 from assignment.gen.gen_strassens import gen_strassens
 from assignment.gen.gen_sum import gen_sum
 from assignment.gen.gen_tensor import gen_tensor
+from assignment.gen.gen_tile import gen_tile
 from assignment.gen.gen_transpose import gen_transpose
 from frontends.tensor import TensorOp, TensorTerm
 
@@ -197,6 +198,8 @@ class LayoutAssignment:
                 kernels = gen_rescale(term, cs_kernels[0])
             case TensorOp.INDEX:
                 kernels = gen_index(term, cs_kernels[0])
+            case TensorOp.TILE:
+                kernels = gen_tile(term, cs_kernels[0])
             case TensorOp.BLOCK_MATMUL:
                 kernels = gen_block_matmul(term, cs_kernels)
             case TensorOp.POLY_CALL | TensorOp.HARD_SWISH:
@@ -430,6 +433,7 @@ class LayoutAssignment:
                 | TensorOp.RESHAPE
                 | TensorOp.PERMUTE
                 | TensorOp.INDEX
+                | TensorOp.TILE
                 | TensorOp.RESCALE
             ):
                 return [self.get_last_kernels(self.kernels[term.cs[0]].values())]
