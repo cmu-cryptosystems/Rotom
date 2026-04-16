@@ -20,6 +20,7 @@ from lower.layout_cts import LayoutCiphertexts
 from lower.lower_add import lower_add
 from lower.lower_combine import lower_combine
 from lower.lower_compact import lower_compact
+from lower.lower_concat import lower_concat
 from lower.lower_const import lower_const
 from lower.lower_conv2d import lower_conv2d
 from lower.lower_conv2d_roll import lower_conv2d_roll
@@ -117,6 +118,8 @@ class Lower:
                     self.env[term] = lower_index(self.env, term)
                 case KernelOp.TILE:
                     self.env[term] = lower_tile(self.env, term)
+                case KernelOp.CONCAT:
+                    self.env[term] = lower_concat(self.env, term)
                 case KernelOp.SELECT:
                     self.env[term] = lower_select(self.env, term)
                 case KernelOp.COMBINE:

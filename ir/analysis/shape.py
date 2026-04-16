@@ -278,6 +278,12 @@ class Shape:
                         "TILE reps rank must match input rank for padded shape"
                     )
                 return [a_shape[i] * int(reps[i]) for i in range(len(a_shape))]
+            case TensorOp.CONCAT:
+                axis = int(term.cs[1])
+                cs_shapes = [copy(self.padded_shapes[t]) for t in term.cs[0]]
+                out = copy(cs_shapes[0])
+                out[axis] = sum(s[axis] for s in cs_shapes)
+                return out
             case _:
                 raise NotImplementedError(term.op)
 
@@ -449,6 +455,12 @@ class Shape:
                 if len(reps) != len(a_shape):
                     raise ValueError("TILE reps rank must match input rank")
                 return [a_shape[i] * int(reps[i]) for i in range(len(a_shape))]
+            case TensorOp.CONCAT:
+                axis = int(term.cs[1])
+                cs_shapes = [copy(self.get_shape(t)) for t in term.cs[0]]
+                out = copy(cs_shapes[0])
+                out[axis] = sum(s[axis] for s in cs_shapes)
+                return out
             case _:
                 raise NotImplementedError(term.op)
 

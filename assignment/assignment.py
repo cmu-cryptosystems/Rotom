@@ -24,6 +24,7 @@ from copy import deepcopy as copy
 from assignment.gen.gen_binop import gen_binop
 from assignment.gen.gen_block_matmul import gen_block_matmul
 from assignment.gen.gen_const import gen_const
+from assignment.gen.gen_concat import gen_concat
 from assignment.gen.gen_conv2d import gen_conv2d, gen_conv2d_roll
 from assignment.gen.gen_conv3d import gen_conv3d
 from assignment.gen.gen_index import gen_index
@@ -200,6 +201,8 @@ class LayoutAssignment:
                 kernels = gen_index(term, cs_kernels[0])
             case TensorOp.TILE:
                 kernels = gen_tile(term, cs_kernels[0])
+            case TensorOp.CONCAT:
+                kernels = gen_concat(term, cs_kernels)
             case TensorOp.BLOCK_MATMUL:
                 kernels = gen_block_matmul(term, cs_kernels)
             case TensorOp.POLY_CALL | TensorOp.HARD_SWISH:
@@ -353,6 +356,10 @@ class LayoutAssignment:
         for cs_term in term.cs:
             if isinstance(cs_term, TensorTerm):
                 cs_shapes.append(self.shape.padded_shapes[cs_term])
+            elif isinstance(cs_term, list):
+                for sub_term in cs_term:
+                    if isinstance(sub_term, TensorTerm):
+                        cs_shapes.append(self.shape.padded_shapes[sub_term])
         return cs_shapes
 
     def get_unpadded_cs_shapes(self, term):
@@ -373,6 +380,10 @@ class LayoutAssignment:
         for cs_term in term.cs:
             if isinstance(cs_term, TensorTerm):
                 cs_shapes.append(self.shape.shapes[cs_term])
+            elif isinstance(cs_term, list):
+                for sub_term in cs_term:
+                    if isinstance(sub_term, TensorTerm):
+                        cs_shapes.append(self.shape.shapes[sub_term])
         return cs_shapes
 
     def _child_kernel_sort_key(self, cs_term: TensorTerm, kernel: Kernel) -> tuple:
@@ -425,6 +436,13 @@ class LayoutAssignment:
                 b = sorted(b, key=lambda x: self._child_kernel_sort_key(term.cs[1], x))
 
                 return [a, b]
+            case TensorOp.CONCAT:
+                out = []
+                for child in term.cs[0]:
+                    ks = self.get_last_kernels(self.kernels[child].values())
+                    ks = sorted(ks, key=lambda x: self._child_kernel_sort_key(child, x))
+                    out.append(ks)
+                return out
             case (
                 TensorOp.TRANSPOSE
                 | TensorOp.POLY_CALL
@@ -651,7 +669,11 @@ class LayoutAssignment:
             # get cs costs
             cs_costs = 0
             for cs_kernel in cs_kernels:
-                cs_term = term.cs[cs_kernel.cs[0]]
+                cs_idx = cs_kernel.cs[0]
+                if term.op == TensorOp.CONCAT:
+                    cs_term = term.cs[0][cs_idx]
+                else:
+                    cs_term = term.cs[cs_idx]
                 merged_cs_layout = dimension_merging(cs_kernel.layout)
                 if cs_term not in self.kernel_costs:
                     self.kernel_costs[cs_term] = {}

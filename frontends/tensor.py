@@ -624,6 +624,12 @@ class TensorTerm:
                         _res, _seen = term.helper_post_order(seen)
                         res += _res
                         seen |= _seen
+                    elif isinstance(term, list):
+                        for sub_term in term:
+                            if isinstance(sub_term, TensorTerm):
+                                _res, _seen = sub_term.helper_post_order(seen)
+                                res += _res
+                                seen |= _seen
                 seen.add(self)
                 res.append(self)
                 return res, seen

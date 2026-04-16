@@ -78,6 +78,7 @@ class KernelOp(Enum):
     REORDER = "REORDER"
     RESCALE = "RESCALE"
     TILE = "TILE"
+    CONCAT = "CONCAT"
 
 
 class Kernel:

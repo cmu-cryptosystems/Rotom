@@ -666,6 +666,7 @@ class KernelCost:
                 | KernelOp.PERMUTE
                 | KernelOp.INDEX
                 | KernelOp.TILE
+                | KernelOp.CONCAT
                 | KernelOp.SELECT
                 | KernelOp.REORDER
                 | KernelOp.RESCALE
@@ -822,6 +823,7 @@ class KernelCost:
                         | KernelOp.SUM
                         | KernelOp.PRODUCT
                         | KernelOp.COMBINE
+                        | KernelOp.CONCAT
                     ):
                         pass
                     case KernelOp.MUL | KernelOp.ROLL | KernelOp.CONVERSION:
