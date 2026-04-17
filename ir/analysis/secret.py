@@ -50,12 +50,18 @@ class Secret:
             case (
                 TensorOp.TRANSPOSE
                 | TensorOp.SUM
+                | TensorOp.MEAN
                 | TensorOp.PRODUCT
                 | TensorOp.POLY_CALL
+                | TensorOp.HARD_SWISH
+                | TensorOp.TILE
+                | TensorOp.CUMSUM
+                | TensorOp.AVG_POOL2D
                 | TensorOp.RESHAPE
                 | TensorOp.PERMUTE
                 | TensorOp.INDEX
                 | TensorOp.RESCALE
+                | TensorOp.CAST
             ):
                 return secrets[0]
             case (
@@ -80,6 +86,8 @@ class Secret:
                 assert a_secret
                 assert not b_secret
                 return a_secret or b_secret
+            case TensorOp.CONCAT:
+                return any(secrets)
             case _:
                 raise NotImplementedError(term.op)
 
@@ -120,15 +128,25 @@ class Secret:
             case (
                 TensorOp.TRANSPOSE
                 | TensorOp.SUM
+                | TensorOp.MEAN
+                | TensorOp.PRODUCT
                 | TensorOp.POLY_CALL
+                | TensorOp.HARD_SWISH
+                | TensorOp.TILE
+                | TensorOp.CUMSUM
+                | TensorOp.AVG_POOL2D
                 | TensorOp.RESHAPE
                 | TensorOp.PERMUTE
                 | TensorOp.INDEX
                 | TensorOp.RESCALE
+                | TensorOp.CAST
             ):
                 cs_secrets = [self.secret[term.cs[0]]]
                 kernel_secret = self.get_secret(term, cs_secrets)
                 self.secret[term] = kernel_secret
+            case TensorOp.CONCAT:
+                cs_secrets = [self.secret[t] for t in term.cs[0]]
+                self.secret[term] = self.get_secret(term, cs_secrets)
             case _:
                 raise NotImplementedError(term.op)
 

@@ -24,6 +24,19 @@ class TensorEvaluator:
     """
 
     @staticmethod
+    def _trim_to_declared_shape(x: np.ndarray, term: Any) -> np.ndarray:
+        """Trim evaluator output to the declared placeholder shape when available."""
+        src = term.cs[0] if hasattr(term, "cs") and term.cs else None
+        if src is not None and getattr(src, "op", None) is not None:
+            src_op_name = getattr(getattr(src, "op"), "value", getattr(src, "op"))
+            if src_op_name == "Tensor":
+                declared = tuple(int(v) for v in src.cs[1])
+                if x.ndim == len(declared):
+                    slices = tuple(slice(0, d) for d in declared)
+                    return np.asarray(x)[slices]
+        return x
+
+    @staticmethod
     def _round_to_ceiling_power_of_2(n: int) -> int:
         if n <= 0:
             raise ValueError("Input must be a positive number.")
@@ -35,9 +48,26 @@ class TensorEvaluator:
         filter_tensor: np.ndarray,
         stride: int,
         padding: str,
+        groups: Any = 1,
     ) -> np.ndarray:
         input_shape = input_tensor.shape
         filter_shape = filter_tensor.shape
+        c_in = int(input_shape[0])
+
+        # Support TFLite-style depthwise filter [1, Kh, Kw, C_in*mult] in addition to
+        # Rotom-style filter [C_out, C_per_group, Kh, Kw].
+        if len(filter_shape) == 4 and filter_shape[0] == 1 and groups == "depthwise":
+            mult = int(filter_shape[3]) // c_in
+            if mult <= 0 or (mult * c_in) != int(filter_shape[3]):
+                raise ValueError(
+                    f"Invalid depthwise filter shape {filter_shape} for input channels {c_in}"
+                )
+            kh, kw = int(filter_shape[1]), int(filter_shape[2])
+            filt = np.transpose(filter_tensor, (3, 0, 1, 2)).reshape(
+                c_in * mult, 1, kh, kw
+            )
+            filter_tensor = filt
+            filter_shape = filter_tensor.shape
         if padding == "valid":
             h_o = (input_shape[1] - filter_shape[2]) // stride + 1
             w_o = (input_shape[2] - filter_shape[3]) // stride + 1
@@ -120,30 +150,90 @@ class TensorEvaluator:
                 )
             input_tensor = padded_input_tensor
 
+        c_out = int(output_shape[0])
+        if groups == "depthwise":
+            groups = c_in
+        if not isinstance(groups, int) or groups <= 0:
+            raise ValueError(
+                f"groups must be positive int or 'depthwise', got {groups!r}"
+            )
+        if c_in % groups != 0:
+            raise ValueError(f"input channels {c_in} not divisible by groups {groups}")
+        if c_out % groups != 0:
+            raise ValueError(
+                f"output channels {c_out} not divisible by groups {groups}"
+            )
+        c_in_per_group = c_in // groups
+        c_out_per_group = c_out // groups
+        if int(filter_shape[1]) != c_in_per_group:
+            raise ValueError(
+                f"filter C_in/group mismatch: expected {c_in_per_group}, got {filter_shape[1]}"
+            )
+
         output_tensor = np.zeros(output_shape)
-        for in_c in range(input_shape[0]):
-            for out_c in range(output_shape[0]):
+        for out_c in range(c_out):
+            group_idx = out_c // c_out_per_group
+            in_start = group_idx * c_in_per_group
+            in_end = in_start + c_in_per_group
+            for in_c_idx in range(in_start, in_end):
+                f_in_idx = in_c_idx - in_start
                 for i in range(output_shape[1]):
                     for j in range(output_shape[2]):
                         i_start = i * stride
                         j_start = j * stride
                         i_end = i_start + filter_shape[2]
                         j_end = j_start + filter_shape[3]
-
-                        patch = []
-                        for x in range(i_start, i_end):
-                            row = []
-                            for y in range(j_start, j_end):
-                                row.append(input_tensor[in_c][x][y])
-                            patch.append(row)
-                        patch = np.array(patch)
-
-                        f_in_idx = min(in_c, filter_shape[1] - 1)
+                        patch = input_tensor[in_c_idx][i_start:i_end, j_start:j_end]
                         output_tensor[out_c][i][j] += np.sum(
                             patch * filter_tensor[out_c][f_in_idx]
                         )
 
         return output_tensor
+
+    @staticmethod
+    def _eval_avg_pool2d(
+        input_tensor: np.ndarray, kernel: int, stride: int, padding: str
+    ) -> np.ndarray:
+        c, h, w = input_tensor.shape
+        if padding == "valid":
+            h_o = (h - kernel) // stride + 1
+            w_o = (w - kernel) // stride + 1
+            pad_top = pad_bottom = pad_left = pad_right = 0
+        elif padding == "same":
+            if stride == 1:
+                h_o, w_o = h, w
+                total_ph = max(0, (h_o - 1) * stride + kernel - h)
+                total_pw = max(0, (w_o - 1) * stride + kernel - w)
+                pad_top = total_ph // 2
+                pad_bottom = total_ph - pad_top
+                pad_left = total_pw // 2
+                pad_right = total_pw - pad_left
+            else:
+                p = kernel // 2
+                pad_top = pad_bottom = pad_left = pad_right = p
+                h_o = (h + 2 * p - kernel) // stride + 1
+                w_o = (w + 2 * p - kernel) // stride + 1
+        else:
+            raise ValueError(f"Unsupported padding mode: {padding!r}")
+
+        if any(x != 0 for x in (pad_top, pad_bottom, pad_left, pad_right)):
+            padded = np.zeros((c, h + pad_top + pad_bottom, w + pad_left + pad_right))
+            padded[:, pad_top : pad_top + h, pad_left : pad_left + w] = input_tensor
+            input_tensor = padded
+
+        out = np.zeros((c, h_o, w_o))
+        denom = float(kernel * kernel)
+        for ch in range(c):
+            for i in range(h_o):
+                hs = i * stride
+                he = hs + kernel
+                for j in range(w_o):
+                    ws = j * stride
+                    we = ws + kernel
+                    out[ch, i, j] = (
+                        float(np.sum(input_tensor[ch, hs:he, ws:we])) / denom
+                    )
+        return out
 
     @staticmethod
     def _eval_conv3d(
@@ -326,6 +416,14 @@ class TensorEvaluator:
                 return env[term.cs[0]] * env[term.cs[1]]
             case "Sum":
                 return np.sum(env[term.cs[0]], axis=term.cs[1], keepdims=False)
+            case "Mean":
+                ax = term.cs[1]
+                axes = (ax,) if isinstance(ax, int) else tuple(ax)
+                return np.mean(env[term.cs[0]], axis=axes, keepdims=True)
+            case "Product":
+                return np.prod(env[term.cs[0]], axis=term.cs[1], keepdims=False)
+            case "Cast":
+                return np.asarray(env[term.cs[0]]).astype(np.dtype(term.cs[1]))
             case "MatMul":
                 return env[term.cs[0]] @ env[term.cs[1]]
             case "Transpose":
@@ -335,7 +433,11 @@ class TensorEvaluator:
 
                 args = Conv2dArgs.from_term(term)
                 return self._eval_conv2d(
-                    env[args.input], env[args.filter], args.stride, args.padding
+                    env[args.input],
+                    env[args.filter],
+                    args.stride,
+                    args.padding,
+                    args.groups,
                 )
             case "Conv3D":
                 from .tensor_args import Conv3dArgs
@@ -394,6 +496,36 @@ class TensorEvaluator:
                     func = term.cs[1] if len(term.cs) > 1 else "identity"
                     func_spec = func
                 return self._eval_poly(x, func_spec, inputs)
+            case "Concat":
+                return np.concatenate(
+                    [env[t] for t in term.cs[0]], axis=int(term.cs[1])
+                )
+            case "Tile":
+                return np.tile(env[term.cs[0]], tuple(int(x) for x in term.cs[1]))
+            case "CumSum":
+                x = np.asarray(env[term.cs[0]])
+                axis = int(term.cs[1])
+                exclusive = bool(term.cs[2]) if len(term.cs) > 2 else False
+                reverse = bool(term.cs[3]) if len(term.cs) > 3 else False
+                if reverse:
+                    x = np.flip(x, axis=axis)
+                y = np.cumsum(x, axis=axis)
+                if exclusive:
+                    y = y - x
+                if reverse:
+                    y = np.flip(y, axis=axis)
+                return self._trim_to_declared_shape(y, term)
+            case "AvgPool2D":
+                return self._eval_avg_pool2d(
+                    env[term.cs[0]],
+                    int(term.cs[1]),
+                    int(term.cs[2]),
+                    term.cs[3],
+                )
+            case "HardSwish":
+                x = np.asarray(env[term.cs[0]], dtype=np.float64)
+                y = x * np.clip(x + 3.0, 0.0, 6.0) / 6.0
+                return self._trim_to_declared_shape(y, term)
             case _:
                 raise NotImplementedError(op_name)
 

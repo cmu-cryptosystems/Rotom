@@ -8,7 +8,7 @@ functionality in the tensor frontend.
 import numpy as np
 import pytest
 
-from frontends.tensor import TensorOp, TensorTerm
+from frontends.tensor import TensorTerm
 
 
 class TestTensorEvaluation:
@@ -87,6 +87,15 @@ class TestArithmeticEvaluation:
         expected = np.array([[9, 6], [3, 0]])
 
         np.testing.assert_array_equal(result, expected)
+
+    def test_unary_negation_evaluation(self):
+        """Unary negation is lowered to ``0 - x`` and matches numpy."""
+        a = TensorTerm.Tensor("a", [2, 2], True)
+        b = -a
+
+        inputs = {"a": np.array([[1.0, -2.0], [3.0, 4.0]], dtype=np.float64)}
+        result = b.eval(inputs)
+        np.testing.assert_allclose(result, -inputs["a"])
 
     def test_multiplication_evaluation(self):
         """Test element-wise multiplication evaluation."""
@@ -208,6 +217,33 @@ class TestReductionOperationsEvaluation:
         sum_1 = a.sum(1).eval(inputs)
         expected_1 = np.array([6, 15])  # padded input
         np.testing.assert_array_equal(sum_1, expected_1)
+
+    def test_mean_evaluation_single_axis(self):
+        """Mean uses ``keepdims=True`` and matches numpy on the padded evaluator tensor."""
+        a = TensorTerm.Tensor("a", [2, 2, 4], True)
+        inputs = {"a": np.arange(16.0).reshape(2, 2, 4)}
+        for axis in (0, 1, 2):
+            got = a.mean(axis).eval(inputs)
+            want = np.mean(inputs["a"], axis=axis, keepdims=True)
+            np.testing.assert_allclose(got, want, rtol=1e-10, atol=1e-10)
+
+    def test_mean_evaluation_multi_axis(self):
+        """Mean over a tuple of axes (TFLite-style) matches numpy."""
+        a = TensorTerm.Tensor("a", [2, 2, 4], True)
+        inputs = {"a": np.arange(16.0).reshape(2, 2, 4)}
+        for axes in ((0, 1), (0, 2), (1, 2)):
+            got = a.mean(axes).eval(inputs)
+            want = np.mean(inputs["a"], axis=axes, keepdims=True)
+            np.testing.assert_allclose(got, want, rtol=1e-10, atol=1e-10)
+
+    def test_mean_with_layout_evaluation(self):
+        """Mean with layout still matches numpy (layout is IR metadata for this evaluator)."""
+        a = TensorTerm.Tensor("a", [2, 4], True)
+        b = a.mean(0, layout="[0:1:1][1:4:1]")
+        inputs = {"a": np.arange(8.0).reshape(2, 4)}
+        got = b.eval(inputs)
+        want = np.mean(inputs["a"], axis=0, keepdims=True)
+        np.testing.assert_allclose(got, want, rtol=1e-10, atol=1e-10)
 
 
 class TestShapeOperationsEvaluation:
@@ -437,6 +473,86 @@ class TestConvolutionEvaluation:
         )
         np.testing.assert_array_equal(result, expected)
 
+    def test_depthwise_conv2d_evaluation(self):
+        """Test depthwise 2D convolution with TFLite-style filter layout."""
+        input_tensor = TensorTerm.Tensor("input", [2, 3, 3], True)
+        # TFLite-style depthwise filter: [1, Kh, Kw, Cin] with multiplier=1
+        depthwise_filter = TensorTerm.Tensor("dw_filter", [1, 2, 2, 2], False)
+        conv = TensorTerm.depthwise_conv2d(input_tensor, depthwise_filter, 1, "valid")
+
+        inputs = {
+            "input": np.array(
+                [
+                    [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+                    [[9, 8, 7], [6, 5, 4], [3, 2, 1]],
+                ]
+            ),
+            "dw_filter": np.array(
+                [
+                    [
+                        [[1, 0], [0, 1]],
+                        [[0, 1], [1, 0]],
+                    ]
+                ]
+            ),
+        }
+        result = conv.eval(inputs)
+        expected = np.array(
+            [
+                [[6, 8], [12, 14]],
+                [[14, 12], [8, 6]],
+            ]
+        )
+        np.testing.assert_array_equal(result, expected)
+
+
+class TestExtendedFrontendOpsEvaluation:
+    """Test newly added frontend op evaluation semantics."""
+
+    def test_concat_evaluation(self):
+        a = TensorTerm.Tensor("a", [2, 2], True)
+        b = TensorTerm.Tensor("b", [2, 2], True)
+        c = TensorTerm.concat([a, b], axis=0)
+        inputs = {"a": np.array([[1, 2], [3, 4]]), "b": np.array([[5, 6], [7, 8]])}
+        result = c.eval(inputs)
+        np.testing.assert_array_equal(
+            result, np.array([[1, 2], [3, 4], [5, 6], [7, 8]])
+        )
+
+    def test_tile_evaluation(self):
+        a = TensorTerm.Tensor("a", [2, 2], True)
+        t = a.tile([1, 2])
+        inputs = {"a": np.array([[1, 2], [3, 4]])}
+        result = t.eval(inputs)
+        np.testing.assert_array_equal(result, np.array([[1, 2, 1, 2], [3, 4, 3, 4]]))
+
+    def test_cumsum_evaluation(self):
+        a = TensorTerm.Tensor("a", [2, 3], True)
+        s = a.cumsum(axis=1)
+        inputs = {"a": np.array([[1, 2, 3], [4, 5, 6]])}
+        result = s.eval(inputs)
+        np.testing.assert_array_equal(result, np.array([[1, 3, 6], [4, 9, 15]]))
+
+    def test_avg_pool2d_evaluation(self):
+        a = TensorTerm.Tensor("a", [1, 4, 4], True)
+        p = a.avg_pool2d(kernel=2, stride=2, padding="valid")
+        inputs = {
+            "a": np.array(
+                [[[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16]]]
+            )
+        }
+        result = p.eval(inputs)
+        np.testing.assert_array_equal(result, np.array([[[3.5, 5.5], [11.5, 13.5]]]))
+
+    def test_hard_swish_evaluation(self):
+        a = TensorTerm.Tensor("a", [5], True)
+        h = a.hard_swish()
+        x = np.array([-4.0, -3.0, 0.0, 3.0, 4.0])
+        inputs = {"a": x}
+        result = h.eval(inputs)
+        expected = x * np.clip(x + 3.0, 0.0, 6.0) / 6.0
+        np.testing.assert_allclose(result, expected)
+
 
 class TestComplexComputationEvaluation:
     """Test evaluation of complex tensor computations."""
@@ -569,10 +685,12 @@ class TestErrorHandling:
             a.eval(inputs)
 
     def test_not_implemented_operation_error(self):
-        """Test error for not implemented operations."""
-        # Create a mock operation that's not implemented
-        a = TensorTerm(TensorOp.PRODUCT, [TensorTerm.Tensor("a", [2, 2], True), 0])
+        """Eval raises ``NotImplementedError`` for unknown IR op names."""
 
+        class _UnknownOp:
+            value = "UnknownOpForEvaluatorTest"
+
+        a = TensorTerm(_UnknownOp(), [TensorTerm.Tensor("a", [2, 2], True)])
         inputs = {"a": np.array([[1, 2], [3, 4]])}
 
         with pytest.raises(NotImplementedError):

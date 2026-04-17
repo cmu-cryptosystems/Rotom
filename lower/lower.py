@@ -20,6 +20,7 @@ from lower.layout_cts import LayoutCiphertexts
 from lower.lower_add import lower_add
 from lower.lower_combine import lower_combine
 from lower.lower_compact import lower_compact
+from lower.lower_concat import lower_concat
 from lower.lower_const import lower_const
 from lower.lower_conv2d import lower_conv2d
 from lower.lower_conv2d_roll import lower_conv2d_roll
@@ -46,7 +47,13 @@ from lower.lower_roll import (
 from lower.lower_select import lower_select
 from lower.lower_sub import lower_sub
 from lower.lower_sum import lower_sum
+from lower.lower_mean import lower_mean
+from lower.lower_product import lower_product
+from lower.lower_cast import lower_cast
 from lower.lower_tensor import lower_tensor
+from lower.lower_tile import lower_tile
+from lower.lower_cumsum import lower_cumsum
+from lower.lower_avg_pool2d import lower_avg_pool2d
 from lower.lower_transpose import lower_transpose
 
 
@@ -86,6 +93,12 @@ class Lower:
                     self.env[term] = lower_conv3d(self.env, term)
                 case KernelOp.SUM:
                     self.env[term] = lower_sum(self.env, term)
+                case KernelOp.MEAN:
+                    self.env[term] = lower_mean(self.env, term)
+                case KernelOp.PRODUCT:
+                    self.env[term] = lower_product(self.env, term)
+                case KernelOp.CAST:
+                    self.env[term] = lower_cast(self.env, term)
                 case KernelOp.CONVERSION:
                     self.env[term] = lower_conversion(self.env, term)
                 case KernelOp.REORDER:
@@ -114,6 +127,14 @@ class Lower:
                     self.env[term] = lower_compact(self.env, term)
                 case KernelOp.INDEX:
                     self.env[term] = lower_index(self.env, term)
+                case KernelOp.TILE:
+                    self.env[term] = lower_tile(self.env, term)
+                case KernelOp.CUMSUM:
+                    self.env[term] = lower_cumsum(self.env, term)
+                case KernelOp.AVG_POOL2D:
+                    self.env[term] = lower_avg_pool2d(self.env, term)
+                case KernelOp.CONCAT:
+                    self.env[term] = lower_concat(self.env, term)
                 case KernelOp.SELECT:
                     self.env[term] = lower_select(self.env, term)
                 case KernelOp.COMBINE:

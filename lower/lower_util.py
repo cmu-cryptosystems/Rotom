@@ -5,6 +5,23 @@ from ir.he import HEOp, HETerm
 from util.layout_util import add_vec, get_dim_indices, mul
 
 
+def rotate_and_product(base_term, extent, mul_offset, replicate=False):
+    """Tree-reduce multiply along a slot dimension (same rotation pattern as ``rotate_and_sum``)."""
+    num_rots = int(math.ceil(math.log2(extent)))
+    for i in range(num_rots):
+        rot_amt = int(math.pow(2, i) * mul_offset)
+        if replicate:
+            rot_amt = -rot_amt
+        rotated_ct = HETerm(
+            HEOp.ROT,
+            [base_term, rot_amt],
+            base_term.secret,
+            f"rot-and-mul ({extent},{mul_offset})",
+        )
+        base_term = rotated_ct * base_term
+    return base_term
+
+
 def rotate_and_sum(base_term, extent, mul_offset, replicate=False):
     num_rots = int(math.ceil(math.log2(extent)))
     for i in range(num_rots):

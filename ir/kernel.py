@@ -27,7 +27,7 @@ class KernelOp(Enum):
     between tensor computations and homomorphic encryption.
 
     Operation Categories:
-        Tensor ops: TENSOR, CS, CONST, ADD, SUB, MUL, SUM, PRODUCT
+        Tensor ops: TENSOR, CS, CONST, ADD, SUB, MUL, SUM, MEAN, PRODUCT
         Matrix ops: MATMUL, BLOCK_MATMUL, BSGS_MATMUL, STRASSEN_MATMUL
         Convolution: CONV2D, CONV2D_ROLL
         Polynomial: POLY
@@ -47,6 +47,7 @@ class KernelOp(Enum):
     SUB = "SUB"
     MUL = "MUL"
     SUM = "SUM"
+    MEAN = "MEAN"
     PRODUCT = "PRODUCT"
     MATMUL = "MATMUL"
     BLOCK_MATMUL = "BLOCK_MATMUL"
@@ -77,6 +78,11 @@ class KernelOp(Enum):
     COMBINE = "COMBINE"
     REORDER = "REORDER"
     RESCALE = "RESCALE"
+    TILE = "TILE"
+    CONCAT = "CONCAT"
+    CAST = "CAST"
+    CUMSUM = "CUMSUM"
+    AVG_POOL2D = "AVG_POOL2D"
 
 
 class Kernel:
@@ -185,7 +191,17 @@ class Kernel:
             ):
                 seen.add(self)
                 return [self], seen
-            case KernelOp.SUM | KernelOp.PRODUCT | KernelOp.INDEX | KernelOp.RESCALE:
+            case (
+                KernelOp.SUM
+                | KernelOp.MEAN
+                | KernelOp.PRODUCT
+                | KernelOp.INDEX
+                | KernelOp.RESCALE
+                | KernelOp.TILE
+                | KernelOp.CUMSUM
+                | KernelOp.AVG_POOL2D
+                | KernelOp.CAST
+            ):
                 res = []
                 _res, _seen = self.cs[0].helper_post_order(seen)
                 res += _res
