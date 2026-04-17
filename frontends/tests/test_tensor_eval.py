@@ -8,7 +8,7 @@ functionality in the tensor frontend.
 import numpy as np
 import pytest
 
-from frontends.tensor import TensorOp, TensorTerm
+from frontends.tensor import TensorTerm
 
 
 class TestTensorEvaluation:
@@ -87,6 +87,15 @@ class TestArithmeticEvaluation:
         expected = np.array([[9, 6], [3, 0]])
 
         np.testing.assert_array_equal(result, expected)
+
+    def test_unary_negation_evaluation(self):
+        """Unary negation is lowered to ``0 - x`` and matches numpy."""
+        a = TensorTerm.Tensor("a", [2, 2], True)
+        b = -a
+
+        inputs = {"a": np.array([[1.0, -2.0], [3.0, 4.0]], dtype=np.float64)}
+        result = b.eval(inputs)
+        np.testing.assert_allclose(result, -inputs["a"])
 
     def test_multiplication_evaluation(self):
         """Test element-wise multiplication evaluation."""
@@ -208,6 +217,33 @@ class TestReductionOperationsEvaluation:
         sum_1 = a.sum(1).eval(inputs)
         expected_1 = np.array([6, 15])  # padded input
         np.testing.assert_array_equal(sum_1, expected_1)
+
+    def test_mean_evaluation_single_axis(self):
+        """Mean uses ``keepdims=True`` and matches numpy on the padded evaluator tensor."""
+        a = TensorTerm.Tensor("a", [2, 2, 4], True)
+        inputs = {"a": np.arange(16.0).reshape(2, 2, 4)}
+        for axis in (0, 1, 2):
+            got = a.mean(axis).eval(inputs)
+            want = np.mean(inputs["a"], axis=axis, keepdims=True)
+            np.testing.assert_allclose(got, want, rtol=1e-10, atol=1e-10)
+
+    def test_mean_evaluation_multi_axis(self):
+        """Mean over a tuple of axes (TFLite-style) matches numpy."""
+        a = TensorTerm.Tensor("a", [2, 2, 4], True)
+        inputs = {"a": np.arange(16.0).reshape(2, 2, 4)}
+        for axes in ((0, 1), (0, 2), (1, 2)):
+            got = a.mean(axes).eval(inputs)
+            want = np.mean(inputs["a"], axis=axes, keepdims=True)
+            np.testing.assert_allclose(got, want, rtol=1e-10, atol=1e-10)
+
+    def test_mean_with_layout_evaluation(self):
+        """Mean with layout still matches numpy (layout is IR metadata for this evaluator)."""
+        a = TensorTerm.Tensor("a", [2, 4], True)
+        b = a.mean(0, layout="[0:1:1][1:4:1]")
+        inputs = {"a": np.arange(8.0).reshape(2, 4)}
+        got = b.eval(inputs)
+        want = np.mean(inputs["a"], axis=0, keepdims=True)
+        np.testing.assert_allclose(got, want, rtol=1e-10, atol=1e-10)
 
 
 class TestShapeOperationsEvaluation:
@@ -649,10 +685,12 @@ class TestErrorHandling:
             a.eval(inputs)
 
     def test_not_implemented_operation_error(self):
-        """Test error for not implemented operations."""
-        # Create a mock operation that's not implemented
-        a = TensorTerm(TensorOp.PRODUCT, [TensorTerm.Tensor("a", [2, 2], True), 0])
+        """Eval raises ``NotImplementedError`` for unknown IR op names."""
 
+        class _UnknownOp:
+            value = "UnknownOpForEvaluatorTest"
+
+        a = TensorTerm(_UnknownOp(), [TensorTerm.Tensor("a", [2, 2], True)])
         inputs = {"a": np.array([[1, 2], [3, 4]])}
 
         with pytest.raises(NotImplementedError):

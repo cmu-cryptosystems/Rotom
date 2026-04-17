@@ -11,6 +11,15 @@ import pytest
 from frontends.rotom_pytorch import Tensor, torch
 
 
+def _inputs_for_mul_with_rhs_tensor(
+    result: Tensor, lhs: Tensor, rhs_data: np.ndarray
+) -> dict:
+    """Eval inputs for ``lhs * rhs`` when ``rhs`` is a tensor leaf (e.g. scalar promoted to length-1 tensor)."""
+    rhs_term = result._tensor_term.cs[1]
+    rhs_name = rhs_term.cs[0]
+    return {lhs.name: lhs.data, rhs_name: np.asarray(rhs_data)}
+
+
 class TestTensorCreation:
     """Test tensor creation functions."""
 
@@ -157,6 +166,24 @@ class TestTensorOperations:
         expected = np.array([[2, 4], [6, 8]])
         assert np.array_equal(result, expected)
 
+    def test_unary_negation_eval(self):
+        """Unary ``-tensor`` matches numpy (use power-of-2 sides so padding does not change values)."""
+        a = torch.tensor([[1.0, -2.0], [3.0, 4.0]], secret=True)
+        inputs = {a.name: a.data}
+        out = (-a).eval(inputs)
+        np.testing.assert_allclose(out, -a.data)
+
+    def test_scalar_true_division_eval(self):
+        """``tensor / scalar`` is elementwise (via reciprocal tensor); matches numpy."""
+        a = torch.tensor([[4.0, 6.0], [10.0, 14.0]], secret=False)
+        c = a / 2.0
+        inputs = _inputs_for_mul_with_rhs_tensor(c, a, np.array([0.5]))
+        np.testing.assert_allclose(c.eval(inputs), a.data / 2.0)
+
+        d = a / np.float32(2.0)
+        inputs = _inputs_for_mul_with_rhs_tensor(d, a, np.array([0.5]))
+        np.testing.assert_allclose(d.eval(inputs), a.data / 2.0)
+
     def test_torch_function_operations(self):
         """Test operations using torch functions."""
         c = torch.add(self.a, self.b)
@@ -198,6 +225,49 @@ class TestTensorShapeOperations:
         eval_result = result.eval(inputs)
         expected = np.array(21)
         assert np.array_equal(eval_result, expected)
+
+    @pytest.mark.parametrize(
+        "secret",
+        [True, False],
+    )
+    def test_mean_matches_numpy_power_of_two_shapes(self, secret):
+        """Mean along each axis matches numpy when every dim is a power of two (no eval padding)."""
+        data = np.arange(16.0).reshape(2, 2, 4)
+        m = torch.tensor(data, secret=secret)
+        inputs = {m.name: m.data}
+        for dim in (0, 1, 2):
+            got = m.mean(dim, keepdim=True).eval(inputs)
+            want = np.mean(data, axis=dim, keepdims=True)
+            np.testing.assert_allclose(got, want, rtol=1e-10, atol=1e-10)
+            got_fn = torch.mean(m, dim, keepdim=True).eval(inputs)
+            np.testing.assert_allclose(got_fn, want, rtol=1e-10, atol=1e-10)
+
+    def test_mean_1d_and_default_keepdim(self):
+        """1D mean and omitted ``keepdim`` default to the layout-friendly path (keepdims in IR)."""
+        v = torch.tensor(np.arange(8.0), secret=True)
+        inputs = {v.name: v.data}
+        r_explicit = v.mean(0, keepdim=True).eval(inputs)
+        r_default = v.mean(0).eval(inputs)
+        want = np.mean(v.data, axis=0, keepdims=True)
+        np.testing.assert_allclose(r_explicit, want)
+        np.testing.assert_allclose(r_default, want)
+
+    def test_mean_after_add_matches_numpy(self):
+        """Mean commutes with addition on unpadded (power-of-two) tensors."""
+        x = torch.tensor(np.ones((2, 4)), secret=True)
+        y = torch.tensor(np.arange(8.0).reshape(2, 4), secret=False)
+        s = x + y
+        inputs = {x.name: x.data, y.name: y.data}
+        got = s.mean(0, keepdim=True).eval(inputs)
+        want = np.mean(x.data + y.data, axis=0, keepdims=True)
+        np.testing.assert_allclose(got, want)
+
+    def test_mean_with_layout_stored(self):
+        """Layout string is forwarded to the IR term (same pattern as sum)."""
+        m = torch.tensor(np.arange(8.0).reshape(2, 4), secret=True)
+        layout = "[0:1:1][1:4:1]"
+        r = m.mean(0, keepdim=True, layout=layout)
+        assert r._tensor_term.layout == layout
 
     def test_mean_operation(self):
         """Mean with keepdim=True matches numpy (use power-of-2 sizes so eval padding does not skew means)."""
@@ -246,31 +316,10 @@ class TestTensorShapeOperations:
         expected = np.array([[1, 4], [2, 5], [3, 6], [0, 0]])  # Padded to power of 2
         assert np.array_equal(eval_result, expected)
 
-    def test_squeeze_unsqueeze_operations(self):
-        """Test squeeze and unsqueeze operations raise NotImplementedError."""
-        # Create tensor with singleton dimension
-        b = torch.tensor([[[1, 2, 3]]])  # Shape (1, 1, 3)
-
-        # Squeeze should raise NotImplementedError
-        with pytest.raises(
-            NotImplementedError, match="Squeeze operation not yet implemented"
-        ):
-            b.squeeze()
-
-        # Unsqueeze should raise NotImplementedError
-        with pytest.raises(
-            NotImplementedError, match="Unsqueeze operation not yet implemented"
-        ):
-            b.unsqueeze(0)
-
-        # TODO: Uncomment when squeeze/unsqueeze operations are implemented
-        # # Squeeze all singleton dimensions
-        # squeezed = b.squeeze()
-        # assert squeezed.shape == (3,)
-        #
-        # # Unsqueeze at dimension 0
-        # unsqueezed = squeezed.unsqueeze(0)
-        # assert unsqueezed.shape == (1, 3)
+    def test_squeeze_noop_when_dimension_not_singleton(self):
+        """``squeeze(dim)`` returns the same tensor when that axis is not size 1."""
+        c = torch.tensor([[1, 2], [3, 4]])
+        assert c.squeeze(0) is c
 
     def test_indexing(self):
         """Test tensor indexing."""
@@ -319,33 +368,19 @@ class TestNeuralNetworkFunctions:
     """Test neural network activation functions."""
 
     def test_relu_function(self):
-        """Test ReLU activation function raises NotImplementedError."""
+        """ReLU uses ``poly_call`` / numpy maximum in evaluation."""
         a = torch.tensor([[1, -2], [3, -4]], secret=True)
-
-        with pytest.raises(
-            NotImplementedError, match="ReLU operation not yet implemented"
-        ):
-            torch.relu(a)
-
-        # TODO: Uncomment when ReLU operation is implemented
-        # result = torch.relu(a)
-        # assert isinstance(result, Tensor)
-        # assert result.secret is True
-        # # Note: Actual result depends on polynomial approximation implementation
+        result = torch.relu(a)
+        assert isinstance(result, Tensor)
+        assert result.secret is True
+        out = result.eval({a.name: a.data})
+        assert np.allclose(out, np.maximum(a.data, 0.0))
 
     def test_sigmoid_function(self):
-        """Test sigmoid activation function raises NotImplementedError."""
+        """Sigmoid remains unsupported until evaluator / lowering adds it."""
         a = torch.tensor([[1, 2], [3, 4]], secret=True)
-
-        with pytest.raises(
-            NotImplementedError, match="Sigmoid operation not yet implemented"
-        ):
+        with pytest.raises(NotImplementedError, match="torch.sigmoid"):
             torch.sigmoid(a)
-
-        # TODO: Uncomment when sigmoid operation is implemented
-        # result = torch.sigmoid(a)
-        # assert isinstance(result, Tensor)
-        # assert result.secret is True
 
     def test_conv2d_function(self):
         """Test 2D convolution function."""
@@ -382,17 +417,9 @@ class TestTensorProperties:
         assert np.array_equal(a.data, b.data)
         assert b.secret is True
 
-        # Detach should raise NotImplementedError
-        with pytest.raises(
-            NotImplementedError, match="Detach operation not yet implemented"
-        ):
-            a.detach()
-
-        # TODO: Uncomment when detach operation is implemented
-        # # Detach
-        # c = a.detach()
-        # assert np.array_equal(a.data, c.data)
-        # assert c.secret is False  # detach should make it non-secret
+        c = a.detach()
+        assert np.array_equal(a.data, c.data)
+        assert c.secret is a.secret
 
     def test_eval_functionality(self):
         """Test tensor evaluation."""
@@ -426,54 +453,29 @@ class TestComplexComputations:
         assert np.array_equal(eval_result, expected)
 
     def test_neural_network_like_computation(self):
-        """Test neural network-like computation."""
-        # Input layer
+        """Linear layer plus ReLU and reduction evaluate end-to-end."""
         x = torch.tensor([[1, 2, 3]], secret=True)
-
-        # Weight matrix
         W = torch.tensor([[1, 0], [0, 1], [1, 1]], secret=True)
-
-        # Linear layer: x @ W
         linear = torch.matmul(x, W)
+        activated = torch.relu(linear)
 
-        # Activation: ReLU should raise NotImplementedError
-        with pytest.raises(
-            NotImplementedError, match="ReLU operation not yet implemented"
-        ):
-            torch.relu(linear)
-
-        # TODO: Uncomment when ReLU is implemented
-        # # Activation: ReLU
-        # activated = torch.relu(linear)
-        #
-        # # Sum reduction
-        # output = torch.sum(activated)
-        #
-        # assert isinstance(output, Tensor)
-        # assert output.secret is True
+        inputs = {x.name: x.data, W.name: W.data}
+        lin = linear.eval(inputs)
+        act_eval = activated.eval(inputs)
+        np.testing.assert_allclose(act_eval, np.maximum(lin, 0.0))
+        assert isinstance(activated, Tensor)
+        assert activated.secret is True
 
 
 class TestErrorHandling:
     """Test error handling and edge cases."""
 
     def test_empty_tensor_list(self):
-        """Test operations with empty tensor list raise NotImplementedError."""
-        with pytest.raises(
-            NotImplementedError, match="Concatenation operation not yet implemented"
-        ):
+        """Empty cat/stack raise ``ValueError``."""
+        with pytest.raises(ValueError, match="non-empty"):
             torch.cat([])
-
-        with pytest.raises(
-            NotImplementedError, match="Stack operation not yet implemented"
-        ):
+        with pytest.raises(ValueError, match="non-empty"):
             torch.stack([])
-
-        # TODO: Uncomment when cat/stack operations are implemented
-        # with pytest.raises(ValueError, match="Cannot concatenate empty list"):
-        #     torch.cat([])
-        #
-        # with pytest.raises(ValueError, match="Cannot stack empty list"):
-        #     torch.stack([])
 
     def test_incompatible_shapes(self):
         """Test operations with incompatible shapes."""
@@ -502,6 +504,10 @@ class TestPyTorchCompatibility:
         assert hasattr(torch, "add")
         assert hasattr(torch, "relu")
         assert hasattr(torch, "conv2d")
+        assert hasattr(torch, "cat")
+        assert hasattr(torch, "stack")
+        assert hasattr(torch, "cumsum")
+        assert hasattr(torch, "cast")
 
         # Check that nn and optim modules exist
         from frontends.rotom_pytorch import nn, optim
@@ -524,6 +530,10 @@ class TestPyTorchCompatibility:
         assert hasattr(a, "unsqueeze")
         assert hasattr(a, "clone")
         assert hasattr(a, "detach")
+        assert hasattr(a, "matmul")
+        assert hasattr(a, "product")
+        assert hasattr(a, "cast")
+        assert hasattr(a, "cumsum")
         assert hasattr(a, "T")
         assert hasattr(a, "eval")
 
