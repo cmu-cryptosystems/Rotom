@@ -79,6 +79,7 @@ class KernelOp(Enum):
     RESCALE = "RESCALE"
     TILE = "TILE"
     CONCAT = "CONCAT"
+    CAST = "CAST"
     CUMSUM = "CUMSUM"
     AVG_POOL2D = "AVG_POOL2D"
 
@@ -197,6 +198,7 @@ class Kernel:
                 | KernelOp.TILE
                 | KernelOp.CUMSUM
                 | KernelOp.AVG_POOL2D
+                | KernelOp.CAST
             ):
                 res = []
                 _res, _seen = self.cs[0].helper_post_order(seen)

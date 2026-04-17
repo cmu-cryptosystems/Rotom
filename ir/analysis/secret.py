@@ -60,6 +60,7 @@ class Secret:
                 | TensorOp.PERMUTE
                 | TensorOp.INDEX
                 | TensorOp.RESCALE
+                | TensorOp.CAST
             ):
                 return secrets[0]
             case (
@@ -126,6 +127,7 @@ class Secret:
             case (
                 TensorOp.TRANSPOSE
                 | TensorOp.SUM
+                | TensorOp.PRODUCT
                 | TensorOp.POLY_CALL
                 | TensorOp.HARD_SWISH
                 | TensorOp.TILE
@@ -135,6 +137,7 @@ class Secret:
                 | TensorOp.PERMUTE
                 | TensorOp.INDEX
                 | TensorOp.RESCALE
+                | TensorOp.CAST
             ):
                 cs_secrets = [self.secret[term.cs[0]]]
                 kernel_secret = self.get_secret(term, cs_secrets)

@@ -31,6 +31,8 @@ Layout Example:
 from enum import Enum
 from typing import Any, Dict, Iterable, List, Optional
 
+import numpy as np
+
 from .tensor_args import Conv2dArgs, Conv3dArgs
 from .tensor_evaluator import TensorEvaluator
 
@@ -77,6 +79,7 @@ class TensorOp(Enum):
     PERMUTE = "Permute"  # permute dims
     INDEX = "Index"
     RESCALE = "Rescale"  # scale division
+    CAST = "Cast"  # view as dtype (layout unchanged; HE is a no-op)
     CONCAT = "Concat"  # concatenate tensors along axis
     TILE = "Tile"  # repeat tensor by reps per dimension
     CUMSUM = "CumSum"  # cumulative sum along axis
@@ -265,6 +268,10 @@ class TensorTerm:
         if not isinstance(other, TensorTerm):
             other = TensorTerm.const(other)
         return TensorTerm(TensorOp.SUB, [self, other], layout)
+
+    def __neg__(self) -> "TensorTerm":
+        """Unary negation as ``0 - self`` (no dedicated IR op)."""
+        return TensorTerm(TensorOp.SUB, [TensorTerm.const(0.0), self], None)
 
     def __mul__(self, other: Any, layout: Optional[str] = None) -> "TensorTerm":
         """Element-wise multiplication operator.
@@ -497,6 +504,10 @@ class TensorTerm:
             >>> c = a.rescale(14, layout="[0:4:1][1:4:1]")  # With layout
         """
         return TensorTerm(TensorOp.RESCALE, [self, scale_exp], layout)
+
+    def cast(self, dtype: Any, layout: Optional[str] = None) -> "TensorTerm":
+        """View with a new dtype; packing is unchanged (lowering is a no-op on slots)."""
+        return TensorTerm(TensorOp.CAST, [self, np.dtype(dtype).str], layout)
 
     @staticmethod
     def conv2d(

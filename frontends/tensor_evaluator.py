@@ -416,6 +416,10 @@ class TensorEvaluator:
                 return env[term.cs[0]] * env[term.cs[1]]
             case "Sum":
                 return np.sum(env[term.cs[0]], axis=term.cs[1], keepdims=False)
+            case "Product":
+                return np.prod(env[term.cs[0]], axis=term.cs[1], keepdims=False)
+            case "Cast":
+                return np.asarray(env[term.cs[0]]).astype(np.dtype(term.cs[1]))
             case "MatMul":
                 return env[term.cs[0]] @ env[term.cs[1]]
             case "Transpose":

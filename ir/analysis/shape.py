@@ -135,8 +135,8 @@ class Shape:
                     return a_shape
                 else:
                     return b_shape
-            case TensorOp.RESCALE:
-                # Rescale preserves the shape of the input tensor
+            case TensorOp.RESCALE | TensorOp.CAST:
+                # Rescale / cast preserve the shape of the input tensor
                 return copy(self.padded_shapes[term.cs[0]])
             case TensorOp.MATMUL:
                 a_shape = copy(self.padded_shapes[term.cs[0]])
@@ -285,7 +285,7 @@ class Shape:
                 dim_idx = term.cs[1]
                 result_shape = a_shape[:dim_idx] + a_shape[dim_idx + 1 :]
                 return result_shape
-            case TensorOp.RESCALE | TensorOp.POLY_CALL | TensorOp.HARD_SWISH:
+            case TensorOp.POLY_CALL | TensorOp.HARD_SWISH:
                 # Preserves the shape of the input tensor
                 return copy(self.padded_shapes[term.cs[0]])
             case TensorOp.TILE:
@@ -337,8 +337,8 @@ class Shape:
                     return a_shape
                 else:
                     return b_shape
-            case TensorOp.RESCALE:
-                # Rescale preserves the shape of the input tensor
+            case TensorOp.RESCALE | TensorOp.CAST:
+                # Rescale / cast preserve the shape of the input tensor
                 return copy(self.get_shape(term.cs[0]))
             case TensorOp.MATMUL:
                 a = term.cs[0]

@@ -47,6 +47,8 @@ from lower.lower_roll import (
 from lower.lower_select import lower_select
 from lower.lower_sub import lower_sub
 from lower.lower_sum import lower_sum
+from lower.lower_product import lower_product
+from lower.lower_cast import lower_cast
 from lower.lower_tensor import lower_tensor
 from lower.lower_tile import lower_tile
 from lower.lower_cumsum import lower_cumsum
@@ -90,6 +92,10 @@ class Lower:
                     self.env[term] = lower_conv3d(self.env, term)
                 case KernelOp.SUM:
                     self.env[term] = lower_sum(self.env, term)
+                case KernelOp.PRODUCT:
+                    self.env[term] = lower_product(self.env, term)
+                case KernelOp.CAST:
+                    self.env[term] = lower_cast(self.env, term)
                 case KernelOp.CONVERSION:
                     self.env[term] = lower_conversion(self.env, term)
                 case KernelOp.REORDER:

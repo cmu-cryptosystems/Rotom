@@ -669,6 +669,7 @@ class KernelCost:
                 | KernelOp.CONCAT
                 | KernelOp.CUMSUM
                 | KernelOp.AVG_POOL2D
+                | KernelOp.CAST
                 | KernelOp.SELECT
                 | KernelOp.REORDER
                 | KernelOp.RESCALE
@@ -828,6 +829,7 @@ class KernelCost:
                         | KernelOp.CONCAT
                         | KernelOp.CUMSUM
                         | KernelOp.AVG_POOL2D
+                        | KernelOp.CAST
                     ):
                         pass
                     case KernelOp.MUL | KernelOp.ROLL | KernelOp.CONVERSION:

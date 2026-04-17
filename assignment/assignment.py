@@ -27,6 +27,8 @@ from assignment.gen.gen_const import gen_const
 from assignment.gen.gen_concat import gen_concat
 from assignment.gen.gen_cumsum import gen_cumsum
 from assignment.gen.gen_avg_pool2d import gen_avg_pool2d
+from assignment.gen.gen_product import gen_product
+from assignment.gen.gen_cast import gen_cast
 from assignment.gen.gen_conv2d import gen_conv2d, gen_conv2d_roll
 from assignment.gen.gen_conv3d import gen_conv3d
 from assignment.gen.gen_index import gen_index
@@ -182,6 +184,8 @@ class LayoutAssignment:
                     kernels = kernel_map[term]
             case TensorOp.SUM:
                 kernels = gen_sum(term, cs_kernels[0])
+            case TensorOp.PRODUCT:
+                kernels = gen_product(term, cs_kernels[0])
             case TensorOp.TRANSPOSE:
                 kernels = gen_transpose(term, cs_kernels[0])
             case TensorOp.CONV2D:
@@ -207,6 +211,8 @@ class LayoutAssignment:
                 kernels = gen_concat(term, cs_kernels)
             case TensorOp.CUMSUM:
                 kernels = gen_cumsum(term, cs_kernels[0])
+            case TensorOp.CAST:
+                kernels = gen_cast(term, cs_kernels[0])
             case TensorOp.AVG_POOL2D:
                 cs_shapes = self.get_unpadded_cs_shapes(term)
                 kernels = gen_avg_pool2d(term, cs_kernels[0], cs_shapes)
@@ -455,12 +461,14 @@ class LayoutAssignment:
                 | TensorOp.POLY_CALL
                 | TensorOp.HARD_SWISH
                 | TensorOp.SUM
+                | TensorOp.PRODUCT
                 | TensorOp.RESHAPE
                 | TensorOp.PERMUTE
                 | TensorOp.INDEX
                 | TensorOp.TILE
                 | TensorOp.CUMSUM
                 | TensorOp.AVG_POOL2D
+                | TensorOp.CAST
                 | TensorOp.RESCALE
             ):
                 return [self.get_last_kernels(self.kernels[term.cs[0]].values())]
