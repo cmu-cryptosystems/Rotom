@@ -416,6 +416,10 @@ class TensorEvaluator:
                 return env[term.cs[0]] * env[term.cs[1]]
             case "Sum":
                 return np.sum(env[term.cs[0]], axis=term.cs[1], keepdims=False)
+            case "Mean":
+                ax = term.cs[1]
+                axes = (ax,) if isinstance(ax, int) else tuple(ax)
+                return np.mean(env[term.cs[0]], axis=axes, keepdims=True)
             case "Product":
                 return np.prod(env[term.cs[0]], axis=term.cs[1], keepdims=False)
             case "Cast":

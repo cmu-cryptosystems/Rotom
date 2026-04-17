@@ -681,7 +681,7 @@ class KernelCost:
                 ops = self.basic_arith_ops(ops)
             case KernelOp.MUL:
                 ops = self.mul_arith_ops(ops)
-            case KernelOp.SUM:
+            case KernelOp.SUM | KernelOp.MEAN:
                 ops = self.sum_ops(ops)
             case KernelOp.PRODUCT:
                 ops = self.product_ops(ops)
@@ -824,6 +824,7 @@ class KernelCost:
                         | KernelOp.ADD
                         | KernelOp.SUB
                         | KernelOp.SUM
+                        | KernelOp.MEAN
                         | KernelOp.PRODUCT
                         | KernelOp.COMBINE
                         | KernelOp.CONCAT

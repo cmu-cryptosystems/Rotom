@@ -285,6 +285,15 @@ class Shape:
                 dim_idx = term.cs[1]
                 result_shape = a_shape[:dim_idx] + a_shape[dim_idx + 1 :]
                 return result_shape
+            case TensorOp.MEAN:
+                a_shape = copy(self.padded_shapes[term.cs[0]])
+                axes = term.cs[1]
+                if isinstance(axes, int):
+                    axes = (axes,)
+                out = copy(a_shape)
+                for a in axes:
+                    out[int(a)] = 1
+                return out
             case TensorOp.POLY_CALL | TensorOp.HARD_SWISH:
                 # Preserves the shape of the input tensor
                 return copy(self.padded_shapes[term.cs[0]])
@@ -478,6 +487,15 @@ class Shape:
                 dim_idx = term.cs[1]
                 result_shape = a_shape[:dim_idx] + a_shape[dim_idx + 1 :]
                 return result_shape
+            case TensorOp.MEAN:
+                a_shape = copy(self.get_shape(term.cs[0]))
+                axes = term.cs[1]
+                if isinstance(axes, int):
+                    axes = (axes,)
+                out = copy(a_shape)
+                for ax in axes:
+                    out[int(ax)] = 1
+                return out
             case TensorOp.POLY_CALL | TensorOp.HARD_SWISH:
                 return copy(self.get_shape(term.cs[0]))
             case TensorOp.TILE:

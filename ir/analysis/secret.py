@@ -50,6 +50,7 @@ class Secret:
             case (
                 TensorOp.TRANSPOSE
                 | TensorOp.SUM
+                | TensorOp.MEAN
                 | TensorOp.PRODUCT
                 | TensorOp.POLY_CALL
                 | TensorOp.HARD_SWISH
@@ -127,6 +128,7 @@ class Secret:
             case (
                 TensorOp.TRANSPOSE
                 | TensorOp.SUM
+                | TensorOp.MEAN
                 | TensorOp.PRODUCT
                 | TensorOp.POLY_CALL
                 | TensorOp.HARD_SWISH

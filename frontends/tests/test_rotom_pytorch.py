@@ -200,31 +200,17 @@ class TestTensorShapeOperations:
         assert np.array_equal(eval_result, expected)
 
     def test_mean_operation(self):
-        """Test mean operation raises NotImplementedError."""
-        # Mean operation should raise NotImplementedError
-        with pytest.raises(
-            NotImplementedError, match="Mean operation not yet implemented"
-        ):
-            self.a.mean(0)
-
-        with pytest.raises(
-            NotImplementedError, match="Mean operation not yet implemented"
-        ):
-            self.a.mean(1)
-
-        # TODO: Uncomment when mean operation is implemented
-        # # Mean along dimension 0
-        # result = self.a.mean(0)
-        # inputs = {self.a.name: self.a.data}
-        # eval_result = result.eval(inputs)
-        # expected = np.array([2.5, 3.5, 4.5])
-        # assert np.allclose(eval_result, expected)
-        #
-        # # Mean along dimension 1
-        # result = self.a.mean(1)
-        # eval_result = result.eval(inputs)
-        # expected = np.array([2.0, 5.0])
-        # assert np.allclose(eval_result, expected)
+        """Mean with keepdim=True matches numpy (use power-of-2 sizes so eval padding does not skew means)."""
+        m = torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]], secret=True)
+        inputs = {m.name: m.data}
+        r0 = m.mean(0, keepdim=True)
+        assert np.allclose(r0.eval(inputs), np.mean(m.data, axis=0, keepdims=True))
+        r1 = m.mean(1, keepdim=True)
+        assert np.allclose(r1.eval(inputs), np.mean(m.data, axis=1, keepdims=True))
+        with pytest.raises(NotImplementedError, match="keepdim=False"):
+            self.a.mean(0, keepdim=False)
+        with pytest.raises(NotImplementedError, match="all dimensions"):
+            self.a.mean(None)
 
     def test_transpose_operation(self):
         """Test transpose operation."""

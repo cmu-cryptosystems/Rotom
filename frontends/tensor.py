@@ -68,6 +68,7 @@ class TensorOp(Enum):
     SUB = "Sub"  # element-wise subtract
     MUL = "Mul"  # element-wise mul
     SUM = "Sum"  # sum along a dimension
+    MEAN = "Mean"  # mean along one or more axes (keepdims=True; TFLite-style)
     PRODUCT = "Product"  # product along a dimension
     TRANSPOSE = "Transpose"  # transpose
     MATMUL = "MatMul"  # matmul
@@ -312,6 +313,18 @@ class TensorTerm:
             >>> d = a.sum(0, layout="[0:1:1]")  # With layout
         """
         return TensorTerm(TensorOp.SUM, [self, dim_idx], layout)
+
+    def mean(
+        self,
+        axis: int | tuple[int, ...],
+        layout: Optional[str] = None,
+    ) -> "TensorTerm":
+        """Mean over one or more axes with keepdims=True (matches TFLite MEAN / global pool)."""
+        if isinstance(axis, int):
+            axes = (axis,)
+        else:
+            axes = tuple(int(a) for a in axis)
+        return TensorTerm(TensorOp.MEAN, [self, axes], layout)
 
     def product(self, dim_idx: int, layout: Optional[str] = None) -> "TensorTerm":
         """Product along a specific dimension.

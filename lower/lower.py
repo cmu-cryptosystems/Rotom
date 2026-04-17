@@ -47,6 +47,7 @@ from lower.lower_roll import (
 from lower.lower_select import lower_select
 from lower.lower_sub import lower_sub
 from lower.lower_sum import lower_sum
+from lower.lower_mean import lower_mean
 from lower.lower_product import lower_product
 from lower.lower_cast import lower_cast
 from lower.lower_tensor import lower_tensor
@@ -92,6 +93,8 @@ class Lower:
                     self.env[term] = lower_conv3d(self.env, term)
                 case KernelOp.SUM:
                     self.env[term] = lower_sum(self.env, term)
+                case KernelOp.MEAN:
+                    self.env[term] = lower_mean(self.env, term)
                 case KernelOp.PRODUCT:
                     self.env[term] = lower_product(self.env, term)
                 case KernelOp.CAST:

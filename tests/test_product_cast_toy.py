@@ -42,6 +42,16 @@ def test_product_along_last_dim() -> None:
     _run_and_compare(t, inputs, n=64)
 
 
+def test_mean_over_two_axes_keepdims() -> None:
+    """TFLite-style MEAN over spatial axes (keepdims), matches toy + numpy."""
+    np.random.seed(4)
+    x = np.random.randn(2, 5, 8, 8, 4).astype(np.float64)
+    inputs = {"x": x}
+    t = TensorTerm.Tensor("x", [2, 5, 8, 8, 4], True)
+    t = t.mean((2, 3))
+    _run_and_compare(t, inputs, n=256)
+
+
 def test_cast_float32_roundtrip_layout() -> None:
     np.random.seed(3)
     x = np.random.randn(4, 8, 8).astype(np.float64)

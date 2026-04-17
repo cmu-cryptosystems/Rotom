@@ -163,20 +163,17 @@ class Tensor:
         keepdim: bool = False,
         layout: Optional[str] = None,
     ):
-        """Mean along dimension."""
-        raise NotImplementedError(
-            "Mean operation not yet implemented in Rotom PyTorch frontend"
-        )
-        # TODO: Implement mean operation
-        # summed = self.sum(dim, keepdim=keepdim, layout=layout)
-        # if dim is None:
-        #     count = np.prod(self.shape)
-        # else:
-        #     count = self.shape[dim]
-        #
-        # # Create constant tensor for division
-        # count_tensor = torch.tensor(count, secret=False)
-        # return summed / count_tensor
+        """Mean along dimension(s); maps to ``TensorTerm.mean`` (keepdims=True in numpy eval)."""
+        if dim is None:
+            raise NotImplementedError(
+                "mean over all dimensions is not supported in the PyTorch frontend yet"
+            )
+        if not keepdim:
+            raise NotImplementedError(
+                "mean(..., keepdim=False) is not supported; use keepdim=True for layout IR"
+            )
+        result_term = self._tensor_term.mean(dim, layout=layout)
+        return _wrap_tensor_term(result_term, secret=self.secret)
 
     def transpose(self, dim0: int = 0, dim1: int = 1, layout: Optional[str] = None):
         """Transpose dimensions."""
@@ -364,10 +361,10 @@ class torch:
     def mean(
         input: Tensor,
         dim: Optional[int] = None,
-        keepdim: bool = False,
+        keepdim: bool = True,
         layout: Optional[str] = None,
     ) -> Tensor:
-        """Mean along dimension."""
+        """Mean along dimension; default ``keepdim=True`` matches layout IR / TFLite-style MEAN."""
         return input.mean(dim, keepdim=keepdim, layout=layout)
 
     @staticmethod
