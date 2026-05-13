@@ -1,5 +1,5 @@
-import random
 from argparse import ArgumentParser, BooleanOptionalAction
+from pathlib import Path
 
 import numpy as np
 
@@ -18,6 +18,9 @@ from benchmarks.microbenchmarks.slot_roll import slot_roll
 from benchmarks.rotom_benchmarks.bert_attention import bert_attention
 from benchmarks.rotom_benchmarks.convolution.convolution import convolution
 from benchmarks.rotom_benchmarks.convolution.convolution_32768 import convolution_32768
+from benchmarks.rotom_benchmarks.hf_bert_direct_manifest import (
+    write_hf_bert_direct_manifest,
+)
 from benchmarks.rotom_benchmarks.double_matmul.double_matmul_128_64_ct_ct import (
     double_matmul_128_64_ct_ct,
 )
@@ -33,8 +36,8 @@ from benchmarks.rotom_benchmarks.ttm import ttm
 
 # Import Rotom
 from frontends.tensor import TensorTerm
-from ir.dim import *
-from ir.layout import *
+from ir.dim import *  # noqa: F403
+from ir.layout import *  # noqa: F403
 from lower.circuit_serializer import serialize_circuit
 from lower.lower import Lower
 from util.checker import check_results
@@ -134,6 +137,12 @@ def run_benchmark_or_microbenchmark(args):
                 tensor_ir, inputs, n = bert_attention()
                 args.n = n
             case "hf_bert_polynomial":
+                if args.direct_manifest:
+                    circuit_name = f"{args.benchmark}_{args.n}"
+                    output_dir = f"output/{circuit_name}"
+                    manifest = write_hf_bert_direct_manifest(args, Path(output_dir), circuit_name)
+                    print(f"Serialized direct BERT manifest to {manifest}")
+                    return
                 tensor_ir, inputs, n = hf_bert_polynomial(args)
                 args.n = n
             case _:
@@ -312,6 +321,12 @@ if __name__ == "__main__":
         action=BooleanOptionalAction,
         default=False,
         help="Stop after layout assignment/lowering/serialization.",
+    )
+    parser.add_argument(
+        "--direct-manifest",
+        action=BooleanOptionalAction,
+        default=False,
+        help="Emit a compact Orbit-readable manifest for hf_bert_polynomial.",
     )
     parser.add_argument("--mock", action=BooleanOptionalAction, default=False)
     parser.add_argument("--fuzz", action=BooleanOptionalAction, default=False)

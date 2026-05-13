@@ -3,6 +3,7 @@ from pathlib import Path
 
 from assignment.assignment import LayoutAssignment
 from assignment.gen.gen_transpose import gen_transpose
+from benchmarks.rotom_benchmarks.hf_bert_direct_manifest import write_hf_bert_direct_manifest
 from benchmarks.rotom_benchmarks import hf_bert_polynomial as bert_poly
 from frontends.tensor import TensorTerm
 from ir.dim import Dim
@@ -68,3 +69,34 @@ def test_transpose_generator_uses_current_layout_constructor():
         0: 4,
         1: 2,
     }
+
+
+def test_direct_bert_manifest_emits_scope_comments(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "benchmarks.rotom_benchmarks.hf_bert_direct_manifest.load_bert_polynomial_spec",
+        lambda model_name, seq_len, num_layers, **_kwargs: bert_poly.BertPolynomialSpec(
+            model_name=model_name,
+            seq_len=2,
+            hidden_size=4,
+            intermediate_size=8,
+            num_hidden_layers=2,
+            num_labels=2,
+        ),
+    )
+    args = Namespace(
+        hf_model="test-bert",
+        seq_len=2,
+        num_layers=2,
+        hidden_size=None,
+        intermediate_size=None,
+        num_labels=None,
+        n=16,
+    )
+
+    manifest = write_hf_bert_direct_manifest(args, tmp_path, "direct_bert")
+    text = "\n".join(path.read_text() for path in tmp_path.glob("*.txt"))
+
+    assert manifest.exists()
+    assert "scope=bert.encoder.layer.0.attention.self.query;op=linear" in text
+    assert "scope=bert.encoder.layer.1.output.LayerNorm;op=polynorm_proxy" in text
+    assert "scope=classifier;op=linear" in text
