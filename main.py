@@ -6,7 +6,6 @@ import numpy as np
 from assignment.assignment import LayoutAssignment
 from backends.heir.heir import HEIR
 from backends.heir.mlir_interpreter import run_mlir_interpreter
-from backends.openfhe_backend import CKKS
 from backends.toy import Toy
 
 # Import benchmarks
@@ -25,6 +24,7 @@ from benchmarks.rotom_benchmarks.double_matmul.double_matmul_128_64_ct_ct import
 from benchmarks.rotom_benchmarks.double_matmul.double_matmul_256_128_ct_ct import (
     double_matmul_256_128_ct_ct,
 )
+from benchmarks.rotom_benchmarks.hf_bert_polynomial import hf_bert_polynomial
 from benchmarks.rotom_benchmarks.logreg import logreg
 from benchmarks.rotom_benchmarks.matmul.matmul_128_64 import matmul_128_64
 from benchmarks.rotom_benchmarks.matmul.matmul_256_128 import matmul_256_128
@@ -38,8 +38,6 @@ from ir.layout import *
 from lower.circuit_serializer import serialize_circuit
 from lower.lower import Lower
 from util.checker import check_results
-from wrappers.fhelipe_wrapper import FhelipeWrapper
-from wrappers.viaduct_wrapper import ViaductWrapper
 
 
 def run_benchmark_or_microbenchmark(args):
@@ -75,12 +73,16 @@ def run_benchmark_or_microbenchmark(args):
             print(
                 f"Serialized circuit to {len(file_paths)} instruction files in {output_dir}/"
             )
+        if args.compile_only:
+            return
 
         runtime = 0
         if args.backend.lower() == "toy":
             results = Toy(circuit_ir, inputs, args).run()
             check_results(kernel.term, inputs, kernel, results, runtime, args)
         elif args.backend.lower() == "ckks":
+            from backends.openfhe_backend import CKKS
+
             runtime, results = CKKS(circuit_ir, inputs, args).run()
             check_results(kernel.term, inputs, kernel, results, runtime, args)
         elif args.backend.lower() == "heir":
@@ -131,6 +133,9 @@ def run_benchmark_or_microbenchmark(args):
             case "bert_attention":
                 tensor_ir, inputs, n = bert_attention()
                 args.n = n
+            case "hf_bert_polynomial":
+                tensor_ir, inputs, n = hf_bert_polynomial(args)
+                args.n = n
             case _:
                 raise NotImplementedError("unknown benchmark")
 
@@ -157,6 +162,8 @@ def run_benchmark_or_microbenchmark(args):
             print(
                 f"Serialized circuit to {len(file_paths)} instruction files in {output_dir}/"
             )
+        if args.compile_only:
+            return
 
         # Run backend with result checking
         runtime = 0
@@ -164,6 +171,8 @@ def run_benchmark_or_microbenchmark(args):
             results = Toy(circuit_ir, inputs, args).run()
             check_results(tensor_ir, inputs, kernel, results, runtime, args)
         elif args.backend.lower() == "ckks":
+            from backends.openfhe_backend import CKKS
+
             runtime, results = CKKS(circuit_ir, inputs, args).run()
             check_results(tensor_ir, inputs, kernel, results, runtime, args)
         elif args.backend.lower() == "heir":
@@ -188,6 +197,8 @@ def main(args):
 
     # Check if we should run fhelipe wrapper
     if args.fhelipe:
+        from wrappers.fhelipe_wrapper import FhelipeWrapper
+
         args.path = args.fhelipe
         w = FhelipeWrapper(args)
         comp = w.create_comp()
@@ -197,6 +208,8 @@ def main(args):
 
     # Check if we should run viaduct wrapper
     if args.viaduct:
+        from wrappers.viaduct_wrapper import ViaductWrapper
+
         args.path = args.viaduct
         w = ViaductWrapper(args)
         comp = w.create_comp()
@@ -238,6 +251,8 @@ def main(args):
         print(
             f"Serialized circuit to {len(file_paths)} instruction files in {output_dir}/"
         )
+    if args.compile_only:
+        return
 
     # run backend
     runtime = 0
@@ -245,6 +260,8 @@ def main(args):
         results = Toy(circuit_ir, inputs, args).run()
         check_results(tensor_ir, inputs, kernel, results, runtime, args)
     elif args.backend.lower() == "ckks":
+        from backends.openfhe_backend import CKKS
+
         runtime, results = CKKS(circuit_ir, inputs, args).run()
         check_results(tensor_ir, inputs, kernel, results, runtime, args)
     elif args.backend.lower() == "heir":
@@ -268,15 +285,33 @@ if __name__ == "__main__":
     parser.add_argument("--backend", default="toy")
     parser.add_argument("--n", type=int, default=4096)
     parser.add_argument("--size", type=int, default=4)
+    parser.add_argument("--hf-model", default="textattack/bert-base-uncased-SST-2")
+    parser.add_argument("--seq-len", type=int, default=128)
+    parser.add_argument("--num-layers", type=int, default=None)
+    parser.add_argument("--hidden-size", type=int, default=None)
+    parser.add_argument("--intermediate-size", type=int, default=None)
+    parser.add_argument("--num-labels", type=int, default=None)
     parser.add_argument("--rolls", action=BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--diagonal-first",
+        action=BooleanOptionalAction,
+        default=True,
+        help="Include guarded direct diagonal lowering candidates for supported ops",
+    )
     parser.add_argument("--strassens", action=BooleanOptionalAction, default=False)
     parser.add_argument("--net", default="lan")
     parser.add_argument("--cache", action=BooleanOptionalAction, default=False)
     parser.add_argument(
         "--serialize",
-        type=BooleanOptionalAction,
+        action=BooleanOptionalAction,
         default=False,
         help="Serialize circuit IR to modular instruction files",
+    )
+    parser.add_argument(
+        "--compile-only",
+        action=BooleanOptionalAction,
+        default=False,
+        help="Stop after layout assignment/lowering/serialization.",
     )
     parser.add_argument("--mock", action=BooleanOptionalAction, default=False)
     parser.add_argument("--fuzz", action=BooleanOptionalAction, default=False)

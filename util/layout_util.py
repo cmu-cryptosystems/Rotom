@@ -1,7 +1,6 @@
 from copy import copy as copy
 
 import numpy as np
-from _pytest._py.error import R
 
 from ir.dim import Dim, DimType
 from ir.layout import Layout

@@ -7,7 +7,6 @@ with different backends (Toy and CKKS).
 
 import pytest
 
-from backends.openfhe_backend import CKKS
 from backends.toy import Toy
 
 
@@ -51,6 +50,8 @@ def run_backend(backend_name, circuit_ir, inputs, args):
         backend = Toy(circuit_ir, inputs, args)
         return backend.run()
     elif backend_name == "ckks":
+        from backends.openfhe_backend import CKKS
+
         backend = CKKS(circuit_ir, inputs, args)
         _, results = backend.run()
         return results

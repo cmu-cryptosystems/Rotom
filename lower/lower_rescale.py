@@ -1,5 +1,6 @@
 from ir.he import HEOp, HETerm
 from lower.layout_cts import LayoutCiphertexts
+from lower.metadata import kernel_metadata
 
 
 def lower_rescale(env, kernel):
@@ -18,9 +19,10 @@ def lower_rescale(env, kernel):
 
     # For each ciphertext in the input, apply rescale
     cts = {}
+    metadata = kernel_metadata(kernel, "rescale")
     for i, ct in input_cts.items():
         # Create a RESCALE HETerm, passing the scale exponent
-        rescale_term = HETerm(HEOp.RESCALE, [ct, scale_exp], ct.secret)
+        rescale_term = HETerm(HEOp.RESCALE, [ct, scale_exp], ct.secret, metadata)
         cts[i] = rescale_term
 
     return LayoutCiphertexts(layout=kernel.layout, cts=cts)

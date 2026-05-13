@@ -153,7 +153,12 @@ class HETerm:
         Returns:
             HETerm: A new HE term representing the addition
         """
-        return HETerm(HEOp.ADD, [self, other], self.secret or other.secret)
+        return HETerm(
+            HEOp.ADD,
+            [self, other],
+            self.secret or other.secret,
+            self.metadata or other.metadata,
+        )
 
     def __sub__(self, other):
         """Homomorphic subtraction operator.
@@ -164,7 +169,12 @@ class HETerm:
         Returns:
             HETerm: A new HE term representing the subtraction
         """
-        return HETerm(HEOp.SUB, [self, other], self.secret or other.secret)
+        return HETerm(
+            HEOp.SUB,
+            [self, other],
+            self.secret or other.secret,
+            self.metadata or other.metadata,
+        )
 
     def __mul__(self, other):
         """Homomorphic multiplication operator.
@@ -175,7 +185,12 @@ class HETerm:
         Returns:
             HETerm: A new HE term representing the multiplication
         """
-        return HETerm(HEOp.MUL, [self, other], self.secret or other.secret)
+        return HETerm(
+            HEOp.MUL,
+            [self, other],
+            self.secret or other.secret,
+            self.metadata or other.metadata,
+        )
 
     def __lshift__(self, other):
         """Homomorphic rotation operator.
@@ -186,7 +201,7 @@ class HETerm:
         Returns:
             HETerm: A new HE term representing the rotation
         """
-        return HETerm(HEOp.ROT, [self, other], self.secret)
+        return HETerm(HEOp.ROT, [self, other], self.secret, self.metadata)
 
     def pack(layout, metadata):
         """Create a pack operation term.
@@ -221,10 +236,10 @@ class HETerm:
             str: Formatted instruction string with metadata comment
         """
         if self.metadata:
-            return f"{instr_str} # {self.metadata.split()[0]}"
+            return f"{instr_str} # {self.metadata}"
         return instr_str
 
-    def instrs(self, env={}, kernel_env={}):
+    def instrs(self, env=None, kernel_env=None):
         """Generate instruction strings for HE operations.
 
         Args:
@@ -234,11 +249,13 @@ class HETerm:
         Returns:
             tuple: (list of instruction strings, updated environment)
         """
-        idx = len(env)
+        env = env or {}
+        kernel_env = kernel_env or {}
         instruction_strs = []
         for term in self.post_order():
             if term in env:
                 continue
+            idx = len(env)
             match term.op:
                 case HEOp.CS:
                     he_term = term.cs[0]
@@ -249,15 +266,26 @@ class HETerm:
                             instruction_strs.append(
                                 f"{idx} {term.secret}: {kernel_env[layout_term][he_term.cs[0]]}"
                             )
+                            env[term] = idx
                         case HEOp.PACK:
                             instruction_strs.append(
                                 he_term.format_metadata(
                                     f"{idx} {he_term.secret}: pack ({he_term.cs[0].layout_str()})"
                                 )
                             )
+                            env[term] = idx
                         case _:
-                            pass
-                            # raise NotImplementedError(he_term.op)
+                            if he_term not in env:
+                                child_instrs, env = he_term.instrs(
+                                    env=env,
+                                    kernel_env=kernel_env,
+                                )
+                                instruction_strs.extend(child_instrs)
+                            # CS wrappers represent an existing child ciphertext.
+                            # Alias the wrapper to the child instead of creating
+                            # an instruction id that has no emitted definition.
+                            env[term] = env[he_term]
+                    continue
                 case HEOp.PACK:
                     instruction_strs.append(
                         term.format_metadata(
@@ -287,32 +315,41 @@ class HETerm:
                 case HEOp.ADD:
                     a = env[term.cs[0]]
                     b = env[term.cs[1]]
-                    instruction_strs.append(f"{idx} {term.secret}: (+ {a} {b})")
+                    instruction_strs.append(
+                        term.format_metadata(f"{idx} {term.secret}: (+ {a} {b})")
+                    )
                 case HEOp.SUB:
                     a = env[term.cs[0]]
                     b = env[term.cs[1]]
-                    instruction_strs.append(f"{idx} {term.secret}: (- {a} {b})")
+                    instruction_strs.append(
+                        term.format_metadata(f"{idx} {term.secret}: (- {a} {b})")
+                    )
                 case HEOp.MUL:
                     a = env[term.cs[0]]
                     b = env[term.cs[1]]
-                    instruction_strs.append(f"{idx} {term.secret}: (* {a} {b})")
+                    instruction_strs.append(
+                        term.format_metadata(f"{idx} {term.secret}: (* {a} {b})")
+                    )
                 case HEOp.ROT:
                     a = env[term.cs[0]]
                     b = str(term.cs[1])
-                    instruction_strs.append(f"{idx} {term.secret}: (<< {a} {b})")
+                    instruction_strs.append(
+                        term.format_metadata(f"{idx} {term.secret}: (<< {a} {b})")
+                    )
                 case HEOp.POLY:
                     a = env[term.cs[0]]
-                    instruction_strs.append(f"{idx} {term.secret}: (poly {a})")
+                    instruction_strs.append(
+                        term.format_metadata(f"{idx} {term.secret}: (poly {a})")
+                    )
                 case HEOp.RESCALE:
                     a = env[term.cs[0]]
                     b = term.cs[1]
                     instruction_strs.append(
-                        f"{idx} {term.secret}: (rescale {a} / 2^{b})"
+                        term.format_metadata(f"{idx} {term.secret}: (rescale {a} / 2^{b})")
                     )
                 case _:
                     raise NotImplementedError(term.op)
             env[term] = idx
-            idx += 1
         return instruction_strs, env
 
     def __repr__(self):

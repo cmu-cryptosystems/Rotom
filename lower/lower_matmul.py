@@ -6,6 +6,7 @@ from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
 from lower.layout_cts import LayoutCiphertexts, create_layout_without_dims
 from lower.lower_util import bsgs, find_sum_dim, rotate_and_sum
+from lower.metadata import kernel_metadata
 from util.layout_util import (
     convert_layout_to_mask,
     get_ct_idxs_by_dim,
@@ -26,8 +27,9 @@ def lower_matmul(env, kernel):
 
     # calculate the multiplications between ct
     cts = {}
+    metadata = kernel_metadata(kernel, "matmul")
     for i, (a, b) in enumerate(zip(a_cs, b_cs)):
-        mul_term = a * b
+        mul_term = HETerm(HEOp.MUL, [a, b], a.secret or b.secret, metadata)
         cts[i] = mul_term
 
     # Create initial layout_cts with input layout

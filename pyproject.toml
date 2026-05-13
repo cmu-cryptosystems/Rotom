@@ -30,6 +30,7 @@ dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
     "pytest-timeout>=2.1.0",
+    "hypothesis>=6.0.0",
     "flake8>=6.0.0",
     "black>=23.0.0",
     "isort>=5.12.0",
@@ -68,7 +69,7 @@ profile = "black"
 multi_line_output = 3
 line_length = 88
 known_first_party = ["rotom"]
-known_third_party = ["numpy", "matplotlib", "tqdm", "openfhe"]
+known_third_party = ["numpy", "matplotlib", "tqdm", "openfhe", "hypothesis"]
 
 [tool.mypy]
 python_version = "3.12"

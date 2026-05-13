@@ -15,6 +15,10 @@ import math
 
 from ir.dim import DimType
 from ir.kernel import KernelOp
+from lower.lower_diagonal import (
+    estimate_diagonal_conv2d_ops,
+    estimate_diagonal_matmul_ops,
+)
 from util.util import get_slot_dims, prod
 
 from .layout_utils import dimension_merging
@@ -630,6 +634,9 @@ class KernelCost:
                 ops = self.product_ops(ops)
             case KernelOp.MATMUL:
                 ops = self.matmul_ops(ops, self.kernel.cs[0].layout, 1)
+            case KernelOp.DIAGONAL_MATMUL:
+                for op, count in estimate_diagonal_matmul_ops(self.kernel).items():
+                    ops[op] += count
             case KernelOp.BLOCK_MATMUL:
                 ops = self.matmul_ops(ops, self.kernel.cs[0].layout, 2)
             case KernelOp.BSGS_MATMUL:
@@ -640,6 +647,9 @@ class KernelCost:
                 ops = self.conv2d_roll_ops(ops)
             case KernelOp.CONV2D:
                 ops = self.conv2d_ops(ops)
+            case KernelOp.DIAGONAL_CONV2D:
+                for op, count in estimate_diagonal_conv2d_ops(self.kernel).items():
+                    ops[op] += count
             case KernelOp.ROLL:
                 ops = self.roll_ops(ops)
             case KernelOp.SPLIT_ROLL:
@@ -767,7 +777,12 @@ class KernelCost:
                         pass
                     case KernelOp.MUL | KernelOp.ROLL | KernelOp.CONVERSION:
                         d += 1
-                    case KernelOp.MATMUL | KernelOp.CONV2D:
+                    case (
+                        KernelOp.MATMUL
+                        | KernelOp.DIAGONAL_MATMUL
+                        | KernelOp.CONV2D
+                        | KernelOp.DIAGONAL_CONV2D
+                    ):
                         # HACK: depth actually varies if masking is required or not
                         d += 2
                     case KernelOp.POLY:

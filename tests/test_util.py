@@ -6,6 +6,7 @@ def get_default_args():
     parser.backend = "ckks"
     parser.n = 4096
     parser.rolls = False
+    parser.diagonal_first = True
     parser.strassens = False
     parser.net = "lan"
     parser.cache = False

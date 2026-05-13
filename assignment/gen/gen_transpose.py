@@ -15,6 +15,7 @@ from copy import deepcopy as copy
 from ir.dim import Dim
 from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
+from ir.layout_utils import dimension_merging
 
 
 def gen_transpose(term, kernels):
@@ -53,13 +54,14 @@ def gen_transpose(term, kernels):
             else:
                 new_dims.append(copy(dim))
 
-        transposed_layout = Layout(
-            term,
-            copy(kernel.layout.rolls),
-            new_dims,
-            {},
-            kernel.layout.n,
-            kernel.layout.secret,
+        transposed_layout = dimension_merging(
+            Layout(
+                term,
+                copy(kernel.layout.rolls),
+                new_dims,
+                kernel.layout.n,
+                kernel.layout.secret,
+            )
         )
 
         # create placeholder for transpose kernel

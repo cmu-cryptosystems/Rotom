@@ -11,7 +11,14 @@ with different underlying homomorphic encryption libraries.
 """
 
 from .heir.heir import HEIR
-from .openfhe_backend import CKKS
 from .toy import Toy
 
 __all__ = ["Toy", "CKKS", "HEIR"]
+
+
+def __getattr__(name):
+    if name == "CKKS":
+        from .openfhe_backend import CKKS
+
+        return CKKS
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

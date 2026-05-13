@@ -20,6 +20,7 @@ from lower.lower_conv2d import lower_conv2d
 from lower.lower_conv2d_roll import lower_conv2d_roll
 from lower.lower_conversion import lower_conversion
 from lower.lower_cs_pack import lower_cs_pack
+from lower.lower_diagonal import lower_diagonal_conv2d, lower_diagonal_matmul
 from lower.lower_index import lower_index
 from lower.lower_mask_tensor import lower_punctured_tensor
 from lower.lower_matmul import lower_bsgs_matmul, lower_matmul
@@ -71,6 +72,8 @@ class Lower:
                     self.env[term] = lower_mul(self.env, term)
                 case KernelOp.CONV2D:
                     self.env[term] = lower_conv2d(self.env, term)
+                case KernelOp.DIAGONAL_CONV2D:
+                    self.env[term] = lower_diagonal_conv2d(self.env, term)
                 case KernelOp.CONV2D_ROLL:
                     self.env[term] = lower_conv2d_roll(self.env, term)
                 case KernelOp.SUM:
@@ -81,6 +84,8 @@ class Lower:
                     self.env[term] = lower_reorder(self.env, term)
                 case KernelOp.MATMUL:
                     self.env[term] = lower_matmul(self.env, term)
+                case KernelOp.DIAGONAL_MATMUL:
+                    self.env[term] = lower_diagonal_matmul(self.env, term)
                 case KernelOp.BSGS_MATMUL:
                     self.env[term] = lower_bsgs_matmul(self.env, term)
                 case KernelOp.ROLL:

@@ -23,3 +23,6 @@ docs/_build/
 docs/.doctrees/
 docs/*.doctrees
 docs/source/api_reference/*.rst
+
+# Local install notes
+INSTALL_OPENFHE.md

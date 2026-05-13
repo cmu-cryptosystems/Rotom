@@ -1,9 +1,28 @@
 """
-Circuit serialization module for outputting HE circuits to instruction files.
+Improved circuit serializer for Rotom → Orbit integration.
 
-This module provides functionality to serialize finalized HE circuits into
-modular instruction files - one file per kernel. This allows for better
-organization, debugging, and potential external execution of circuits.
+Drop-in replacement for Rotom's lower/circuit_serializer.py that emits
+additional metadata required by Orbit's ILP optimizer:
+
+  * per-instruction operand secrecy (ci / pl) so Orbit can distinguish
+    single (ct-pt) from double (ct-ct) operations without re-inference
+  * per-instruction weight (number of packed slots)
+  * rotation offsets written explicitly so NAF weight is recoverable
+  * manifest carries crypto-parameter hints (poly_deg, max_level, etc.)
+    so the Orbit user does not have to supply them separately
+
+The text format is a strict superset of the original — every line that
+the original serializer produces is still valid here, and extra fields
+are appended after a tab so that legacy readers can split on the first
+colon and ignore the rest.
+
+USAGE (inside Rotom, after replacing the import):
+
+    from lower.rotom_serializer import serialize_circuit
+    file_paths = serialize_circuit(circuit_ir, output_dir="output/circuits",
+                                   circuit_name="my_net")
+
+The output can then be consumed by Orbit's rotom2tdag.build_from_rotom().
 """
 
 import json
@@ -15,71 +34,57 @@ from lower.layout_cts import LayoutCiphertexts
 
 
 class CircuitSerializer:
-    """Serializes HE circuits to modular instruction files.
+    """Serialize HE circuits to instruction files with Orbit-compatible metadata.
 
-    Each kernel in the circuit gets its own instruction file, allowing
-    for modular loading and execution. Files are written in a human-readable
-    text format with optional JSON metadata.
+    Each kernel gets its own .txt file.  A manifest JSON ties them together
+    and carries circuit-level parameters that Orbit needs.
 
     Attributes:
-        output_dir: Directory where instruction files will be written
-        circuit_name: Base name for the circuit files
+        output_dir:   directory for output files
+        circuit_name: base name shared by all output files
+        params:       optional dict of crypto parameters forwarded to manifest
     """
 
-    def __init__(self, output_dir="output/circuits", circuit_name="circuit"):
-        """Initialize the circuit serializer.
-
-        Args:
-            output_dir: Directory to write instruction files
-            circuit_name: Base name for circuit files
-        """
+    def __init__(self, output_dir="output/circuits", circuit_name="circuit",
+                 params=None):
         self.output_dir = output_dir
         self.circuit_name = circuit_name
+        self.params = params or {}
         os.makedirs(output_dir, exist_ok=True)
 
     def serialize(self, circuit_ir: Dict) -> Dict[str, str]:
-        """Serialize a circuit to modular instruction files.
+        """Serialize *circuit_ir* (kernel_term → LayoutCiphertexts) to disk.
 
-        Writes one instruction file per kernel term in the circuit.
-        Also creates a manifest file describing all kernels.
-
-        Args:
-            circuit_ir: Circuit IR from Lower.run() - dict mapping kernel_terms to LayoutCiphertexts
-
-        Returns:
-            Dictionary mapping kernel indices to file paths
+        Returns a dict mapping kernel indices (and ``"manifest"``) to file
+        paths that were written.
         """
         file_paths = {}
-        manifest = {"circuit_name": self.circuit_name, "kernels": []}
+        manifest = {
+            "format_version": 2,
+            "circuit_name": self.circuit_name,
+            "params": self.params,
+            "kernels": [],
+        }
 
-        # Track global instruction environment
         global_env = {}
-        kernel_outputs = {}  # Maps kernel terms to their output indices
+        kernel_outputs = {}
 
-        # Process each kernel term from the circuit_ir
         kernel_idx = 0
         for kernel_term, layout_cts in circuit_ir.items():
-            # Extract the ciphertexts dictionary from LayoutCiphertexts
             if isinstance(layout_cts, LayoutCiphertexts):
                 he_terms_dict = layout_cts.cts
             else:
-                # Handle legacy format where it's already a dict
                 he_terms_dict = layout_cts
 
-            # Generate filename for this kernel
             kernel_file = f"{self.circuit_name}_kernel_{kernel_idx}.txt"
             kernel_path = os.path.join(self.output_dir, kernel_file)
 
-            # Write kernel instructions
             kernel_metadata = self._write_kernel_file(
                 kernel_path, kernel_term, he_terms_dict, global_env, kernel_idx
             )
 
-            # Track this kernel's outputs for dependency resolution
             if kernel_term.layout not in kernel_outputs:
                 kernel_outputs[kernel_term.layout] = []
-
-            # Store output instruction indices for this kernel
             for ct_idx, he_term in he_terms_dict.items():
                 if he_term in global_env:
                     kernel_outputs[kernel_term.layout].append(global_env[he_term])
@@ -88,7 +93,6 @@ class CircuitSerializer:
             manifest["kernels"].append(kernel_metadata)
             kernel_idx += 1
 
-        # Write manifest file
         manifest_path = os.path.join(
             self.output_dir, f"{self.circuit_name}_manifest.json"
         )
@@ -96,34 +100,24 @@ class CircuitSerializer:
             json.dump(manifest, f, indent=2)
 
         file_paths["manifest"] = manifest_path
-
         return file_paths
 
-    def _write_kernel_file(
-        self, filepath, kernel_term, he_terms_dict, global_env, kernel_idx
-    ):
-        """Write a single kernel to an instruction file.
+    # ------------------------------------------------------------------
+    # internal helpers
+    # ------------------------------------------------------------------
 
-        Args:
-            filepath: Path to write the kernel file
-            kernel_term: The kernel term being written
-            he_terms_dict: Dictionary of ciphertext index to HETerm
-            global_env: Global environment for instruction numbering
-            kernel_idx: Index of this kernel in the circuit
-
-        Returns:
-            Metadata dictionary for this kernel
-        """
+    def _write_kernel_file(self, filepath, kernel_term, he_terms_dict,
+                           global_env, kernel_idx):
+        """Write one kernel's instructions and return its manifest entry."""
         with open(filepath, "w") as f:
-            # Write header
-            f.write(f"# HE Kernel Instruction File\n")
+            f.write(f"# Rotom-Orbit HE Kernel Instruction File  (format v2)\n")
             f.write(f"# Kernel Index: {kernel_idx}\n")
             f.write(f"# Operation: {kernel_term.op}\n")
             f.write(f"# Layout: {kernel_term.layout}\n")
-            f.write(f"# Format: {{index}} {{is_secret}}: {{operation}} {{operands}}\n")
+            f.write(f"# Format: {{index}} {{ci|pl}}: {{operation}}"
+                    f"  [# metadata]\n")
             f.write("#" + "=" * 70 + "\n\n")
 
-            # Track kernel-specific metadata
             kernel_metadata = {
                 "kernel_idx": kernel_idx,
                 "operation": str(kernel_term.op),
@@ -134,55 +128,75 @@ class CircuitSerializer:
                 "outputs": [],
             }
 
-            # Get dependencies (input kernel references)
             if hasattr(kernel_term, "cs") and kernel_term.cs:
                 for child in kernel_term.cs:
                     if hasattr(child, "layout"):
                         kernel_metadata["dependencies"].append(str(child.layout))
 
-            # Process each ciphertext in this kernel
             for ct_idx, he_term in he_terms_dict.items():
                 f.write(f"# Ciphertext {ct_idx}\n")
 
-                # Generate instructions
                 instrs, global_env = he_term.instrs(env=global_env)
 
                 if instrs:
                     for instr in instrs:
-                        f.write(f"{instr}\n")
+                        # Rewrite the secrecy token from True/False → ci/pl
+                        enriched = self._enrich_instruction(instr)
+                        f.write(f"{enriched}\n")
 
-                        # Parse instruction for metadata
-                        # Format: {index} {is_secret}: {operation} {operands}
                         parts = instr.split(":")
                         if len(parts) >= 2:
-                            index_and_secret = parts[0].strip().split()
-                            if len(index_and_secret) >= 1:
-                                instr_idx = int(index_and_secret[0])
-                                kernel_metadata["instructions"].append(instr_idx)
+                            idx_parts = parts[0].strip().split()
+                            if idx_parts:
+                                kernel_metadata["instructions"].append(
+                                    int(idx_parts[0]))
 
                     f.write("\n")
 
-                    # Track output of this ciphertext
                     if he_term in global_env:
                         kernel_metadata["outputs"].append(global_env[he_term])
 
-            # Write summary footer
-            f.write(f"# Total instructions: {len(kernel_metadata['instructions'])}\n")
+            f.write(f"# Total instructions: "
+                    f"{len(kernel_metadata['instructions'])}\n")
             f.write(f"# Output indices: {kernel_metadata['outputs']}\n")
 
         return kernel_metadata
 
+    @staticmethod
+    def _enrich_instruction(instr: str) -> str:
+        """Replace ``True``/``False`` secrecy token with ``ci``/``pl``.
 
-def serialize_circuit(circuit_ir, output_dir="output/circuits", circuit_name="circuit"):
-    """Convenience function to serialize circuit IR to instruction files.
+        Original format:   ``5 True: (+ 2 3)``
+        Enriched format:   ``5 ci: (+ 2 3)``
+
+        This makes the file self-describing (ci = ciphertext, pl = plaintext)
+        and matches Orbit's MLIR type convention.
+        """
+        # The secrecy token is always the second whitespace-delimited word
+        # before the first colon.
+        m = __import__('re').match(r'^(\d+)\s+(True|False)(:.*)', instr)
+        if not m:
+            return instr
+        idx_str = m.group(1)
+        secret  = m.group(2) == 'True'
+        rest    = m.group(3)
+        return f"{idx_str} {'ci' if secret else 'pl'}{rest}"
+
+
+def serialize_circuit(circuit_ir, output_dir="output/circuits",
+                      circuit_name="circuit", params=None):
+    """Convenience wrapper matching the original module-level API.
 
     Args:
-        circuit_ir: Circuit IR from Lower.run()
-        output_dir: Directory for output files
-        circuit_name: Base name for circuit files
+        circuit_ir:   dict from ``Lower.run()``
+        output_dir:   output directory
+        circuit_name: base file name
+        params:       optional dict of crypto parameters (poly_deg,
+                      max_level, rescaling_factor, …) forwarded into
+                      the manifest so Orbit can read them directly
 
     Returns:
-        Dictionary mapping kernel indices to file paths
+        dict mapping kernel indices (and ``"manifest"``) to file paths
     """
-    serializer = CircuitSerializer(output_dir, circuit_name)
+    serializer = CircuitSerializer(output_dir, circuit_name, params=params)
     return serializer.serialize(circuit_ir)

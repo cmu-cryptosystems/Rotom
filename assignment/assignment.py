@@ -18,9 +18,7 @@ while maintaining correctness of the computation graph semantics.
 
 from copy import deepcopy as copy
 
-# import frontend terms
-from re import L
-
+from assignment.diagonal import diagonalize_term, estimate_layout_embedding_ops
 from assignment.gen.gen_binop import gen_binop
 from assignment.gen.gen_block_matmul import gen_block_matmul
 from assignment.gen.gen_conv2d import gen_conv2d, gen_conv2d_roll
@@ -86,6 +84,8 @@ class LayoutAssignment:
         self.kernels = {}
         self.kernel_costs = {}
         self.candidates = {}
+        self.diagonal_plans = {}
+        self.diagonal_costs = {}
         self.roll_flag = args.rolls if args and hasattr(args, "rolls") else False
         self.network = args.net if args and hasattr(args, "net") else "lan"
         self.strassens = (
@@ -99,6 +99,11 @@ class LayoutAssignment:
         self.conv_roll = (
             args.conv_roll if args and hasattr(args, "conv_roll") else False
         )
+        self.diagonal_first = True
+        if args and hasattr(args, "diagonal_first"):
+            self.diagonal_first = args.diagonal_first
+        elif args and hasattr(args, "diagonal"):
+            self.diagonal_first = args.diagonal
         self.fuzzer = Fuzz(self.n)
         self.fn = args.fn if args and hasattr(args, "fn") else "default"
 
@@ -143,29 +148,6 @@ class LayoutAssignment:
                         cs_shapes,
                         self.roll_flag,
                     )
-                    # Debug: Print candidate kernels for MATMUL
-                    if term.op == TensorOp.MATMUL:
-                        print(f"\n=== Candidate kernels for MATMUL {term} ===")
-                        print(f"roll_flag: {self.roll_flag}")
-                        print(f"Total candidate kernels: {len(kernels)}")
-                        kernels_with_rolls = [k for k in kernels if k.layout.rolls]
-                        kernels_without_rolls = [
-                            k for k in kernels if not k.layout.rolls
-                        ]
-                        print(f"Kernels with rolls: {len(kernels_with_rolls)}")
-                        print(f"Kernels without rolls: {len(kernels_without_rolls)}")
-                        for i, kernel in enumerate(kernels):
-                            has_rolls = bool(kernel.layout.rolls)
-                            print(
-                                f"\nKernel {i+1}: {'HAS ROLLS' if has_rolls else 'NO ROLLS'}"
-                            )
-                            print(f"  Layout: {kernel.layout}")
-                            print(f"  Rolls: {kernel.layout.rolls}")
-                            if has_rolls:
-                                print(
-                                    f"  Roll details: {[str(r) for r in kernel.layout.rolls]}"
-                                )
-                        print("=" * 60)
             case TensorOp.SUM:
                 kernels = gen_sum(term, cs_kernels[0])
             case TensorOp.TRANSPOSE:
@@ -233,6 +215,7 @@ class LayoutAssignment:
             kernels = self.shape_check(kernels)
             # kernels = self.prune_tiles(kernels)
             kernels = self.add_equivalent_kernels(kernels)
+            kernels = self.add_diagonal_kernels(term, kernels)
 
             # update kernel map
             self.update_kernels(term, kernels)
@@ -488,6 +471,91 @@ class LayoutAssignment:
         assert eq_kernels
         return sorted(eq_kernels, key=lambda k: k.layout.layout_str())
 
+    def add_diagonal_kernels(self, term, kernels):
+        """Add guarded direct-diagonal alternatives for supported kernels.
+
+        The standard candidate remains in the search space.  A diagonal clone
+        is inserted only when the direct lowering estimate is no worse under
+        the same weighted HE-op model.  This makes ``--diagonal-first`` an
+        evidence-backed alternative path instead of an additive penalty on
+        ordinary kernels.
+        """
+
+        if not self.diagonal_first or term.op not in {TensorOp.MATMUL, TensorOp.CONV2D}:
+            return kernels
+
+        expanded = list(kernels)
+        seen = set(expanded)
+        for kernel in kernels:
+            diagonal_kernel = self.diagonal_kernel_clone(kernel)
+            if diagonal_kernel is not None and diagonal_kernel not in seen:
+                expanded.append(diagonal_kernel)
+                seen.add(diagonal_kernel)
+        return sorted(expanded, key=lambda k: (k.layout.layout_str(), k.op.value))
+
+    def diagonal_kernel_clone(self, kernel):
+        """Recursively replace supported inner ops with diagonal variants.
+
+        Candidate generators often wrap a matmul in ``COMPACT`` or ``REORDER``.
+        The lowering choice belongs to the inner arithmetic kernel, so this
+        helper walks the kernel tree and clones the wrapper when a child becomes
+        ``DIAGONAL_MATMUL`` or ``DIAGONAL_CONV2D``.
+        """
+
+        cloned_children = []
+        changed = False
+        for child in kernel.cs:
+            if isinstance(child, Kernel):
+                cloned_child = self.diagonal_kernel_clone(child)
+                if cloned_child is not None:
+                    cloned_children.append(cloned_child)
+                    changed = True
+                else:
+                    cloned_children.append(child)
+            else:
+                cloned_children.append(child)
+
+        if kernel.op in {KernelOp.MATMUL, KernelOp.CONV2D}:
+            diagonal_op = {
+                KernelOp.MATMUL: KernelOp.DIAGONAL_MATMUL,
+                KernelOp.CONV2D: KernelOp.DIAGONAL_CONV2D,
+            }[kernel.op]
+            candidate = Kernel(diagonal_op, cloned_children, kernel.layout)
+            if self.diagonal_candidate_is_guarded(kernel, candidate):
+                return candidate
+
+        if changed:
+            return Kernel(kernel.op, cloned_children, kernel.layout)
+        return None
+
+    def diagonal_candidate_is_guarded(self, base_kernel, diagonal_kernel):
+        """Return true when direct diagonal cost is no worse than baseline."""
+
+        if not self._has_secret_data_operand(base_kernel):
+            return False
+
+        try:
+            cost_model = KernelCost(base_kernel, self.network).cost_model()
+            base_ops = KernelCost(base_kernel, self.network).ops()
+            diagonal_ops = KernelCost(diagonal_kernel, self.network).ops()
+        except (AssertionError, IndexError, KeyError, NotImplementedError, ValueError):
+            return False
+
+        base_cost = sum(cost_model[op] * count for op, count in base_ops.items())
+        diagonal_cost = sum(
+            cost_model[op] * count for op, count in diagonal_ops.items()
+        )
+        return diagonal_cost <= base_cost
+
+    def _has_secret_data_operand(self, kernel):
+        if kernel.op == KernelOp.CONV2D:
+            children = kernel.cs[:1]
+        elif kernel.op == KernelOp.MATMUL:
+            children = kernel.cs[:2]
+        else:
+            return False
+        return any(getattr(child.layout, "secret", False) for child in children)
+
     def prune(self, kernels):
         layouts = {}
         for kernel in kernels:
@@ -586,6 +654,83 @@ class LayoutAssignment:
         assert new_kernels
         return new_kernels
 
+    def diagonal_action_plan(self, term):
+        """Return the canonical diagonal movement plan for supported terms.
+
+        Matmul uses padded child shapes because layout generation pads tensor
+        dimensions before assigning slots.  Conv2d uses original image/filter
+        shapes because its stencil arithmetic is defined over real image
+        coordinates; padding is represented by skipped lanes at the boundary.
+        """
+
+        if not self.diagonal_first or term.op not in {TensorOp.MATMUL, TensorOp.CONV2D}:
+            return None
+        if term in self.diagonal_plans:
+            return self.diagonal_plans[term]
+
+        try:
+            if term.op == TensorOp.CONV2D:
+                shapes = self.get_unpadded_cs_shapes(term)
+            else:
+                shapes = self.get_cs_shapes(term)
+            plan = diagonalize_term(term, shapes)
+        except (IndexError, KeyError, NotImplementedError, ValueError):
+            plan = None
+
+        self.diagonal_plans[term] = plan
+        return plan
+
+    def diagonal_source_layout(self, term, kernel):
+        """Choose the physical layout whose lanes realize the diagonal shifts."""
+
+        if term.op == TensorOp.CONV2D:
+            if kernel.op not in {KernelOp.CONV2D, KernelOp.CONV2D_ROLL}:
+                return None
+            data_children = kernel.cs[:1]
+        elif term.op == TensorOp.MATMUL:
+            if kernel.op == KernelOp.BSGS_MATMUL:
+                data_children = kernel.cs[1:3]
+            elif kernel.op == KernelOp.MATMUL:
+                data_children = kernel.cs[:2]
+            else:
+                return None
+        else:
+            return None
+
+        for child in data_children:
+            layout = getattr(child, "layout", None)
+            if layout is not None and layout.secret:
+                return layout
+        return None
+
+    def diagonal_embedding_cost(self, term, kernel):
+        """Return the standalone diagonal embedding score for diagnostics.
+
+        This is not added to candidate cost anymore.  Actual diagonal-first
+        selection happens through guarded ``DIAGONAL_*`` clone candidates above.
+        We keep this helper as an audit signal for the representation-theoretic
+        embedding model and for tests that check the scoring oracle directly.
+        """
+
+        plan = self.diagonal_action_plan(term)
+        layout = self.diagonal_source_layout(term, kernel)
+        if plan is None or layout is None:
+            return 0
+
+        cache_key = (term, layout.layout_str())
+        if cache_key in self.diagonal_costs:
+            return self.diagonal_costs[cache_key]
+
+        try:
+            cost_model = KernelCost(kernel, self.network).cost_model()
+            ops = estimate_layout_embedding_ops(plan, layout)
+            cost = sum(cost_model[op] * count for op, count in ops.items())
+        except (AssertionError, IndexError, KeyError, NotImplementedError, ValueError):
+            cost = 0
+
+        self.diagonal_costs[cache_key] = cost
+        return cost
+
     def update_kernels(self, term, kernels):
         for kernel in kernels:
             # get cs kernels
@@ -642,22 +787,6 @@ class LayoutAssignment:
         """
         assert term in self.kernels and term in self.kernel_costs
         assert self.kernels[term] and self.kernel_costs[term]
-
-        # Debug: Print all candidate costs
-        if term.op.value == "MATMUL" or (
-            hasattr(term, "op") and str(term).startswith("(@")
-        ):
-            print(f"\n=== Search for {term} ===")
-            print(f"Number of candidate layouts: {len(self.kernel_costs[term])}")
-            for layout_key, cost in sorted(
-                self.kernel_costs[term].items(), key=lambda kv: kv[1]
-            ):
-                kernel = self.kernels[term][layout_key].kernel
-                has_rolls = bool(kernel.layout.rolls)
-                print(f"  Layout: {layout_key}")
-                print(f"    Has rolls: {has_rolls}, Cost: {cost}")
-                print(f"    Layout: {kernel.layout}")
-            print("=" * 60)
 
         best_layout, _best_cost = min(
             self.kernel_costs[term].items(), key=lambda kv: kv[1]
