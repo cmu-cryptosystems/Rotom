@@ -21,25 +21,32 @@ def _conv2d_term(name, in_ch, out_ch, k, inputs, stride=1, padding="same"):
     return lambda x: TensorTerm.conv2d(x, w_term, stride, padding)
 
 
-def _batchnorm_term(x, prefix, num_ch, inputs, eps=1e-5):
-    """Register BatchNorm params in inputs and return Poly(BN) term."""
-    inputs[f"{prefix}_mean"] = np.random.randn(num_ch).astype(np.float64) * 0.1
-    inputs[f"{prefix}_var"] = np.abs(np.random.randn(num_ch).astype(np.float64)) + 0.1
-    inputs[f"{prefix}_gamma"] = np.ones(num_ch, dtype=np.float64)
-    inputs[f"{prefix}_beta"] = np.zeros(num_ch, dtype=np.float64)
-    return TensorTerm.batchnorm(
-        x,
-        f"{prefix}_mean",
-        f"{prefix}_var",
-        f"{prefix}_gamma",
-        f"{prefix}_beta",
-        eps=eps,
-    )
+def _batchnorm_term(x, prefix, num_ch, size, inputs, eps=1e-5):
+    """Inference BatchNorm folded to ``x * scale + shift``.
+
+    The per-channel scale and shift are tiled to ``[C, H, W]`` plaintext
+    tensors, because layout assignment does not broadcast ``[C, 1, 1]``.
+    """
+    mean = np.random.randn(num_ch) * 0.1
+    var = np.abs(np.random.randn(num_ch)) + 0.1
+    gamma = np.ones(num_ch)
+    beta = np.zeros(num_ch)
+    std = np.sqrt(var + eps)
+    shape = (num_ch, size, size)
+    for key, values in (("scale", gamma / std), ("shift", beta - mean * gamma / std)):
+        inputs[f"{prefix}_{key}"] = np.broadcast_to(
+            values.reshape(-1, 1, 1), shape
+        ).astype(np.float64)
+    scale = TensorTerm.Tensor(f"{prefix}_scale", list(shape), False)
+    shift = TensorTerm.Tensor(f"{prefix}_shift", list(shape), False)
+    return x * scale + shift
 
 
-def _basic_block(x, name, in_ch, out_ch, stride, inputs):
+def _basic_block(x, name, in_ch, out_ch, stride, size, inputs):
     """
     ResNet BasicBlock: conv-BN-SiLU, conv-BN, (+ shortcut), SiLU.
+
+    ``size`` is the block's output height and width.
     """
     conv1 = _conv2d_term(
         f"{name}_conv1", in_ch, out_ch, 3, inputs, stride=stride, padding="same"
@@ -49,17 +56,19 @@ def _basic_block(x, name, in_ch, out_ch, stride, inputs):
     )
 
     out = conv1(x)
-    out = _batchnorm_term(out, f"{name}_conv1_bn", out_ch, inputs)
+    out = _batchnorm_term(out, f"{name}_conv1_bn", out_ch, size, inputs)
     out = _silu_poly_call(out)
     out = conv2(out)
-    out = _batchnorm_term(out, f"{name}_conv2_bn", out_ch, inputs)
+    out = _batchnorm_term(out, f"{name}_conv2_bn", out_ch, size, inputs)
 
     if stride != 1 or in_ch != out_ch:
         shortcut_conv = _conv2d_term(
             f"{name}_shortcut", in_ch, out_ch, 1, inputs, stride=stride, padding="same"
         )
         shortcut = shortcut_conv(x)
-        shortcut = _batchnorm_term(shortcut, f"{name}_shortcut_bn", out_ch, inputs)
+        shortcut = _batchnorm_term(
+            shortcut, f"{name}_shortcut_bn", out_ch, size, inputs
+        )
     else:
         shortcut = x
 
@@ -70,7 +79,7 @@ def _basic_block(x, name, in_ch, out_ch, stride, inputs):
 
 def resnet_silu():
     """
-    Conv2d-based ResNet20-style benchmark with BatchNorm and SiLU via Poly.
+    Conv2d-based ResNet20-style benchmark with folded BatchNorm and SiLU via PolyCall.
 
     Shapes (per image, no batch dim in the tensor IR):
       - Input:   [3, 32, 32]
@@ -95,27 +104,31 @@ def resnet_silu():
     # conv1: 3 → 16, 3×3, stride 1, padding=1 ("same")
     conv1 = _conv2d_term("conv1", 3, 16, 3, inputs, stride=1, padding="same")
     x = conv1(x)
-    x = _batchnorm_term(x, "conv1_bn", 16, inputs)
+    x = _batchnorm_term(x, "conv1_bn", 16, 32, inputs)
     x = _silu_poly_call(x)
 
     # layer1: 3 blocks, 16 channels, stride 1
     for i in range(3):
         x = _basic_block(
-            x, f"layer1_block{i}", in_ch=16, out_ch=16, stride=1, inputs=inputs
+            x, f"layer1_block{i}", in_ch=16, out_ch=16, stride=1, size=32, inputs=inputs
         )
 
     # layer2: 3 blocks, 32 channels; first block stride 2 (downsample)
-    x = _basic_block(x, "layer2_block0", in_ch=16, out_ch=32, stride=2, inputs=inputs)
+    x = _basic_block(
+        x, "layer2_block0", in_ch=16, out_ch=32, stride=2, size=16, inputs=inputs
+    )
     for i in range(1, 3):
         x = _basic_block(
-            x, f"layer2_block{i}", in_ch=32, out_ch=32, stride=1, inputs=inputs
+            x, f"layer2_block{i}", in_ch=32, out_ch=32, stride=1, size=16, inputs=inputs
         )
 
     # layer3: 3 blocks, 64 channels; first block stride 2 (downsample)
-    x = _basic_block(x, "layer3_block0", in_ch=32, out_ch=64, stride=2, inputs=inputs)
+    x = _basic_block(
+        x, "layer3_block0", in_ch=32, out_ch=64, stride=2, size=8, inputs=inputs
+    )
     for i in range(1, 3):
         x = _basic_block(
-            x, f"layer3_block{i}", in_ch=64, out_ch=64, stride=1, inputs=inputs
+            x, f"layer3_block{i}", in_ch=64, out_ch=64, stride=1, size=8, inputs=inputs
         )
 
     # Global average pool: sum over H (dim 1) then W (dim 1 after first sum).
@@ -151,7 +164,7 @@ def resnet_silu_one_layer():
     x = TensorTerm.Tensor("input", [C_in, H, W], True)
     conv = _conv2d_term("conv1", C_in, C_out, 3, inputs, stride=1, padding="same")
     x = conv(x)
-    x = _batchnorm_term(x, "conv1_bn", C_out, inputs)
+    x = _batchnorm_term(x, "conv1_bn", C_out, H, inputs)
     x = _silu_poly_call(x)
     tensor_ir = x
     n = 4096
