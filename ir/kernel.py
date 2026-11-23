@@ -29,7 +29,7 @@ class KernelOp(Enum):
     Operation Categories:
         Tensor ops: TENSOR, CS, CONST, ADD, SUB, MUL, SUM, MEAN, PRODUCT
         Matrix ops: MATMUL, BSGS_MATMUL, STRASSEN_MATMUL
-        Convolution: CONV2D
+        Convolution: CONV_DIRECT, CONV3D
         Polynomial: POLY
         Conversions: CONVERSION
         Replications: REPLICATE
@@ -52,8 +52,8 @@ class KernelOp(Enum):
     MATMUL = "MATMUL"
     BSGS_MATMUL = "BSGS_MATMUL"
     STRASSEN_MATMUL = "STRASSENS"
-    CONV2D = "CONV2D"
     CONV3D = "CONV3D"
+    CONV_DIRECT = "CONV_DIRECT"
     # poly
     POLY = "POLY"
     POLY_CALL = "POLY_CALL"
@@ -198,6 +198,7 @@ class Kernel:
                 | KernelOp.CUMSUM
                 | KernelOp.AVG_POOL2D
                 | KernelOp.CAST
+                | KernelOp.CONV_DIRECT
             ):
                 res = []
                 _res, _seen = self.cs[0].helper_post_order(seen)
