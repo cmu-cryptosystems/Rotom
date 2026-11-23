@@ -21,7 +21,6 @@ from frontends.tensor import TensorTerm
 from tests.conftest import assert_results_equal, run_compiler_and_backend
 from tests.test_util import get_default_args
 from util.layout_util import apply_layout
-from util.util import get_sum_dim
 
 
 def _tensors(lhs_rank, rhs_rank):
@@ -74,22 +73,12 @@ def test_matmul_unsupported_ranks_still_raise():
         get_dim_alignment(a @ b, shapes)
 
 
-@pytest.mark.parametrize("lhs_rank,rhs_rank", [(2, 1), (1, 2), (2, 2), (3, 2)])
-def test_matmul_sum_dims_match_get_sum_dim(lhs_rank, rhs_rank):
-    a, b, shapes = _tensors(lhs_rank, rhs_rank)
-    term = a @ b
-    spec = spec_for_term(term, shapes)
-
-    class _Kernel:
-        def __init__(self, operand, rank):
-            self.layout = type("L", (), {})()
-            self.layout.term = operand
-            self.layout.get_dims = lambda: [
-                type("D", (), {"dim": d})() for d in range(rank)
-            ]
-
-    assert spec.lhs_sum_dims() == (get_sum_dim(term, _Kernel(a, lhs_rank)),)
-    assert spec.rhs_sum_dims() == (get_sum_dim(term, _Kernel(b, rhs_rank)),)
+def test_matmul_sum_dims():
+    assert matmul_spec(2, 1).lhs_sum_dims() == (1,)
+    assert matmul_spec(2, 1).rhs_sum_dims() == (0,)
+    assert matmul_spec(1, 2).lhs_sum_dims() == (0,)
+    assert matmul_spec(2, 2).rhs_sum_dims() == (0,)
+    assert matmul_spec(3, 2).lhs_sum_dims() == (2,)
 
 
 def test_output_dims():
@@ -330,3 +319,120 @@ def test_every_term_of_a_graph_has_a_spec_of_the_right_ranks():
         assert spec.is_unary == (len(operands) == 1)
         seen.add(term.op.name)
     assert seen == {"MATMUL", "ADD", "RESHAPE", "PERMUTE", "INDEX", "SUM", "POLY_CALL"}
+
+
+def _pieces(*dims, extent=4):
+    return [(dim, extent, 1) for dim in dims]
+
+
+def test_rolled_matmul_shares_one_traversal():
+    # lhs [i][k][R] with k rolled by R, rhs [R][k][j] with k rolled by j.
+    spec = matmul_spec(2, 2)
+    rolled = spec.with_rolls(
+        _pieces(0, 1, None), _pieces(None, 0, 1), [(1, 2)], [(1, 2)]
+    )
+    assert str(rolled) == "i (k-j) j, i (k-j) j -> i j [k=(j+(k-j)) mod 4]"
+    assert rolled.aligned()
+
+
+def test_a_roll_of_the_contracted_label_must_be_on_both_operands():
+    spec = matmul_spec(2, 2)
+    rolled = spec.with_rolls(_pieces(0, 1, None), _pieces(None, 0, 1), [(1, 2)], [])
+    assert rolled.mismatches() == ("piece 1 is (k-j) on the lhs and k on the rhs",)
+
+
+def test_replication_faces_a_diagonal():
+    # lhs [i];[R][k] with i rolled by R (which faces j): the output is rolled.
+    spec = matmul_spec(2, 2)
+    rolled = spec.with_rolls(_pieces(0, None, 1), _pieces(None, 1, 0), [(0, 1)], [])
+    assert rolled.lhs == rolled.rhs == ("(i-j)", "j", "k")
+    assert rolled.aligned()
+
+
+def test_an_output_label_rolled_by_the_contracted_label_is_rejected():
+    spec = matmul_spec(2, 2)
+    rolled = spec.with_rolls(_pieces(0, 1, None), _pieces(None, 0, 1), [(0, 1)], [])
+    assert rolled.mismatches() == ("(i-k) is rolled by a contracted label",)
+
+
+def test_roll_order_decides_what_a_roll_reads():
+    # rhs [k];[R][j]. roll(0,2) then roll(2,1): k is rolled by piece 2 before
+    # that piece is rolled, so by its traversal index (j-i).
+    spec = matmul_spec(2, 2)
+    lhs, rhs = _pieces(1, 0, None), _pieces(0, None, 1)
+    first = spec.with_rolls(lhs, rhs, [(0, 2)], [(0, 2), (2, 1)])
+    assert first.rhs == ("(k-(j-i))", "i", "(j-i)")
+    assert first.aligned()
+    # roll(2,1) then roll(0,2): k is rolled by the tensor index j.
+    second = spec.with_rolls(lhs, rhs, [(0, 2)], [(2, 1), (0, 2)])
+    assert second.rhs == ("(k-j)", "i", "(j-i)")
+    assert not second.aligned()
+
+
+def test_elementwise_rolls_must_match():
+    spec = elementwise_spec(2, 2)
+    pieces = _pieces(0, 1)
+    assert spec.with_rolls(pieces, pieces, [(0, 1)], [(0, 1)]).aligned()
+    assert not spec.with_rolls(pieces, pieces, [(0, 1)], []).aligned()
+    # Layouts with different piece counts compare rolls by label.
+    longer = _pieces(0, 1, None)
+    assert spec.with_rolls(longer, pieces, [(0, 1)], [(0, 1)]).aligned()
+    assert not spec.with_rolls(longer, pieces, [(0, 1)], []).aligned()
+
+
+def test_split_dims_are_digits_and_must_split_alike():
+    spec = elementwise_spec(2, 2)
+    # d1 of extent 8 as (stride 4, extent 2) + (stride 1, extent 4) ...
+    a = [(1, 4, 1), (1, 2, 4), (0, 8, 1)]
+    # ... and as (stride 2, extent 4) + (stride 1, extent 2).
+    b = [(1, 4, 2), (1, 2, 1), (0, 8, 1)]
+    same = spec.with_rolls(a, a)
+    assert same.lhs == ("d1@1", "d1@4", "d0")
+    assert Relation("d1", "d1@4", "d1@1", stride=4) in same.relations
+    assert same.aligned()
+    assert spec.with_rolls(a, b).mismatches() == (
+        "piece 0 is d1@1 on the lhs and d1@2 on the rhs",
+        "piece 1 is d1@4 on the lhs and d1@1 on the rhs",
+    )
+
+
+def test_a_fragment_roll_is_a_roll_of_a_digit():
+    spec = matmul_spec(2, 2)
+    lhs = [(0, 4, 1), (1, 2, 2), (1, 2, 1), (None, 2, 1)]
+    rhs = [(None, 4, 1), (0, 2, 2), (0, 2, 1), (1, 2, 1)]
+    rolled = spec.with_rolls(lhs, rhs, [(2, 3)], [(2, 3)])
+    assert rolled.lhs == ("i", "k@2", "(k@1-j)", "j")
+    assert Relation("k@1", "j", "(k@1-j)", modulus=2) in rolled.relations
+    assert Relation("k", "k@2", "k@1", stride=2) in rolled.relations
+    assert rolled.aligned()
+
+
+def _run(term, inputs, n, name):
+    args = get_default_args()
+    args.n = n
+    args.rolls = True
+    args.backend = "toy"
+    args.benchmark = name
+    results, kernel = run_compiler_and_backend(term, inputs, args, "toy")
+    assert_results_equal(apply_layout(term.eval(inputs), kernel.layout), results, "toy")
+    return kernel
+
+
+@pytest.mark.parametrize("size,n", [(4, 16), (8, 64), (8, 16)])
+def test_add_after_a_rolled_matmul_matches_eval(size, n):
+    # The positional roll check accepted a rolled sum with an unrolled
+    # operand; (8, 16) also added operands whose dims were split differently.
+    rng = np.random.default_rng(0)
+    inputs = {name: rng.normal(size=(size, size)) for name in "abc"}
+    a = TensorTerm.Tensor("a", [size, size], True)
+    b = TensorTerm.Tensor("b", [size, size], True)
+    c = TensorTerm.Tensor("c", [size, size], True)
+    _run(a @ b + c, inputs, n, f"rolled_matmul_add_{size}_{n}")
+
+
+def test_matmul_of_a_tensor_with_itself_matches_eval():
+    # Operands are told apart by position, not by term identity.
+    rng = np.random.default_rng(0)
+    inputs = {"a": rng.normal(size=(4, 4))}
+    a = TensorTerm.Tensor("a", [4, 4], True)
+    _run(a @ a, inputs, 16, "self_matmul")

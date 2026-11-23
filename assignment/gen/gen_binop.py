@@ -131,12 +131,12 @@ def gen_binop(term, cs_kernels, shapes, roll_flag):
 
     # if the roll_flag is set, apply rolls to move summation dimensions the vector dimensions
     if roll_flag and term.op == TensorOp.MATMUL:
-        replicated_kernels += apply_sum_rolls(term, replicated_kernels)
+        replicated_kernels += apply_sum_rolls(spec, replicated_kernels)
 
     output_kernels = set()
     for kernels in replicated_kernels:
         # add conversions or rolls to align layouts
-        matched_layouts = match_layout(term, kernels, alignment, roll_flag)
+        matched_layouts = match_layout(spec, kernels, alignment, roll_flag)
 
         for matched_a_kernel, matched_b_kernel in matched_layouts:
             # find output layout

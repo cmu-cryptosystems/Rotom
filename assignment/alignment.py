@@ -242,11 +242,218 @@ class OperatorSpec:
                 return self.out.index(r.base)
         return None
 
+    def with_rolls(self, lhs_pieces, rhs_pieces, lhs_rolls=(), rhs_rolls=()):
+        """This spec over the pieces of two rolled layouts.
+
+        Args:
+            lhs_pieces, rhs_pieces: each layout's pieces in order, as
+                `(dim, extent, stride)`; `dim` is None for replication
+            lhs_rolls, rhs_rolls: each layout's rolls, as `(piece, by)` piece
+                positions
+
+        Returns:
+            RolledSpec: the traversal labels of each piece and the relations
+            that recover the tensor indices
+        """
+        if self.rhs is None:
+            raise ValueError(f"a unary operator has one layout: {self}")
+        lhs_pieces, rhs_pieces = tuple(lhs_pieces), tuple(rhs_pieces)
+        lhs = _Side(lhs_pieces, self.lhs, lhs_rolls)
+        rhs = _Side(rhs_pieces, self.rhs, rhs_rolls)
+        faces = len(lhs_pieces) == len(rhs_pieces)
+        if faces:
+            lhs.other, rhs.other = rhs, lhs
+
+        contracted = set(self.contracted())
+        relations = []
+        rolled_by_contracted = []
+        named = []
+        for side in (lhs, rhs):
+            rolls = []
+            for at, (piece, by) in enumerate(side.rolls):
+                digit = side.digits[piece] or "_"
+                by_label, by_mentions = side.value(by, at)
+                rolls.append((digit, by_label))
+                if _base(digit) not in contracted and by_mentions & contracted:
+                    if side.digits[piece] is not None:
+                        rolled_by_contracted.append(side.label(piece)[0])
+                later = [p for p, _ in side.rolls[at + 1 :]]
+                diagonal = (
+                    side.label(piece)[0] if piece not in later else f"{digit}'{at}"
+                )
+                earlier = [i for i, (p, _) in enumerate(side.rolls[:at]) if p == piece]
+                rolled = digit if not earlier else f"{digit}'{earlier[-1]}"
+                relation = Relation(
+                    rolled, by_label, diagonal, modulus=side.pieces[piece][1]
+                )
+                if relation not in relations:
+                    relations.append(relation)
+            named.append(tuple(rolls))
+            relations += [r for r in side.relations if r not in relations]
+        return RolledSpec(
+            self,
+            tuple(lhs.label(p)[0] for p in range(len(lhs_pieces))),
+            tuple(rhs.label(p)[0] for p in range(len(rhs_pieces))),
+            tuple(relations),
+            faces,
+            named[0],
+            named[1],
+            tuple(dict.fromkeys(rolled_by_contracted)),
+        )
+
     def lhs_out_dims(self) -> Tuple[Optional[int], ...]:
         return tuple(self.out_dim(label) for label in self.lhs)
 
     def rhs_out_dims(self) -> Tuple[Optional[int], ...]:
         return tuple(self.out_dim(label) for label in self.rhs or ())
+
+
+@dataclass(frozen=True)
+class RolledSpec:
+    """An operator spec read over the pieces of two rolled layouts.
+
+    A layout stores a tensor as an ordered list of pieces, and a roll adds the
+    index of one piece to another: after ``roll(u by t)``, slot ``(d, t)``
+    holds the element ``u = (t + d) mod extent``. The rolled piece is
+    therefore traversed by a new index ``d``, the diagonal, and the tensor
+    index is recovered by a relation.
+
+    ``lhs`` and ``rhs`` hold one traversal label per piece:
+    - an unrolled piece of a whole dim keeps the dim's label (``k``)
+    - a strided piece or a piece of a split dim is a digit, named by its
+      stride (``k@4``); the digits recover the dim through a chain of relations
+    - a rolled piece is a diagonal, named ``(u-t)`` after the label of the
+      piece it was rolled by at the time of the roll
+    - an unrolled replication piece takes the label it faces on the other
+      operand, or ``_`` when it faces none
+
+    Two rolled layouts are aligned when the operands share one traversal: each
+    position holds the same label on both, and no label the output keeps is
+    rolled by a contracted one.
+    """
+
+    spec: "OperatorSpec"
+    lhs: Tuple[str, ...]
+    rhs: Tuple[str, ...]
+    relations: Tuple[Relation, ...]
+    faces: bool
+    lhs_rolls: Tuple[Tuple[str, str], ...]
+    rhs_rolls: Tuple[Tuple[str, str], ...]
+    output_rolled_by_contracted: Tuple[str, ...]
+
+    def __str__(self):
+        text = f"{' '.join(self.lhs)}, {' '.join(self.rhs)} -> "
+        text += " ".join(self.spec.out)
+        for r in self.relations:
+            text += f" [{r}]"
+        return text
+
+    def mismatches(self) -> Tuple[str, ...]:
+        """Why the two rolled layouts do not share a traversal; empty if they do."""
+        why = [
+            f"{label} is rolled by a contracted label"
+            for label in self.output_rolled_by_contracted
+        ]
+        if self.faces:
+            for position, (a, b) in enumerate(zip(self.lhs, self.rhs)):
+                if a != b and "_" not in (a, b):
+                    why.append(f"piece {position} is {a} on the lhs and {b} on the rhs")
+            return tuple(why)
+        # The layouts have different piece counts, so positions do not face
+        # each other: compare the rolls of the labels both operands hold.
+        sides = (
+            ("lhs", self.lhs_rolls, self.rhs_rolls, self.spec.rhs or ()),
+            ("rhs", self.rhs_rolls, self.lhs_rolls, self.spec.lhs),
+        )
+        for side, mine, theirs, other_labels in sides:
+            for u, t in mine:
+                if _base(u) in other_labels and (u, t) not in theirs:
+                    why.append(f"{side} roll({u} by {t}) is not rolled on the other")
+        return tuple(why)
+
+    def aligned(self) -> bool:
+        return not self.mismatches()
+
+
+def _base(label: str) -> str:
+    """The spec label a digit label is a digit of."""
+    return label.partition("@")[0]
+
+
+class _Side:
+    """The pieces and rolls of one operand's layout."""
+
+    def __init__(self, pieces, own, rolls):
+        self.pieces = pieces
+        self.rolls = tuple(rolls)
+        strides = {}
+        for dim, _, stride in pieces:
+            if dim is not None:
+                strides.setdefault(dim, []).append(stride)
+        self.digits = []
+        for dim, _, stride in pieces:
+            if dim is None:
+                self.digits.append(None)
+            elif strides[dim] == [1]:
+                self.digits.append(own[dim])
+            else:
+                self.digits.append(f"{own[dim]}@{stride}")
+        self.relations = []
+        for dim, dim_strides in strides.items():
+            if dim_strides != [1]:
+                self.relations += _digit_relations(own[dim], dim_strides)
+        self.other = None
+        self._labels = {}
+
+    def label(self, piece):
+        """The traversal label of a piece, and the spec labels it mentions."""
+        if piece in self._labels:
+            return self._labels[piece]
+        self._labels[piece] = ("_", frozenset())  # a cycle resolves to "_"
+        digit = self.digits[piece]
+        rolls = [(i, by) for i, (p, by) in enumerate(self.rolls) if p == piece]
+        if digit is None and not rolls:
+            faces = self.other is not None and piece < len(self.other.pieces)
+            result = self.other.label(piece) if faces else ("_", frozenset())
+        else:
+            text = digit or "_"
+            mentions = frozenset([_base(digit)] if digit else [])
+            if rolls:
+                by = [self.value(t, i) for i, t in rolls]
+                text = f"({text}-{'-'.join(b[0] for b in by)})"
+                mentions = mentions.union(*(b[1] for b in by))
+            result = (text, mentions)
+        self._labels[piece] = result
+        return result
+
+    def value(self, piece, at):
+        """What a piece's index holds when roll number `at` reads it."""
+        own = [i for i, (p, _) in enumerate(self.rolls) if p == piece]
+        if all(i > at for i in own):
+            # Not rolled yet: its index is still its traversal index.
+            return self.label(piece)
+        digit = self.digits[piece]
+        if all(i < at for i in own) and digit is not None:
+            # Fully rolled: its index is the tensor index again.
+            return (digit, frozenset([_base(digit)]))
+        return ("_", frozenset())
+
+
+def _digit_relations(label, strides):
+    """Mixed-radix digits, outermost first: k = s0*k@s0 + (s1*k@s1 + ...)."""
+    ordered = sorted(strides, reverse=True)
+    relations = []
+    rest = label
+    for i, stride in enumerate(ordered[:-1]):
+        if i == len(ordered) - 2 and ordered[-1] == 1:
+            below = f"{label}@1"
+        else:
+            below = f"{label}<{stride}"
+        relations.append(Relation(rest, f"{label}@{stride}", below, stride=stride))
+        rest = below
+    if ordered[-1] != 1:
+        relations.append(Relation(rest, f"{label}@{ordered[-1]}", stride=ordered[-1]))
+    return relations
 
 
 def _dims(rank: int) -> Tuple[str, ...]:
