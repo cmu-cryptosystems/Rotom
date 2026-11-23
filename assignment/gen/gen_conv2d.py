@@ -8,10 +8,8 @@ in the homomorphic encryption domain.
 
 Key functions:
 - apply_replication: Applies replication to convolution kernels
-- apply_roll: Applies roll operations for convolution alignment
 - calculate_padding: Calculates padding requirements for convolution
 - gen_conv2d: Main function for generating convolution layouts
-- gen_conv2d_roll: Main function for generating roll-based convolution layouts
 
 """
 
@@ -22,7 +20,6 @@ from frontends.tensor_args import Conv2dArgs
 from ir.dim import Dim, DimType
 from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
-from ir.roll import Roll
 from util.util import round_to_ceiling_power_of_2
 
 
@@ -53,42 +50,6 @@ def apply_replication(term, kernel, dim):
     return Kernel(KernelOp.REPLICATE, [kernel], replicated_layout)
 
 
-def apply_roll(term, kernel, roll):
-    """Applies a roll operation to a convolution kernel.
-
-    This function creates a rolled version of a kernel by adding a roll
-    operation. For convolution operations, split rolls are used because
-    convolutions only require parts of the rolled values, with other
-    values being masked out.
-
-    Args:
-        term: TensorTerm representing the convolution operation
-        kernel: Kernel to apply roll to
-        roll: Roll operation to apply
-
-    Returns:
-        Kernel: New kernel with roll operation applied
-    """
-    rolled_dims = kernel.layout.get_dims()
-    rolled_rolls = copy(kernel.layout.rolls)
-    rolled_rolls.append(roll)
-
-    # rolled layout
-    layout = Layout(
-        term,
-        rolled_rolls,
-        rolled_dims,
-        kernel.layout.n,
-        kernel.layout.secret,
-    )
-    # NOTE: conv2d only requires split_rolls for alignment. This is because
-    # convolutions require only parts of the left and right rolls.
-    # Other values (that wrap around the dimension when rolled) are masked out.
-
-    # NOTE: this roll will be optimized later in circuit optimizations
-    return Kernel(KernelOp.SPLIT_ROLL, [roll, kernel], layout)
-
-
 def calculate_padding(input_shape, filter_shape, stride, padding):
     # Input shape: [C_in, H_in, W_in]
     H_in, W_in = input_shape[1], input_shape[2]
@@ -117,177 +78,6 @@ def calculate_padding(input_shape, filter_shape, stride, padding):
         return [p_h, p_h, p_w, p_w]
     else:
         raise NotImplementedError("unknown padding: " + padding)
-
-
-def add_replicated_dimensions_roll(a_shape, b_shape):
-    # add replicated dimensions to the a_kernel
-    # this is done to allow for the a_kernel to be replicated
-    # and rolled to align with the b_kernel
-    #
-    # b_shape is always [C_out, C_in, H_f, W_f] in 4D form
-    # We need to replicate for C_in (input channels) and spatial dims (H_f, W_f)
-    # C_out (output channels) is handled separately in the output layout
-
-    replicated_dims = {}
-    c_in = b_shape[1]  # Number of input channels
-    _h_f = b_shape[2]  # Filter height (unused; for documentation)
-    _w_f = b_shape[3]  # Filter width (unused; for documentation)
-
-    # Replicate for input channels (but only if we need different filters per channel)
-    if c_in > 1:
-        replicated_dims[1] = Dim(None, c_in, a_shape[1] * a_shape[2])
-
-    # Replicate for spatial dimensions based on INPUT shape
-    if a_shape[1] > 1:
-        replicated_dims[2] = Dim(None, a_shape[1], a_shape[2])
-
-    if a_shape[2] > 1:
-        replicated_dims[3] = Dim(None, a_shape[2], 1)
-
-    return replicated_dims
-
-
-def gen_conv2d_roll(term, cs_kernels, shapes):
-    # assumption is that a_kernel (input) is secret and b_kernel (weights) is public
-    # the goal is to use rolls to align the a_kernel for summation
-    # the b layout can then follow the same alignment as the a_kernel
-    a_shape = shapes[0]
-    b_shape = shapes[1]
-
-    args = Conv2dArgs.from_term(term)
-    # find padding
-    padding = calculate_padding(a_shape, b_shape, args.stride, args.padding)
-    term.cs.append(padding)
-
-    output_kernels = set()
-    for a_kernel in cs_kernels:
-        # assumes that a layout does not have any rolls applied to it
-        if a_kernel.layout.rolls:
-            continue
-
-        # assumes input is row-major layout (though this can be relaxed later)
-        dims_ = [dim.dim for dim in a_kernel.layout.get_dims() if dim.dim is not None]
-        if sorted(dims_) != dims_:
-            continue
-
-        # add replicated dimensions to the a_kernel
-        replicated_dims = add_replicated_dimensions_roll(a_shape, b_shape)
-
-        # map a_dims
-        a_dim_map = {}
-        for dim in a_kernel.layout.get_dims():
-            # assumes that dimensions are not tiled
-            assert dim.dim not in a_dim_map
-            a_dim_map[dim.dim] = dim
-
-        # map b_dims
-        b_dims = []
-        b_rolls = []
-        b_dim_stride = 1
-        for dim in a_kernel.layout.get_dims()[::-1]:
-            b_dims.insert(0, Dim(None, dim.extent, b_dim_stride))
-            b_dim_stride *= dim.extent
-
-        # apply replication and roll for width
-        if 3 in replicated_dims:
-            a_kernel = apply_replication(args.input, a_kernel, replicated_dims[3])
-            a_roll = Roll(a_dim_map[2], replicated_dims[3])
-            a_kernel = apply_roll(args.input, a_kernel, a_roll)
-
-        # apply replication and roll for height
-        if 2 in replicated_dims:
-            a_kernel = apply_replication(args.input, a_kernel, replicated_dims[2])
-            a_roll = Roll(a_dim_map[1], replicated_dims[2])
-            a_kernel = apply_roll(args.input, a_kernel, a_roll)
-
-        # apply final replication
-        if 1 in replicated_dims:
-            a_kernel = apply_replication(args.input, a_kernel, replicated_dims[1])
-
-        # apply final replication
-        if 0 in replicated_dims:
-            a_kernel = apply_replication(args.input, a_kernel, replicated_dims[0])
-
-        # match b_dims to a_dims
-        # ideally this should match based on the length of the dimension traversal
-        b_dims = []
-        alignment = {
-            None: [2, 3],
-            0: [None],
-            1: [None],
-            2: [None],
-        }
-        for a_dim in a_kernel.layout.get_dims():
-            if a_dim.dim is None and a_dim.dim_type == DimType.EMPTY:
-                b_dim = copy(a_dim)
-                b_dims.append(b_dim)
-            elif a_dim.dim is None:
-                # Replicated dimension - consume from alignment list
-                if alignment[a_dim.dim]:
-                    b_dim = Dim(alignment[a_dim.dim][0], a_dim.extent, 1)
-                    b_dims.append(b_dim)
-                    alignment[a_dim.dim] = alignment[a_dim.dim][1:]
-                else:
-                    # No more alignment entries - skip this dimension
-                    b_dim = Dim(None, a_dim.extent, 1)
-                    b_dims.append(b_dim)
-            else:
-                # Data dimension - always maps to None (don't consume alignment)
-                b_dim = Dim(None, a_dim.extent, 1)
-                b_dims.append(b_dim)
-
-        # back-fill, fix b_dim replication stride
-        none_stride = 1
-        for b_dim in b_dims[::-1]:
-            if b_dim.dim is None and b_dim.dim_type == DimType.FILL:
-                b_dim.stride = none_stride
-                none_stride *= b_dim.extent
-
-        b_rolls = []
-        for a_roll in a_kernel.layout.rolls:
-            a_roll_idx = a_roll.roll_index(a_kernel.layout.get_dims())
-            b_rolls.append(Roll(b_dims[a_roll_idx[0]], b_dims[a_roll_idx[1]]))
-
-        # create layout and kernel
-        b_layout = Layout(args.filter, b_rolls, b_dims, a_kernel.layout.n, False)
-        b_kernel = Kernel(KernelOp.TENSOR, [], b_layout)
-
-        # find output layout after convolution
-        output_dims = []
-
-        # Add output channel dimension if C_out > 1
-        c_out = b_shape[0]
-        if c_out > 1:
-            # Calculate stride for channel dimension (product of spatial dimensions)
-            spatial_extent = 1
-            for dim in a_kernel.layout.slot_dims:
-                if dim.dim and dim.dim > 0:  # Spatial dimensions (1, 2)
-                    spatial_extent *= dim.extent
-            output_dims.append(Dim(0, c_out, spatial_extent))
-
-        # Add remaining dimensions (spatial and any others)
-        # For single output (C_out=1), just copy all dims from input
-        # For multi-output (C_out>1), skip dimension 0 if it exists (input channels)
-        for dim in a_kernel.layout.slot_dims:
-            if dim.dim:
-                # Skip input channel dimension (0) if we already added output channel dimension
-                if c_out > 1 and dim.dim == 0:
-                    continue
-                output_dims.append(copy(dim))
-
-        output_layout = Layout(
-            term,
-            [],
-            output_dims,
-            a_kernel.layout.n,
-            a_kernel.layout.secret,
-        )
-
-        kernel = Kernel(KernelOp.CONV2D_ROLL, [a_kernel, b_kernel], output_layout)
-        output_kernels.add(kernel)
-        if not kernel.layout.rolls:
-            output_kernels.add(find_compaction(kernel))
-    return output_kernels
 
 
 def add_replicated_dimensions(a_shape, b_shape):

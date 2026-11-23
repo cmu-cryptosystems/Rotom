@@ -3,7 +3,6 @@ from copy import deepcopy as copy
 
 import numpy as np
 
-from frontends.tensor import TensorOp
 from ir.dim import Dim, DimType
 
 
@@ -328,19 +327,6 @@ def get_slot_dims(dims, n):
         else:
             ct_dims.insert(0, dim)
     return ct_dims, slot_dims
-
-
-def get_sum_dim(term, kernel):
-    match term.op:
-        case TensorOp.MATMUL:
-            if kernel.layout.term == term.cs[0]:
-                return max(
-                    dim.dim for dim in kernel.layout.get_dims() if dim.dim is not None
-                )
-            else:
-                return min(
-                    dim.dim for dim in kernel.layout.get_dims() if dim.dim is not None
-                )
 
 
 def split_lists(lst, num_sublists):

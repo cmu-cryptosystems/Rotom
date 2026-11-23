@@ -45,14 +45,12 @@ class TestConvolution2D:
         expected_cts = apply_layout(expected, kernel.layout)
         assert_results_equal(expected_cts, results, backend)
 
-    @pytest.mark.parametrize("conv_roll", [False])
-    def test_conv2d_4x4_filter_2x2(self, conv_roll, backend):
+    def test_conv2d_4x4_filter_2x2(self, backend):
         """Test 2D convolution with 4x4 input and 2x2 filter."""
         # Create args
         args = get_default_args()
         args.n = 16
         args.rolls = True
-        args.conv_roll = conv_roll
         args.benchmark = "conv2d_1"
 
         # Create inputs
@@ -78,14 +76,12 @@ class TestConvolution2D:
         )
         self._run_test_case(tensor_ir, inputs, args, backend)
 
-    @pytest.mark.parametrize("conv_roll", [False])
-    def test_conv2d_4x4_filter_3x3(self, conv_roll, backend):
+    def test_conv2d_4x4_filter_3x3(self, backend):
         """Test 2D convolution with 4x4 input and 3x3 filter."""
         # Create args
         args = get_default_args()
         args.n = 16
         args.rolls = True
-        args.conv_roll = conv_roll
         args.benchmark = "conv2d_2"
 
         # Create inputs
@@ -109,14 +105,12 @@ class TestConvolution2D:
         )
         self._run_test_case(tensor_ir, inputs, args, backend)
 
-    @pytest.mark.parametrize("conv_roll", [False])
-    def test_conv2d_4x4_3channels_filter_3x3(self, conv_roll, backend):
+    def test_conv2d_4x4_3channels_filter_3x3(self, backend):
         """Test 2D convolution with 4x4 input, 3 channels, and 3x3 filter."""
         # Create args
         args = get_default_args()
         args.n = 64
         args.rolls = True
-        args.conv_roll = conv_roll
         args.benchmark = "conv2d_3"
 
         # Create inputs
@@ -147,14 +141,12 @@ class TestConvolution2D:
         )
         self._run_test_case(tensor_ir, inputs, args, backend)
 
-    @pytest.mark.parametrize("conv_roll", [False])
-    def test_conv2d_32x32_3channels_filter_3x3(self, conv_roll, backend):
+    def test_conv2d_32x32_3channels_filter_3x3(self, backend):
         """Test 2D convolution with 32x32 input, 3 channels, and 3x3 filter (large scale)."""
         # Create args
         args = get_default_args()
         args.n = 4096
         args.rolls = True
-        args.conv_roll = conv_roll
         args.benchmark = "conv2d_4"
 
         # Create inputs
@@ -219,14 +211,12 @@ class TestConvolution2D:
         )
         self._run_test_case(tensor_ir, inputs, args, backend)
 
-    @pytest.mark.parametrize("conv_roll", [False])
-    def test_conv2d_4x4_filter_3x3_random_weights(self, conv_roll, backend):
+    def test_conv2d_4x4_filter_3x3_random_weights(self, backend):
         """Test 2D convolution with random filter weights (integer values for FHE)."""
         # Create args
         args = get_default_args()
         args.n = 16
         args.rolls = True
-        args.conv_roll = conv_roll
         args.benchmark = "conv2d_random_weights"
 
         # Create inputs with random data (integers for FHE accuracy)
@@ -246,14 +236,12 @@ class TestConvolution2D:
         )
         self._run_test_case(tensor_ir, inputs, args, backend)
 
-    @pytest.mark.parametrize("conv_roll", [False])
-    def test_conv2d_4x4_filter_3x3_identity_center(self, conv_roll, backend):
+    def test_conv2d_4x4_filter_3x3_identity_center(self, backend):
         """Test 2D convolution with identity filter (center weight = 1, rest = 0)."""
         # Create args
         args = get_default_args()
         args.n = 16
         args.rolls = True
-        args.conv_roll = conv_roll
         args.benchmark = "conv2d_identity"
 
         # Create inputs (integer values for FHE)
@@ -280,7 +268,6 @@ class TestConvolution2D:
         args = get_default_args()
         args.n = 64
         args.rolls = True
-        args.conv_roll = False
         args.benchmark = "conv2d_same"
 
         dim_size = 8
@@ -305,13 +292,11 @@ class TestConvolution2D:
         )
         self._run_test_case(tensor_ir, inputs, args, backend)
 
-    @pytest.mark.parametrize("conv_roll", [False])
-    def test_conv2d_stride2_same_8x8_filter_3x3(self, conv_roll, backend):
+    def test_conv2d_stride2_same_8x8_filter_3x3(self, backend):
         """Test 2D convolution with stride=2 and same padding (8x8 input -> 4x4 output)."""
         args = get_default_args()
         args.n = 64
         args.rolls = True
-        args.conv_roll = conv_roll
         args.benchmark = "conv2d_stride2_same"
 
         dim_size = 8
@@ -342,7 +327,6 @@ def test_conv2d_stride2_gap_split_channel_layout_regression():
     args = get_default_args()
     args.n = 512
     args.rolls = True
-    args.conv_roll = False
     args.backend = "toy"
     args.benchmark = "conv2d_gap_split_channel_regression"
 
@@ -384,7 +368,6 @@ def test_conv2d_same_varied_input_layouts(backend, input_layout):
     args = get_default_args()
     args.n = 4096
     args.rolls = True
-    args.conv_roll = False
     args.benchmark = f"conv2d_same_layout_{abs(hash(input_layout)) % 10**8}"
 
     h = w = 4
@@ -422,7 +405,6 @@ def test_conv2d_same_split_channel_layouts(backend, input_layout):
     args = get_default_args()
     args.n = 4096
     args.rolls = True
-    args.conv_roll = False
     args.benchmark = f"conv2d_same_splitc_{abs(hash(input_layout)) % 10**8}"
 
     h = w = 4
@@ -454,7 +436,6 @@ def test_conv2d_same_multichannel_io_default_layout(backend, c_in, c_out):
     args = get_default_args()
     args.n = 4096
     args.rolls = True
-    args.conv_roll = False
     args.benchmark = f"conv2d_mc_io_{c_in}_{c_out}"
 
     h = w = 4
@@ -483,7 +464,6 @@ def test_conv2d_same_multichannel_io_dense_channel_layout(backend, c_in, c_out):
     args = get_default_args()
     args.n = 4096
     args.rolls = True
-    args.conv_roll = False
     args.benchmark = f"conv2d_mc_dense_{c_in}_{c_out}"
 
     h = w = 4
@@ -512,7 +492,6 @@ def test_conv2d_depthwise_same_diagonal_channels(backend):
     args = get_default_args()
     args.n = 256
     args.rolls = True
-    args.conv_roll = False
     args.benchmark = "conv2d_depthwise_same_diag"
 
     c_in = c_out = 4
@@ -543,7 +522,6 @@ def test_conv2d_depthwise_channel_multiplier_two(backend):
     args = get_default_args()
     args.n = 256
     args.rolls = True
-    args.conv_roll = False
     args.benchmark = "conv2d_depthwise_multiplier2"
 
     c_in = 3
@@ -579,7 +557,6 @@ def test_conv2d_depthwise_multiplier_two_varied_stride(backend, stride, padding)
     args = get_default_args()
     args.n = 512
     args.rolls = True
-    args.conv_roll = False
     args.benchmark = f"conv2d_depthwise_m2_s{stride}"
 
     c_in = 4
@@ -614,7 +591,6 @@ def test_conv2d_depthwise_same_large_kernel(backend):
     args = get_default_args()
     args.n = 256
     args.rolls = True
-    args.conv_roll = False
     args.benchmark = "conv2d_depthwise_same_k5"
 
     c_in = c_out = 4
@@ -645,7 +621,6 @@ def test_conv2d_depthwise_split_channel_gap_layout_multiplier_two(backend):
     args = get_default_args()
     args.n = 512
     args.rolls = True
-    args.conv_roll = False
     args.benchmark = "conv2d_depthwise_split_gap_m2"
 
     c_in = 4

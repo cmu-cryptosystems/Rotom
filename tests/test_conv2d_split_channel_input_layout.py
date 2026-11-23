@@ -37,7 +37,6 @@ def test_conv2d_same_split_dim0_channel_small_4x4(backend: str) -> None:
     args = get_default_args()
     args.n = N_SMALL
     args.rolls = True
-    args.conv_roll = False
     args.benchmark = "conv2d_split_dim0_4ch_4x4"
 
     c_in, h, w = 4, 4, 4
@@ -64,7 +63,6 @@ def test_conv2d_same_split_dim0_channel_stride2_8x8(backend: str) -> None:
     args = get_default_args()
     args.n = 256
     args.rolls = True
-    args.conv_roll = False
     args.benchmark = "conv2d_split_dim0_stride2_8x8"
 
     layout = "[0:2:2][1:8:1][0:2:1][2:8:1]"
@@ -93,7 +91,6 @@ def test_conv2d_same_compact_64ch_8x8_input_matches_eval(backend: str) -> None:
     args = get_default_args()
     args.n = N_RESNET_SLOT
     args.rolls = True
-    args.conv_roll = False
     args.benchmark = "conv2d_compact_64ch_8x8_in"
 
     c_in, h, w = 64, 8, 8

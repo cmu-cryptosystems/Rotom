@@ -32,23 +32,6 @@ class RollCostMixin:
         ops["mul"] += roll_extent * num_ct_real
         return ops
 
-    def split_roll_ops(self, ops):
-        """Calculate split roll operations."""
-        roll = self.kernel.cs[0]
-        roll_extent = roll.dim_to_roll.extent
-        num_ops = roll_extent
-
-        if (
-            roll.dim_to_roll in self.kernel.layout.ct_dims
-            and roll.dim_to_roll_by in self.kernel.layout.ct_dims
-        ):
-            return ops
-
-        ops["add"] += num_ops
-        ops["rot"] += num_ops
-        ops["mul"] += num_ops
-        return ops
-
     def bsgs_roll_ops(self, ops):
         """Calculate BSGS (Baby-Step Giant-Step) roll operations."""
         roll_ops = {}

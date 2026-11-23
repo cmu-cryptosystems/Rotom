@@ -23,7 +23,6 @@ from lower.lower_compact import lower_compact
 from lower.lower_concat import lower_concat
 from lower.lower_const import lower_const
 from lower.lower_conv2d import lower_conv2d
-from lower.lower_conv2d_roll import lower_conv2d_roll
 from lower.lower_conv3d import lower_conv3d
 from lower.lower_conversion import lower_conversion
 from lower.lower_cs_pack import lower_cs_pack
@@ -42,7 +41,6 @@ from lower.lower_roll import (
     lower_bsgs_rot_roll,
     lower_roll,
     lower_rot_roll,
-    lower_split_roll,
 )
 from lower.lower_select import lower_select
 from lower.lower_sub import lower_sub
@@ -87,8 +85,6 @@ class Lower:
                     self.env[term] = lower_mul(self.env, term)
                 case KernelOp.CONV2D:
                     self.env[term] = lower_conv2d(self.env, term)
-                case KernelOp.CONV2D_ROLL:
-                    self.env[term] = lower_conv2d_roll(self.env, term)
                 case KernelOp.CONV3D:
                     self.env[term] = lower_conv3d(self.env, term)
                 case KernelOp.SUM:
@@ -115,8 +111,6 @@ class Lower:
                     self.env[term] = lower_bsgs_rot_roll(self.env, term)
                 case KernelOp.BSGS_ROLL:
                     self.env[term] = lower_bsgs_roll(self.env, term)
-                case KernelOp.SPLIT_ROLL:
-                    self.env[term] = lower_split_roll(self.env, term)
                 case KernelOp.TRANSPOSE:
                     self.env[term] = lower_transpose(self.env, term)
                 case KernelOp.RESHAPE:

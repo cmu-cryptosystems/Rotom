@@ -17,7 +17,7 @@ from util.layout_util import (
     match_dims,
     merge_dims,
 )
-from util.util import get_sum_dim, prod, split_dim
+from util.util import prod, split_dim
 
 
 def check_extent_alignment(alignment, a_dims, b_dims):
@@ -309,64 +309,36 @@ def check_dim_alignment(alignment, a_kernel, b_kernel):
     return True
 
 
-def check_roll_alignment(term, alignment, a_kernel, b_kernel):
+def _sum_dim(spec, side):
+    """The dim of operand `side` (0 lhs, 1 rhs) that the operator sums away."""
+    dims = spec.lhs_sum_dims() if side == 0 else spec.rhs_sum_dims()
+    return dims[0] if len(dims) == 1 else None
+
+
+def rolled_spec(spec, a_kernel, b_kernel):
+    """`spec` over the pieces and rolls of the two operand layouts."""
     a_dims = a_kernel.layout.get_dims()
     b_dims = b_kernel.layout.get_dims()
-    a_sum_dim = get_sum_dim(term, a_kernel)
-    b_sum_dim = get_sum_dim(term, b_kernel)
-
-    a_roll_idx_set = set()
-    b_roll_idx_set = set()
-    for a_roll in a_kernel.layout.rolls:
-        a_roll_idx_set.add(a_roll.roll_index(a_dims))
-    for b_roll in b_kernel.layout.rolls:
-        b_roll_idx_set.add(b_roll.roll_index(b_dims))
-
-    for a_roll_idx in a_roll_idx_set:
-        if (
-            a_roll_idx in b_roll_idx_set
-            and a_dims[a_roll_idx[0]].extent != b_dims[a_roll_idx[1]].extent
-        ):
-            return False
-    for b_roll_idx in b_roll_idx_set:
-        if (
-            b_roll_idx in a_roll_idx_set
-            and b_dims[b_roll_idx[0]].extent != a_dims[b_roll_idx[1]].extent
-        ):
-            return False
-
-    for a_roll in a_kernel.layout.rolls:
-        if (
-            a_roll.dim_to_roll.dim == a_sum_dim
-            and a_roll.roll_index(a_dims) not in b_roll_idx_set
-        ):
-            return False
-    for b_roll in b_kernel.layout.rolls:
-        if (
-            b_roll.dim_to_roll.dim == b_sum_dim
-            and b_roll.roll_index(b_dims) not in a_roll_idx_set
-        ):
-            return False
-
-    if term.op == TensorOp.MATMUL:
-        if len(a_kernel.layout.rolls) == 1:
-            dim_to_roll = a_kernel.layout.rolls[0].dim_to_roll
-            dim_to_roll_by = a_kernel.layout.rolls[0].dim_to_roll_by
-            if (
-                dim_to_roll in a_kernel.layout.slot_dims
-                and dim_to_roll_by in a_kernel.layout.slot_dims
-                and dim_to_roll.dim is not None
-                and dim_to_roll_by.dim is not None
-                and dim_to_roll.dim == 0
-            ):
-                return False
-
-    return True
+    return spec.with_rolls(
+        [(d.dim, d.extent, d.stride) for d in a_dims],
+        [(d.dim, d.extent, d.stride) for d in b_dims],
+        [roll.roll_index(a_dims) for roll in a_kernel.layout.rolls],
+        [roll.roll_index(b_dims) for roll in b_kernel.layout.rolls],
+    )
 
 
-def check_alignment(term, alignment, a_kernel, b_kernel):
+def check_roll_alignment(spec, alignment, a_kernel, b_kernel):
+    """True when the pieces and rolls of the two layouts give both operands
+    one traversal."""
+    return rolled_spec(spec, a_kernel, b_kernel).aligned()
+
+
+def check_alignment(spec, alignment, a_kernel, b_kernel):
+    # An elementwise operator pairs the operands ciphertext by ciphertext.
+    if not spec.contracted() and (a_kernel.layout.num_ct() != b_kernel.layout.num_ct()):
+        return False
     return check_dim_alignment(alignment, a_kernel, b_kernel) and check_roll_alignment(
-        term, alignment, a_kernel, b_kernel
+        spec, alignment, a_kernel, b_kernel
     )
 
 
@@ -688,8 +660,8 @@ def get_dim_from_alignment(alignment, dim, index, remaining_dims):
     return remaining_dims[0]
 
 
-def apply_sum_roll(term, kernel):
-    sum_dim = get_sum_dim(term, kernel)
+def apply_sum_roll(spec, kernel, side):
+    sum_dim = _sum_dim(spec, side)
 
     layout = kernel.layout
 
@@ -812,7 +784,7 @@ def apply_sum_roll(term, kernel):
             return Kernel(KernelOp.ROLL, [new_roll, kernel], new_layout)
 
 
-def roll_dim_alignment(term, alignment, a_kernel, b_kernel):
+def roll_dim_alignment(spec, alignment, a_kernel, b_kernel):
     aligned_kernels = []
 
     a_dims = a_kernel.layout.get_dims()
@@ -821,8 +793,8 @@ def roll_dim_alignment(term, alignment, a_kernel, b_kernel):
         a_kernel.layout.get_dims(), b_kernel.layout.get_dims()
     )
 
-    a_sum_dim = get_sum_dim(term, a_kernel)
-    b_sum_dim = get_sum_dim(term, b_kernel)
+    a_sum_dim = _sum_dim(spec, 0)
+    b_sum_dim = _sum_dim(spec, 1)
 
     for a_dim, b_dim in zip(extent_a_dims, extent_b_dims):
         if a_dim.dim == a_sum_dim and b_dim.dim != b_sum_dim:
@@ -909,7 +881,7 @@ def roll_dim_alignment(term, alignment, a_kernel, b_kernel):
             [roll, rolled_b_kernel],
             rolled_b_layout,
         )
-    if check_alignment(term, alignment, a_kernel, rolled_b_kernel):
+    if check_alignment(spec, alignment, a_kernel, rolled_b_kernel):
         aligned_kernels.append((a_kernel, rolled_b_kernel))
 
     a_dim_map = get_dim_map(a_dims)
@@ -966,16 +938,23 @@ def roll_dim_alignment(term, alignment, a_kernel, b_kernel):
                 [roll, rolled_a_kernel],
                 rolled_a_layout,
             )
-    if check_alignment(term, alignment, rolled_a_kernel, b_kernel):
+    if check_alignment(spec, alignment, rolled_a_kernel, b_kernel):
         aligned_kernels.append((rolled_a_kernel, b_kernel))
     return aligned_kernels
 
 
-def roll_roll_alignment(term, a_kernel, b_kernel):
+def _shared_dims(spec):
+    """The dims of each operand whose label the other operand also holds."""
+    lhs = {d for d, label in enumerate(spec.lhs) if label in spec.rhs}
+    rhs = {d for d, label in enumerate(spec.rhs) if label in spec.lhs}
+    return lhs, rhs
+
+
+def roll_roll_alignment(spec, a_kernel, b_kernel):
+    """Mirrors each roll of a shared label onto the operand that lacks it."""
     a_dims = a_kernel.layout.get_dims()
     b_dims = b_kernel.layout.get_dims()
-    a_sum_dim = get_sum_dim(term, a_kernel)
-    b_sum_dim = get_sum_dim(term, b_kernel)
+    a_shared, b_shared = _shared_dims(spec)
 
     if len(a_dims) > len(b_dims):
         b_dims = match_dims(b_dims, a_dims)
@@ -985,12 +964,12 @@ def roll_roll_alignment(term, a_kernel, b_kernel):
     a_sum_rolls = []
     b_sum_rolls = []
     for roll in a_kernel.layout.rolls:
-        if roll.dim_to_roll.dim == a_sum_dim:
+        if roll.dim_to_roll.dim in a_shared:
             dim_to_roll_idx = a_dims.index(roll.dim_to_roll)
             dim_to_roll_by_idx = a_dims.index(roll.dim_to_roll_by)
             a_sum_rolls.append((dim_to_roll_idx, dim_to_roll_by_idx))
     for roll in b_kernel.layout.rolls:
-        if roll.dim_to_roll.dim == b_sum_dim:
+        if roll.dim_to_roll.dim in b_shared:
             dim_to_roll_idx = b_dims.index(roll.dim_to_roll)
             dim_to_roll_by_idx = b_dims.index(roll.dim_to_roll_by)
             b_sum_rolls.append((dim_to_roll_idx, dim_to_roll_by_idx))
@@ -1010,6 +989,10 @@ def roll_roll_alignment(term, a_kernel, b_kernel):
     b_rolls = []
     for roll in b_roll_indices:
         b_rolls.append(Roll(b_dims[roll[0]], b_dims[roll[1]]))
+
+    # A ROLL kernel applies one roll.
+    if len(a_rolls) > 1 or len(b_rolls) > 1:
+        return None
 
     if b_rolls:
         rolled_b_layout = Layout(
@@ -1046,27 +1029,23 @@ def roll_roll_alignment(term, a_kernel, b_kernel):
     return (rolled_a_kernel, rolled_b_kernel)
 
 
-def apply_roll_conversion(term, alignment, kernels):
-    aligned_kernels = []
-    dim_alignment = check_dim_alignment(alignment, kernels[0], kernels[1])
-    roll_alignment = check_roll_alignment(term, alignment, kernels[0], kernels[1])
-    if dim_alignment and roll_alignment:
-        aligned_kernels.append(kernels)
-    elif dim_alignment and not roll_alignment:
-        aligned_kernels.append(roll_roll_alignment(term, kernels[0], kernels[1]))
-    elif (
-        roll_alignment
-        and not dim_alignment
-        and not kernels[0].layout.rolls
-        and not kernels[1].layout.rolls
-    ):
-        aligned_kernels += roll_dim_alignment(term, alignment, kernels[0], kernels[1])
-    elif roll_alignment and not dim_alignment:
-        aligned_kernels += roll_dim_alignment(term, alignment, kernels[0], kernels[1])
-    return aligned_kernels
+def apply_roll_conversion(spec, alignment, kernels):
+    """Adds the rolls that align two layouts.
+
+    Layouts whose dims already align need at most the missing rolls mirrored
+    (roll_roll_alignment). Layouts whose dims do not align are aligned by
+    rolling a dim into place (roll_dim_alignment). Either result is checked by
+    the caller.
+    """
+    if not check_dim_alignment(alignment, kernels[0], kernels[1]):
+        return roll_dim_alignment(spec, alignment, kernels[0], kernels[1])
+    if check_roll_alignment(spec, alignment, kernels[0], kernels[1]):
+        return [kernels]
+    mirrored = roll_roll_alignment(spec, kernels[0], kernels[1])
+    return [mirrored] if mirrored is not None else []
 
 
-def roll_dimensions(term, alignment, kernels):
+def roll_dimensions(spec, alignment, kernels):
     a_kernel = kernels[0]
     b_kernel = kernels[1]
 
@@ -1125,19 +1104,19 @@ def roll_dimensions(term, alignment, kernels):
                             skip = True
                     if skip:
                         continue
-                    aligned_kernels += apply_roll_conversion(term, alignment, kernels)
+                    aligned_kernels += apply_roll_conversion(spec, alignment, kernels)
             except Exception:
-                aligned_kernels += apply_roll_conversion(term, alignment, kernels)
+                aligned_kernels += apply_roll_conversion(spec, alignment, kernels)
         else:
             try:
-                aligned_kernels += apply_roll_conversion(term, alignment, kernels)
+                aligned_kernels += apply_roll_conversion(spec, alignment, kernels)
             except Exception:
                 aligned_kernels += []
     return aligned_kernels
 
 
-def match_layout(term, kernels, alignment, roll_flag):
-    if check_alignment(term, alignment, kernels[0], kernels[1]):
+def match_layout(spec, kernels, alignment, roll_flag):
+    if check_alignment(spec, alignment, kernels[0], kernels[1]):
         return [kernels]
 
     matched_layouts = []
@@ -1146,11 +1125,11 @@ def match_layout(term, kernels, alignment, roll_flag):
         matched_layouts += conv_dimensions(alignment, kernels)
 
     if roll_flag:
-        matched_layouts += roll_dimensions(term, alignment, kernels)
+        matched_layouts += roll_dimensions(spec, alignment, kernels)
 
     matched = []
     for a_kernel, b_kernel in matched_layouts:
-        if not check_alignment(term, alignment, a_kernel, b_kernel):
+        if not check_alignment(spec, alignment, a_kernel, b_kernel):
             continue
         matched.append((a_kernel, b_kernel))
     return matched
@@ -1283,11 +1262,11 @@ def output_layout(term, spec, a_kernel, b_kernel):
             raise NotImplementedError(term.op)
 
 
-def apply_sum_rolls(term, replicated_kernels):
+def apply_sum_rolls(spec, replicated_kernels):
     rolled = []
     for kernels in replicated_kernels:
-        rolled_a_kernel = apply_sum_roll(term, copy(kernels[0]))
-        rolled_b_kernel = apply_sum_roll(term, copy(kernels[1]))
+        rolled_a_kernel = apply_sum_roll(spec, copy(kernels[0]), 0)
+        rolled_b_kernel = apply_sum_roll(spec, copy(kernels[1]), 1)
 
         if rolled_a_kernel and rolled_b_kernel:
             rolled.append(tuple([rolled_a_kernel, rolled_b_kernel]))

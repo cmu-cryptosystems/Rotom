@@ -1,7 +1,6 @@
 from ir.he import HEOp, HETerm
 from lower.layout_cts import LayoutCiphertexts
 from lower.lower_util import bsgs, get_rots_per_ct
-from util.layout_util import get_segments
 from util.util import split_lists
 
 
@@ -134,83 +133,6 @@ def lower_rot_roll(env, kernel):
 
 def lower_bsgs_rot_roll(env, kernel):
     return lower_rot_roll(env, kernel)
-
-
-def lower_split_roll(env, kernel):
-    n = kernel.layout.n
-    cts = {}
-
-    # env ct term
-    cache = {}
-    for ct_index in range(kernel.layout.num_ct()):
-        roll = kernel.cs[0]
-        roll_index = roll.roll_index(kernel.layout.get_dims())
-
-        rots = {}
-        segments = get_segments(kernel.layout.get_dims())
-        segment = segments[roll_index[0]]
-        rot_amt = segment[2] * (ct_index // segment[2])
-        rot_amt_2 = -((segment[1] * segment[2] - rot_amt) % (segment[1] * segment[2]))
-
-        if (rot_amt, rot_amt_2) not in cache:
-            rots[rot_amt] = [
-                1 if i % (segment[1] * segment[2]) < abs(rot_amt_2) else 0
-                for i in range(segment[0])
-            ]
-            rots[rot_amt_2] = [
-                1 if i % (segment[1] * segment[2]) >= abs(rot_amt_2) else 0
-                for i in range(segment[0])
-            ]
-            cache[(rot_amt, rot_amt_2)] = rots
-        else:
-            rots = cache[(rot_amt, rot_amt_2)]
-
-        input_cts = env[kernel.cs[1]]
-        base_term = input_cts[ct_index]
-        if len(rots) == 1:
-            # this roll can be done with a single rotation
-            for rot_amt, _ in rots.items():
-                if isinstance(base_term, list):
-                    cts[ct_index] = [ct << rot_amt for ct in base_term]
-                else:
-                    cts[ct_index] = [base_term << rot_amt]
-        elif len(rots) == 2:
-            # keep only the left rotations
-            rot_amts = list(rots.keys())
-            mask = rots[rot_amts[0]]
-
-            # rotate mask
-            mask = [mask[(i - rot_amts[0]) % n] for i in range(len(mask))]
-            mask2 = [i ^ 1 for i in mask]
-            mask_term = HETerm(HEOp.MASK, [mask], False, "roll mask")
-            mask_term_2 = HETerm(HEOp.MASK, [mask2], False, "roll mask 2")
-
-            # create masked_a_term
-            if isinstance(base_term, list):
-                # should be [left right] -> [ll lr rl rr]
-                res = []
-                for ct in base_term:
-                    masked_left_term = ct * mask_term
-                    # create masked_b_term through subtraction
-                    masked_right_term = ct * mask_term_2
-
-                    # rotate both
-                    rot_left_term = masked_left_term << rot_amts[0]
-                    rot_right_term = masked_right_term << rot_amts[1]
-                    res += [rot_left_term, rot_right_term]
-                cts[ct_index] = res
-            else:
-                masked_left_term = base_term * mask_term
-                # create masked_b_term through subtraction
-                masked_right_term = base_term * mask_term_2
-
-                # rotate both
-                rot_left_term = masked_left_term << rot_amts[0]
-                rot_right_term = masked_right_term << rot_amts[1]
-                cts[ct_index] = [rot_left_term, rot_right_term]
-    # Note: lower_split_roll returns a dict with list values, which is a special case
-    # We'll keep it as-is for now, but it may need special handling
-    return cts
 
 
 def lower_bsgs_roll(env, kernel):

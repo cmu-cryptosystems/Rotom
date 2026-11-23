@@ -291,12 +291,6 @@ if __name__ == "__main__":
     parser.add_argument("--fuzz", action=BooleanOptionalAction, default=False)
     parser.add_argument("--fuzz_result", action=BooleanOptionalAction, default=False)
     parser.add_argument(
-        "--conv_roll",
-        action=BooleanOptionalAction,
-        default=False,
-        help="Use roll-based convolution for conv2d operations",
-    )
-    parser.add_argument(
         "--layout-simplicity-weight",
         type=float,
         default=0.0,
