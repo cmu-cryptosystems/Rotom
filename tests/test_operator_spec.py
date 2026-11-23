@@ -5,12 +5,17 @@ import pytest
 
 from assignment.alignment import (
     OperatorSpec,
-    Window,
+    Relation,
     conv_spec,
     elementwise_spec,
     get_dim_alignment,
+    identity_spec,
+    index_spec,
     matmul_spec,
+    permute_spec,
+    reduce_spec,
     spec_for_term,
+    split_spec,
 )
 from frontends.tensor import TensorTerm
 from tests.conftest import assert_results_equal, run_compiler_and_backend
@@ -105,7 +110,7 @@ def test_conv2d_spec():
 
     assert str(spec) == (
         "c_in h w, c_out c_in kh kw -> c_out h_out w_out"
-        " [h_out=2*h+kh] [w_out=2*w+kw]"
+        " [h=2*h_out+kh] [w=2*w_out+kw]"
     )
     assert spec.accepts([[4, 8, 8], [8, 4, 3, 3]])
     assert not spec.accepts([[4, 8, 8], [8, 4, 3]])
@@ -124,7 +129,10 @@ def test_conv2d_spec():
     assert spec.rhs_sum_dims() == (1, 2, 3)
     assert spec.lhs_out_dims() == (None, 1, 2)
     assert spec.rhs_out_dims() == (0, None, None, None)
-    assert spec.window_of("h") == Window(out="h_out", inp="h", tap="kh", stride=2)
+    window = Relation(label="h", base="h_out", offset="kh", stride=2)
+    assert spec.relation_of("h") == window
+    assert spec.relation_of("kh") == window
+    assert spec.relation_of("c_in") is None
 
 
 def test_conv3d_spec_and_per_axis_strides():
@@ -139,31 +147,140 @@ def test_conv3d_spec_and_per_axis_strides():
 
     # A stride per axis is a different spec, not a different operator.
     spatial_only = conv_spec([1, 2, 2])
-    assert [w.stride for w in spatial_only.windows] == [1, 2, 2]
+    assert [r.stride for r in spatial_only.relations] == [1, 2, 2]
 
 
 def test_depthwise_conv_spec_carries_the_channel():
     spec = conv_spec([1, 1], depthwise=True)
-    assert str(spec) == "c h w, c kh kw -> c h_out w_out [h_out=1*h+kh] [w_out=1*w+kw]"
+    assert str(spec) == "c h w, c kh kw -> c h_out w_out [h=h_out+kh] [w=w_out+kw]"
     assert spec.contracted() == ()
     assert spec.alignment() == {(0, 0), (1, None), (2, None), (None, 1), (None, 2)}
     assert spec.lhs_out_dims() == (0, 1, 2)
 
 
 @pytest.mark.parametrize(
-    "spec,windows",
+    "spec,relations",
     [
         ("ik,kj", ()),  # no output
         ("ii,ij->ij", ()),  # repeated label
         ("ik,kj->ijz", ()),  # output label with no source
         ("ik,j->j", ()),  # label summed over one operand
-        ("cy,ocp->oY", (Window("Y", "y", "p", 0),)),  # stride 0
-        ("cy,ocp->oy", (Window("y", "y", "p"),)),  # window out is not output-only
+        ("cy,ocp->oY", (Relation("y", "Y", "p", stride=0),)),  # stride 0
+        ("cy,ocp->oy", (Relation("y", "y", "p"),)),  # related label in the output
+        ("cy,ocp->oY", (Relation("c", "Y", "p"),)),  # related label in the rhs
+        ("cy,ocp->oY", (Relation("y", "Y", "q"),)),  # term in no operand
+        (
+            "cyx,ocp->oY",
+            (Relation("y", "Y", "p"), Relation("x", "Y")),
+        ),  # term read twice
+        ("ab->az", ()),  # unary output label with no source
+        ("aa->a", ()),  # unary repeated label
     ],
 )
-def test_invalid_specs_are_rejected(spec, windows):
+def test_invalid_specs_are_rejected(spec, relations):
     with pytest.raises(ValueError):
-        OperatorSpec.parse(spec, windows)
+        OperatorSpec.parse(spec, relations)
+
+
+def test_unary_spec_parses_and_prints():
+    spec = OperatorSpec.parse("ab->a")
+    assert spec.is_unary and spec.rhs is None
+    assert str(spec) == "ab->a"
+    assert spec.accepts([[4, 4]])
+    assert not spec.accepts([[4, 4], [4]])
+    assert spec.reduced() == ("b",)
+    assert spec.lhs_sum_dims() == (1,)
+    assert spec.rhs_sum_dims() == ()
+    assert spec.rhs_out_dims() == ()
+    with pytest.raises(ValueError):
+        spec.alignment()
+    # A binary spec with an empty rhs (a constant) is not a unary spec.
+    assert not OperatorSpec.parse("ab,->ab").is_unary
+    # A binary operator still may not sum a label over one operand.
+    with pytest.raises(ValueError):
+        OperatorSpec.parse("ab,->a")
+
+
+def _unary(rank=2, extent=4):
+    return TensorTerm.Tensor("a", [extent] * rank, True), [[extent] * rank]
+
+
+def test_slotwise_unary_specs_carry_every_dim():
+    a, shapes = _unary(3)
+    for term in (a.poly_call("silu", -1.0, 1.0),):
+        spec = spec_for_term(term, shapes)
+        assert spec == identity_spec(3)
+        assert str(spec) == "d0 d1 d2 -> d0 d1 d2"
+        assert spec.lhs_out_dims() == (0, 1, 2)
+        assert spec.lhs_sum_dims() == ()
+
+
+def test_permute_and_transpose_specs():
+    a, shapes = _unary(3)
+    spec = spec_for_term(a.permute({0: 1, 1: 2, 2: 0}), shapes)
+    assert spec.out == ("d2", "d0", "d1")
+    assert spec.lhs_out_dims() == (1, 2, 0)
+    assert spec.lhs_sum_dims() == ()
+
+    m, m_shapes = _unary(2)
+    assert spec_for_term(m.T, m_shapes) == permute_spec({0: 1, 1: 0})
+    assert spec_for_term(m.T, m_shapes).lhs_out_dims() == (1, 0)
+    with pytest.raises(ValueError):
+        permute_spec({0: 0, 1: 0})
+
+
+def test_sum_and_product_specs_reduce_one_dim():
+    a, shapes = _unary(3)
+    for term in (a.sum(1), a.product(1)):
+        spec = spec_for_term(term, shapes)
+        assert spec == reduce_spec(3, 1)
+        assert str(spec) == "d0 d1 d2 -> d0 d2"
+        assert spec.reduced() == ("d1",)
+        assert spec.lhs_sum_dims() == (1,)
+        assert spec.lhs_out_dims() == (0, None, 1)
+
+
+def test_reshape_spec_splits_the_last_dim():
+    a = TensorTerm.Tensor("a", [4, 32], True)
+    spec = spec_for_term(a.reshape(1, {1: 4, 2: 8}), [[4, 32]])
+    assert spec == split_spec(2, 1, 4, 8)
+    assert str(spec) == "d0 d1 -> d0 d1.0 d1.1 [d1=8*d1.0+d1.1]"
+    # The split dim is neither reduced nor carried; it becomes its outer part.
+    assert spec.reduced() == ()
+    assert spec.lhs_sum_dims() == ()
+    assert spec.lhs_out_dims() == (0, 1)
+    assert spec.relation_of("d1.1").label == "d1"
+
+
+def test_index_spec_fixes_ints_and_keeps_slices():
+    a = TensorTerm.Tensor("a", [4, 8, 8], True)
+    shapes = [[4, 8, 8]]
+
+    spec = spec_for_term(a[2], shapes)
+    assert str(spec) == "d0 d1 d2 -> d1 d2 [d0=2]"
+    assert spec.reduced() == ()
+    assert spec.lhs_out_dims() == (None, 0, 1)
+
+    # bert_attention's head select: an int, then whole-dim slices.
+    assert spec_for_term(a[2, :, :], shapes) == spec
+
+    spec = index_spec(3, (slice(None), slice(1, 7, 2), slice(0, 4)))
+    assert str(spec) == "d0 d1 d2 -> d0 d1_out d2 [d1=2*d1_out+1]"
+    assert spec.lhs_out_dims() == (0, 1, 2)
+
+    with pytest.raises(NotImplementedError):
+        index_spec(3, -1)
+    with pytest.raises(ValueError):
+        index_spec(1, (0, 0))
+
+
+def test_roll_is_a_relation_with_a_modulus():
+    # A matmul whose contraction dim is rolled by j: k = (j + d) mod 4.
+    roll = Relation(label="k", base="j", offset="d", modulus=4)
+    assert str(roll) == "k=(j+d) mod 4"
+    spec = OperatorSpec(("i", "k"), ("d", "j"), ("i", "j"), (roll,))
+    assert spec.rhs_sum_dims() == (0,)
+    assert spec.lhs_out_dims() == (0, 1)
 
 
 @pytest.mark.parametrize("rolls", [False, True])
@@ -184,3 +301,32 @@ def test_vector_matrix_matmul_matches_eval(rolls):
     assert np.allclose(expected, inputs["a"] @ inputs["b"])
     results, kernel = run_compiler_and_backend(term, inputs, args, "toy")
     assert_results_equal(apply_layout(expected, kernel.layout), results, "toy")
+
+
+def _bert_attention_small():
+    h = TensorTerm.Tensor("h", [4, 8], True)
+    w = TensorTerm.Tensor("w", [8, 8], False)
+    b = TensorTerm.Tensor("b", [8], False)
+    q = (h @ w + b).reshape(1, {1: 2, 2: 4}).permute({0: 1, 1: 0, 2: 2})
+    k = (h @ w + b).reshape(1, {1: 2, 2: 4}).permute({0: 2, 1: 0, 2: 1})
+    return (q[0, :, :] @ k[0, :, :]).sum(1).poly_call("silu", -1.0, 1.0)
+
+
+def test_every_term_of_a_graph_has_a_spec_of_the_right_ranks():
+    from ir.analysis.shape import Shape
+
+    root = _bert_attention_small()
+    shape = Shape(root)
+    shape.run()
+    seen = set()
+    for term in root.post_order():
+        if term.op.name in ("TENSOR", "CONST"):
+            continue
+        operands = [c for c in term.cs if isinstance(c, TensorTerm)]
+        shapes = [shape.get_shape(c) for c in operands]
+        spec = spec_for_term(term, shapes)
+        assert spec.accepts(shapes), f"{term.op}: {spec}"
+        assert len(spec.out) == len(shape.get_shape(term)), f"{term.op}: {spec}"
+        assert spec.is_unary == (len(operands) == 1)
+        seen.add(term.op.name)
+    assert seen == {"MATMUL", "ADD", "RESHAPE", "PERMUTE", "INDEX", "SUM", "POLY_CALL"}
