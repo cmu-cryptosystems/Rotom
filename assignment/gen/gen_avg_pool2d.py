@@ -11,27 +11,10 @@ from assignment.gen.gen_window import (
     replication_dims,
 )
 from assignment.gen.gen_compaction import find_compaction
+from frontends.tensor_args import window_axis
 from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
 from util.util import round_to_ceiling_power_of_2
-
-
-def _avg_pool_out_hw(
-    h_i: int, w_i: int, k: int, s: int, padding: str
-) -> tuple[int, int]:
-    if padding == "valid":
-        h_o = (h_i - k) // s + 1
-        w_o = (w_i - k) // s + 1
-    elif padding == "same":
-        if s == 1:
-            h_o, w_o = h_i, w_i
-        else:
-            p = k // 2
-            h_o = (h_i + 2 * p - k) // s + 1
-            w_o = (w_i + 2 * p - k) // s + 1
-    else:
-        raise NotImplementedError(f"unknown padding: {padding!r}")
-    return h_o, w_o
 
 
 def gen_avg_pool2d(term, cs_kernels, shapes):
@@ -41,7 +24,8 @@ def gen_avg_pool2d(term, cs_kernels, shapes):
     stride = int(term.cs[2])
     padding = term.cs[3]
     h_i, w_i = int(a_shape[1]), int(a_shape[2])
-    h_o, w_o = _avg_pool_out_hw(h_i, w_i, k_sz, stride, padding)
+    h_o = window_axis(h_i, k_sz, stride, padding)[0]
+    w_o = window_axis(w_i, k_sz, stride, padding)[0]
     h_o_p2 = round_to_ceiling_power_of_2(h_o)
     w_o_p2 = round_to_ceiling_power_of_2(w_o)
 

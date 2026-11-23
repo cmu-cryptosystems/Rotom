@@ -2,7 +2,7 @@ from ir.analysis.shape import Shape
 from ir.dim import DimType
 from ir.he import HEOp, HETerm
 from ir.layout import Layout
-from frontends.tensor_args import Conv2dArgs
+from frontends.tensor_args import Conv2dArgs, axis_strides
 from lower.layout_cts import LayoutCiphertexts, create_layout_without_dims
 from lower.lower_util import find_sum_dim, rotate_and_sum
 import numpy as np
@@ -124,7 +124,7 @@ def lower_conv2d(env, kernel):
     _pad_bottom = computed_padding[1]
     pad_left = computed_padding[2]
     _pad_right = computed_padding[3]
-    _stride = kernel.layout.term.cs[2]
+    unit_stride = all(s == 1 for s in axis_strides(kernel.layout.term.cs[2], 2))
 
     # calculate rotation amounts for input ciphertexts
     # derive spatial multipliers from actual layout order (supports arbitrary dim ordering)
@@ -164,7 +164,7 @@ def lower_conv2d(env, kernel):
     filter_masks: list[list[int]] = []
     base_by_ct: list | None = None
     hin = win = 0
-    if int(_stride) != 1:
+    if not unit_stride:
         for i in range(b_shape[2]):
             for j in range(b_shape[3]):
                 rot_0 = i * h_stride
@@ -204,7 +204,7 @@ def lower_conv2d(env, kernel):
         filter_idx = f_h * f_w_extent_masks + f_w
         rot_amt = rot_amts[filter_idx]
         a_idx = ct_idx
-        if int(_stride) == 1:
+        if unit_stride:
             assert base_by_ct is not None
             m = _slot_mask_conv2d_same_stride1(
                 base_indices_ct=base_by_ct[a_idx],

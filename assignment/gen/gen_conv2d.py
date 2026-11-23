@@ -23,7 +23,7 @@ from assignment.gen.gen_window import (
     output_dims,
     replication_dims,
 )
-from frontends.tensor_args import Conv2dArgs
+from frontends.tensor_args import Conv2dArgs, axis_strides, window_axis
 from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
 from util.util import round_to_ceiling_power_of_2
@@ -57,33 +57,15 @@ def apply_replication(term, kernel, dim):
 
 
 def calculate_padding(input_shape, filter_shape, stride, padding):
-    # Input shape: [C_in, H_in, W_in]
-    H_in, W_in = input_shape[1], input_shape[2]
-    # Filter shape: [C_out, C_in, H_f, W_f]
-    K_h, K_w = filter_shape[2], filter_shape[3]
-    S_h, S_w = stride, stride
-
-    if padding == "valid":
-        return [0, 0, 0, 0]
-
-    elif padding == "same":
-        if S_h == 1:
-            # Stride 1: preserve spatial size (align with tensor_evaluator._eval_conv2d).
-            O_h = (H_in + S_h - 1) // S_h
-            O_w = (W_in + S_w - 1) // S_w
-            total_padding_h = max(0, (O_h - 1) * S_h + K_h - H_in)
-            total_padding_w = max(0, (O_w - 1) * S_w + K_w - W_in)
-            pad_top = total_padding_h // 2
-            pad_bottom = total_padding_h - pad_top
-            pad_left = total_padding_w // 2
-            pad_right = total_padding_w - pad_left
-            return [pad_top, pad_bottom, pad_left, pad_right]
-        # Stride > 1: symmetric k//2 per side (PyTorch nn.Conv2d), matching tensor_evaluator.
-        p_h = K_h // 2
-        p_w = K_w // 2
-        return [p_h, p_h, p_w, p_w]
-    else:
-        raise NotImplementedError("unknown padding: " + padding)
+    """``[pad_top, pad_bottom, pad_left, pad_right]`` for input ``[C_in, H, W]``
+    and filter ``[C_out, C_in, K_h, K_w]``."""
+    pads = []
+    for axis, s in enumerate(axis_strides(stride, 2)):
+        _, before, after = window_axis(
+            input_shape[axis + 1], filter_shape[axis + 2], s, padding
+        )
+        pads += [before, after]
+    return pads
 
 
 def gen_conv2d(term, cs_kernels, shapes):
@@ -117,7 +99,7 @@ def gen_conv2d(term, cs_kernels, shapes):
     b_shape = shapes[1]
 
     args = Conv2dArgs.from_term(term)
-    spec = conv_spec([args.stride] * 2)
+    spec = conv_spec(args.strides)
     # find padding
     padding = calculate_padding(a_shape, b_shape, args.stride, args.padding)
     term.cs.append(padding)
@@ -145,20 +127,10 @@ def gen_conv2d(term, cs_kernels, shapes):
         b_kernel = Kernel(KernelOp.PUNCTURED_TENSOR, [], b_layout)
 
         # Output spatial size (depends on stride and padding)
-        stride = args.stride
-        padding = args.padding
-        h_i, w_i = a_shape[1], a_shape[2]
-        f_h, f_w = b_shape[2], b_shape[3]
-        if padding == "valid":
-            h_o = (h_i - f_h) // stride + 1
-            w_o = (w_i - f_w) // stride + 1
-        else:
-            if stride == 1:
-                h_o, w_o = h_i, w_i
-            else:
-                p_h, p_w = f_h // 2, f_w // 2
-                h_o = (h_i + 2 * p_h - f_h) // stride + 1
-                w_o = (w_i + 2 * p_w - f_w) // stride + 1
+        h_o, w_o = (
+            window_axis(a_shape[axis + 1], b_shape[axis + 2], s, args.padding)[0]
+            for axis, s in enumerate(args.strides)
+        )
         h_o_p2 = round_to_ceiling_power_of_2(h_o)
         w_o_p2 = round_to_ceiling_power_of_2(w_o)
 

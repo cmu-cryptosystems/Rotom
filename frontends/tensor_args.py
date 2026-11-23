@@ -11,7 +11,44 @@ pulling in the full tensor frontend (e.g. lower, assignment, ir/analysis).
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+
+def axis_strides(stride: Any, axes: int) -> Tuple[int, ...]:
+    """A conv stride as one int per spatial axis.
+
+    An int applies to every axis; a sequence gives one stride per axis.
+    """
+    if isinstance(stride, int):
+        strides = (stride,) * axes
+    else:
+        strides = tuple(int(s) for s in stride)
+    if len(strides) != axes or any(s < 1 for s in strides):
+        raise ValueError(f"expected {axes} positive strides, got {stride!r}")
+    return strides
+
+
+def window_axis(
+    extent: int, kernel: int, stride: int, padding: str
+) -> Tuple[int, int, int]:
+    """One spatial axis of a windowed operator (conv, pooling).
+
+    Returns:
+        (out_extent, pad_before, pad_after)
+
+    ``"same"`` with stride 1 keeps the extent and splits ``kernel - 1`` of
+    padding with the extra cell after. ``"same"`` with a larger stride pads
+    ``kernel // 2`` on both sides, as ``torch.nn.Conv2d`` does.
+    """
+    if padding == "valid":
+        return (extent - kernel) // stride + 1, 0, 0
+    if padding != "same":
+        raise NotImplementedError(f"unknown padding: {padding!r}")
+    if stride == 1:
+        total = max(0, kernel - 1)
+        return extent, total // 2, total - total // 2
+    pad = kernel // 2
+    return (extent + 2 * pad - kernel) // stride + 1, pad, pad
 
 
 @dataclass(frozen=True)
@@ -39,9 +76,14 @@ class Conv2dArgs:
 
     input: Any
     filter: Any  # noqa: A003
-    stride: int
+    stride: Any
     padding: str
     groups: Any
+
+    @property
+    def strides(self) -> Tuple[int, int]:
+        """The stride of the H and W axes."""
+        return axis_strides(self.stride, 2)
 
     @classmethod
     def from_term(cls, term: Any) -> "Conv2dArgs":
@@ -78,8 +120,13 @@ class Conv3dArgs:
 
     input: Any
     filter: Any  # noqa: A003
-    stride: int
+    stride: Any
     padding: str
+
+    @property
+    def strides(self) -> Tuple[int, int, int]:
+        """The stride of the D, H and W axes."""
+        return axis_strides(self.stride, 3)
 
     @classmethod
     def from_term(cls, term: Any) -> "Conv3dArgs":

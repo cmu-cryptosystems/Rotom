@@ -21,6 +21,7 @@ from frontends.tensor_args import (
     Conv3dArgs,
     ReshapeArgs,
     TensorPlaceholderArgs,
+    window_axis,
 )
 from util.util import round_to_ceiling_power_of_2
 
@@ -28,19 +29,7 @@ from util.util import round_to_ceiling_power_of_2
 def _avg_pool_out_hw(
     h_i: int, w_i: int, k: int, s: int, padding: str
 ) -> tuple[int, int]:
-    if padding == "valid":
-        h_o = (h_i - k) // s + 1
-        w_o = (w_i - k) // s + 1
-    elif padding == "same":
-        if s == 1:
-            h_o, w_o = h_i, w_i
-        else:
-            p = k // 2
-            h_o = (h_i + 2 * p - k) // s + 1
-            w_o = (w_i + 2 * p - k) // s + 1
-    else:
-        raise NotImplementedError(f"unknown padding: {padding!r}")
-    return h_o, w_o
+    return window_axis(h_i, k, s, padding)[0], window_axis(w_i, k, s, padding)[0]
 
 
 class Shape:
@@ -205,21 +194,10 @@ class Shape:
                 else:
                     f_h, f_w = logical_b[1], logical_b[2]  # 3D: assume c_in=1
 
-                stride = args.stride
-                padding = args.padding
-
-                if padding == "valid":
-                    h_o = (h_i - f_h) // stride + 1
-                    w_o = (w_i - f_w) // stride + 1
-                elif padding == "same":
-                    if stride == 1:
-                        h_o, w_o = h_i, w_i
-                    else:
-                        p_h, p_w = f_h // 2, f_w // 2
-                        h_o = (h_i + 2 * p_h - f_h) // stride + 1
-                        w_o = (w_i + 2 * p_w - f_w) // stride + 1
-                else:
-                    raise NotImplementedError(f"unknown padding: {padding}")
+                (h_o, _, _), (w_o, _, _) = (
+                    window_axis(extent, kernel, s, args.padding)
+                    for extent, kernel, s in zip((h_i, w_i), (f_h, f_w), args.strides)
+                )
                 # Round to power of 2 for layout compatibility
                 c_shape = [
                     c_o,
@@ -240,23 +218,12 @@ class Shape:
                 c_o = logical_b[0]
                 # Use logical filter spatial sizes, not padded filter.
                 k_d, k_h, k_w = logical_b[2], logical_b[3], logical_b[4]
-                stride = args.stride
-                padding = args.padding
-
-                if padding == "valid":
-                    d_o = (d_i - k_d) // stride + 1
-                    h_o = (h_i - k_h) // stride + 1
-                    w_o = (w_i - k_w) // stride + 1
-                elif padding == "same":
-                    if stride == 1:
-                        d_o, h_o, w_o = d_i, h_i, w_i
-                    else:
-                        p_d, p_h, p_w = k_d // 2, k_h // 2, k_w // 2
-                        d_o = (d_i + 2 * p_d - k_d) // stride + 1
-                        h_o = (h_i + 2 * p_h - k_h) // stride + 1
-                        w_o = (w_i + 2 * p_w - k_w) // stride + 1
-                else:
-                    raise NotImplementedError(f"unknown padding: {padding}")
+                (d_o, _, _), (h_o, _, _), (w_o, _, _) = (
+                    window_axis(extent, kernel, s, args.padding)
+                    for extent, kernel, s in zip(
+                        (d_i, h_i, w_i), (k_d, k_h, k_w), args.strides
+                    )
+                )
 
                 return [
                     c_o,
@@ -391,21 +358,10 @@ class Shape:
                 h_i = a_shape[1]
                 w_i = a_shape[2]
 
-                stride = args.stride
-                padding = args.padding
-
-                if padding == "valid":
-                    h_o = (h_i - f_h) // stride + 1
-                    w_o = (w_i - f_w) // stride + 1
-                elif padding == "same":
-                    if stride == 1:
-                        h_o, w_o = h_i, w_i
-                    else:
-                        p_h, p_w = f_h // 2, f_w // 2
-                        h_o = (h_i + 2 * p_h - f_h) // stride + 1
-                        w_o = (w_i + 2 * p_w - f_w) // stride + 1
-                else:
-                    raise NotImplementedError(f"unknown padding: {padding}")
+                (h_o, _, _), (w_o, _, _) = (
+                    window_axis(extent, kernel, s, args.padding)
+                    for extent, kernel, s in zip((h_i, w_i), (f_h, f_w), args.strides)
+                )
                 c_shape = [c_o, h_o, w_o]
                 return c_shape
             case TensorOp.CONV3D:
@@ -419,23 +375,12 @@ class Shape:
                 k_d, k_h, k_w = b_shape[2], b_shape[3], b_shape[4]
                 d_i, h_i, w_i = a_shape[1], a_shape[2], a_shape[3]
 
-                stride = args.stride
-                padding = args.padding
-
-                if padding == "valid":
-                    d_o = (d_i - k_d) // stride + 1
-                    h_o = (h_i - k_h) // stride + 1
-                    w_o = (w_i - k_w) // stride + 1
-                elif padding == "same":
-                    if stride == 1:
-                        d_o, h_o, w_o = d_i, h_i, w_i
-                    else:
-                        p_d, p_h, p_w = k_d // 2, k_h // 2, k_w // 2
-                        d_o = (d_i + 2 * p_d - k_d) // stride + 1
-                        h_o = (h_i + 2 * p_h - k_h) // stride + 1
-                        w_o = (w_i + 2 * p_w - k_w) // stride + 1
-                else:
-                    raise NotImplementedError(f"unknown padding: {padding}")
+                (d_o, _, _), (h_o, _, _), (w_o, _, _) = (
+                    window_axis(extent, kernel, s, args.padding)
+                    for extent, kernel, s in zip(
+                        (d_i, h_i, w_i), (k_d, k_h, k_w), args.strides
+                    )
+                )
 
                 return [c_o, d_o, h_o, w_o]
             case TensorOp.INDEX:

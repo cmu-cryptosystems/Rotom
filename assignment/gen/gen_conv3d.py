@@ -16,7 +16,7 @@ from assignment.gen.gen_window import (
     output_dims,
     replication_dims,
 )
-from frontends.tensor_args import Conv3dArgs
+from frontends.tensor_args import Conv3dArgs, axis_strides, window_axis
 from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
 from util.util import round_to_ceiling_power_of_2
@@ -36,42 +36,22 @@ def apply_replication(term, kernel, dim):
 
 
 def calculate_padding_3d(input_shape, filter_shape, stride, padding):
-    # input_shape: [C_in, D, H, W], filter_shape: [C_out, C_in, Kd, Kh, Kw]
-    d_in, h_in, w_in = input_shape[1], input_shape[2], input_shape[3]
-    k_d, k_h, k_w = filter_shape[2], filter_shape[3], filter_shape[4]
-    s = stride
-    if padding == "valid":
-        return [0, 0, 0, 0, 0, 0]
-    if padding != "same":
-        raise NotImplementedError("unknown padding: " + padding)
-
-    if s == 1:
-        o_d = (d_in + s - 1) // s
-        o_h = (h_in + s - 1) // s
-        o_w = (w_in + s - 1) // s
-        total_pd = max(0, (o_d - 1) * s + k_d - d_in)
-        total_ph = max(0, (o_h - 1) * s + k_h - h_in)
-        total_pw = max(0, (o_w - 1) * s + k_w - w_in)
-        pf = total_pd // 2
-        pb = total_pd - pf
-        pt = total_ph // 2
-        pbot = total_ph - pt
-        pl = total_pw // 2
-        pr = total_pw - pl
-        return [pf, pb, pt, pbot, pl, pr]
-
-    # stride > 1: symmetric k//2 per side (match evaluator convention)
-    p_d = k_d // 2
-    p_h = k_h // 2
-    p_w = k_w // 2
-    return [p_d, p_d, p_h, p_h, p_w, p_w]
+    """``[pad_front, pad_back, pad_top, pad_bottom, pad_left, pad_right]`` for
+    input ``[C_in, D, H, W]`` and filter ``[C_out, C_in, K_d, K_h, K_w]``."""
+    pads = []
+    for axis, s in enumerate(axis_strides(stride, 3)):
+        _, before, after = window_axis(
+            input_shape[axis + 1], filter_shape[axis + 2], s, padding
+        )
+        pads += [before, after]
+    return pads
 
 
 def gen_conv3d(term, cs_kernels, shapes):
     a_shape = shapes[0]
     b_shape = shapes[1]
     args = Conv3dArgs.from_term(term)
-    spec = conv_spec([args.stride] * 3)
+    spec = conv_spec(args.strides)
 
     padding = calculate_padding_3d(a_shape, b_shape, args.stride, args.padding)
     term.cs.append(padding)
@@ -95,27 +75,15 @@ def gen_conv3d(term, cs_kernels, shapes):
         b_layout = Layout(b_term, [], b_dims, a_kernel.layout.n, False)
         b_kernel = Kernel(KernelOp.PUNCTURED_TENSOR, [], b_layout)
 
-        stride = args.stride
-        padding_mode = args.padding
-        d_i, h_i, w_i = a_shape[1], a_shape[2], a_shape[3]
-        k_d, k_h, k_w = b_shape[2], b_shape[3], b_shape[4]
-        if padding_mode == "valid":
-            d_o = (d_i - k_d) // stride + 1
-            h_o = (h_i - k_h) // stride + 1
-            w_o = (w_i - k_w) // stride + 1
+        if args.padding == "valid":
             # Shape analysis still uses dense [D_out,H_out,W_out] (p2);
             # see Conv3D(valid) in ``assignment.shape_check``.
-            d_o_layout, h_o_layout, w_o_layout = d_i, h_i, w_i
+            d_o_layout, h_o_layout, w_o_layout = a_shape[1:4]
         else:
-            if stride == 1:
-                d_o, h_o, w_o = d_i, h_i, w_i
-                d_o_layout, h_o_layout, w_o_layout = d_o, h_o, w_o
-            else:
-                p_d, p_h, p_w = k_d // 2, k_h // 2, k_w // 2
-                d_o = (d_i + 2 * p_d - k_d) // stride + 1
-                h_o = (h_i + 2 * p_h - k_h) // stride + 1
-                w_o = (w_i + 2 * p_w - k_w) // stride + 1
-                d_o_layout, h_o_layout, w_o_layout = d_o, h_o, w_o
+            d_o_layout, h_o_layout, w_o_layout = (
+                window_axis(a_shape[axis + 1], b_shape[axis + 2], s, args.padding)[0]
+                for axis, s in enumerate(args.strides)
+            )
 
         d_o_p2 = round_to_ceiling_power_of_2(d_o_layout)
         h_o_p2 = round_to_ceiling_power_of_2(h_o_layout)

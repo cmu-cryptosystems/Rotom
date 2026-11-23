@@ -506,7 +506,7 @@ class TensorTerm:
     def conv2d(
         a: "TensorTerm",
         b: "TensorTerm",
-        stride: int,
+        stride: int | tuple[int, int],
         padding: str,
         groups: int | str = 1,
         layout: Optional[str] = None,
@@ -516,7 +516,8 @@ class TensorTerm:
         Args:
             a (TensorTerm): Input tensor
             b (TensorTerm): Filter tensor
-            stride (int): Stride of the convolution
+            stride (int | tuple[int, int]): Stride of the convolution, or one
+                stride per spatial axis ``(stride_h, stride_w)``
             padding (str): Padding mode ("valid" or "same")
             layout (str, optional): Tensor layout string for the result
 
@@ -552,7 +553,7 @@ class TensorTerm:
     def conv3d(
         a: "TensorTerm",
         b: "TensorTerm",
-        stride: int,
+        stride: int | tuple[int, int, int],
         padding: str,
         layout: Optional[str] = None,
     ) -> "TensorTerm":
@@ -562,7 +563,8 @@ class TensorTerm:
         - Input tensor shape: [C_in, D_in, H_in, W_in]
         - Filter tensor shape: [C_out, C_in, K_d, K_h, K_w]
         - Output tensor shape: [C_out, D_out, H_out, W_out]
-        - `stride` applies to all spatial dims (D/H/W).
+        - `stride` is an int for all spatial dims, or one stride per axis
+          `(stride_d, stride_h, stride_w)`.
         - `padding` is "valid" or "same".
         """
         return TensorTerm(TensorOp.CONV3D, [a, b, stride, padding], layout)
