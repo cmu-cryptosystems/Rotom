@@ -268,3 +268,57 @@ def test_two_convs_match_eval_and_count_the_first_conv():
         > min(search.kernel_costs[first].values())
         > 0
     )
+
+
+@pytest.mark.parametrize(
+    "source,target,n",
+    [
+        (
+            "[0:2:8][1:8:1][0:2:4][2:8:1][G:2][0:4:1][G:2]",
+            "[0:2:8][1:8:1][0:2:4][2:8:1][0:2:2][G:4][0:2:1]",
+            4096,
+        ),
+        ("[0:4:1];[G:4][1:8:1][2:8:1]", "[1:8:1][0:4:1][2:8:1][G:4]", 256),
+        ("[1:8:1][2:8:1][0:4:1]", "[0:2:2];[G:2][0:2:1][2:8:1][1:8:1]", 256),
+        ("[0:4:1][1:8:1][2:8:1]", "[R:2:1];[0:4:1][2:8:1][1:8:1]", 256),
+    ],
+)
+def test_relayout_moves_every_element(source, target, n):
+    from util.window import layout_shape, relayout_keys, relayout_mask
+
+    a = parse_layout(source, n, True)
+    b = parse_layout(target, n, True)
+    x = np.random.default_rng(0).normal(size=layout_shape(b))
+    in_cts = [np.asarray(ct, dtype=np.float64) for ct in apply_layout(x, a)]
+    cts = [np.zeros(n) for _ in range(b.num_ct())]
+    for key in relayout_keys(a, b):
+        out_ct, in_ct, shift = (int(k) for k in key)
+        cts[out_ct] += np.roll(in_cts[in_ct], -shift) * relayout_mask(a, b, key)
+    expected = [np.asarray(ct, dtype=np.float64) for ct in apply_layout(x, b)]
+    assert np.allclose(np.concatenate(cts), np.concatenate(expected))
+
+
+def test_downsampling_block_with_a_conversion_matches_eval():
+    """The two branches of a residual add arrive in different layouts."""
+    rng = np.random.default_rng(0)
+    inputs = {"x": rng.normal(size=(8, 16, 16))}
+
+    def weights(name, shape):
+        inputs[name] = rng.normal(size=shape) * 0.3
+        return TensorTerm.Tensor(name, list(shape), False)
+
+    def conv(x, name, c_out, c_in, k, stride, size):
+        y = TensorTerm.conv2d(x, weights(name, (c_out, c_in, k, k)), stride, "same")
+        return y * weights(name + "_s", (c_out, size, size)) + weights(
+            name + "_b", (c_out, size, size)
+        )
+
+    x = TensorTerm.Tensor("x", [8, 16, 16], True)
+    h = conv(x, "w0", 8, 8, 3, 1, 16).poly_call("relu", -8.0, 8.0)
+    f = conv(h, "w1", 16, 8, 3, 2, 8).poly_call("relu", -8.0, 8.0)
+    y = (conv(f, "w2", 16, 16, 3, 1, 8) + conv(h, "w3", 16, 8, 1, 2, 8)).poly_call(
+        "relu", -8.0, 8.0
+    )
+    term = conv(y, "w4", 16, 16, 3, 1, 8) + y
+    kernel = _run(term, inputs, 4096)
+    assert any(k.op == KernelOp.CONVERSION for k in kernel.post_order())

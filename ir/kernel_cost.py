@@ -15,8 +15,9 @@ import math
 
 from ir.dim import DimType
 from ir.kernel import KernelOp
+from ir.layout import Layout
 from util.util import get_slot_dims, prod
-from util.window import summed_pieces, window_ops
+from util.window import relayout_ops, summed_pieces, window_ops
 
 from .layout_utils import dimension_merging
 
@@ -530,6 +531,15 @@ class KernelCost:
         """
         from_dims = self.kernel.cs[0]
         to_dims = self.kernel.cs[1]
+
+        # Without rolls the conversion is lowered as a relayout: count it.
+        child = self.kernel.cs[2].layout
+        if not self.kernel.layout.rolls and not child.rolls:
+            source = Layout(child.term, [], list(from_dims), child.n, child.secret)
+            if source.num_ct() == child.num_ct():
+                for op, count in relayout_ops(source, self.kernel.layout).items():
+                    ops[op] += count
+                return ops
 
         _, from_slot_dims = get_slot_dims(from_dims, self.kernel.layout.n)
         _, to_slot_dims = get_slot_dims(to_dims, self.kernel.layout.n)
