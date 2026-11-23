@@ -141,7 +141,7 @@ def gen_binop(term, cs_kernels, shapes, roll_flag):
         for matched_a_kernel, matched_b_kernel in matched_layouts:
             # find output layout
             output_kernel = output_layout(
-                term, alignment, matched_a_kernel, matched_b_kernel, spec
+                term, spec, matched_a_kernel, matched_b_kernel
             )
             # try compacting if no rolls are applied:
             if not output_kernel.layout.rolls:
