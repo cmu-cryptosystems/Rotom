@@ -107,12 +107,6 @@ class TestTensorOperatorsLayout:
         assert result.layout == self.layout
         assert result.op == TensorOp.MATMUL
 
-    def test_block_matmul_with_layout(self):
-        """Test block matrix multiplication with layout."""
-        result = self.a.block_matmul(self.b, layout=self.layout)
-        assert result.layout == self.layout
-        assert result.op == TensorOp.BLOCK_MATMUL
-
     def test_indexing_without_layout(self):
         """Test indexing without layout."""
         result = self.a[0]

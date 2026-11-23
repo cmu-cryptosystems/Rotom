@@ -28,7 +28,7 @@ class KernelOp(Enum):
 
     Operation Categories:
         Tensor ops: TENSOR, CS, CONST, ADD, SUB, MUL, SUM, MEAN, PRODUCT
-        Matrix ops: MATMUL, BLOCK_MATMUL, BSGS_MATMUL, STRASSEN_MATMUL
+        Matrix ops: MATMUL, BSGS_MATMUL, STRASSEN_MATMUL
         Convolution: CONV2D, CONV2D_ROLL
         Polynomial: POLY
         Conversions: CONVERSION
@@ -50,7 +50,6 @@ class KernelOp(Enum):
     MEAN = "MEAN"
     PRODUCT = "PRODUCT"
     MATMUL = "MATMUL"
-    BLOCK_MATMUL = "BLOCK_MATMUL"
     BSGS_MATMUL = "BSGS_MATMUL"
     STRASSEN_MATMUL = "STRASSENS"
     CONV2D = "CONV2D"

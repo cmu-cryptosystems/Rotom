@@ -2,8 +2,8 @@
 Operator specs and dimension alignment for tensor operations.
 
 An operator is described once, einsum-style, by the index labels of its two
-operands and of its output: matmul is ``ik,kj->ij``, block matmul is
-``bik,bkj->bij``. A label is any string; single letters are the shorthand that
+operands and of its output: matmul is ``ik,kj->ij``, a batched matmul is
+``bik,kj->bij``. A label is any string; single letters are the shorthand that
 ``OperatorSpec.parse`` reads, and operators with many roles use names
 (``c_in``, ``h``, ``kh``, ``h_out``). Everything the layout
 assignment needs to know about the operator's structure is derived from those
@@ -193,11 +193,6 @@ def matmul_spec(lhs_rank: int, rhs_rank: int) -> OperatorSpec:
     return OperatorSpec.parse(specs[(lhs_rank, rhs_rank)])
 
 
-def block_matmul_spec() -> OperatorSpec:
-    """Block matmul: a shared leading block dim, then a matmul per block."""
-    return OperatorSpec.parse("bik,bkj->bij")
-
-
 def conv_spec(strides: Sequence[int], depthwise: bool = False) -> OperatorSpec:
     """Convolution over ``len(strides)`` spatial axes, one stride per axis.
 
@@ -235,8 +230,6 @@ def spec_for_term(term, shapes) -> OperatorSpec:
             return elementwise_spec(len(shapes[0]), len(shapes[1]))
         case TensorOp.MATMUL:
             return matmul_spec(len(shapes[0]), len(shapes[1]))
-        case TensorOp.BLOCK_MATMUL:
-            return block_matmul_spec()
         case TensorOp.CONV2D:
             args = Conv2dArgs.from_term(term)
             # Depthwise terms carry a TFLite-style [1, Kh, Kw, C] filter, which

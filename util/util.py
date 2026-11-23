@@ -114,7 +114,7 @@ def convert_layout_to_indices(layout):
                         if slot_indices[index][dim.dim] is not None:
                             slot_indices[
                                 (i * (dim.extent * slot_offset) + j * slot_offset + k)
-                            ][dim.dim] += j * dim.stride
+                            ][dim.dim] += (j * dim.stride)
                     elif dim.dim_type == DimType.EMPTY:
                         for key in dim_offset.keys():
                             if j:
@@ -341,11 +341,6 @@ def get_sum_dim(term, kernel):
                 return min(
                     dim.dim for dim in kernel.layout.get_dims() if dim.dim is not None
                 )
-        case TensorOp.BLOCK_MATMUL:
-            if kernel.layout.term == term.cs[0]:
-                return 2
-            else:
-                return 1
 
 
 def split_lists(lst, num_sublists):

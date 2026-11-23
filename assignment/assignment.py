@@ -22,7 +22,6 @@ from copy import deepcopy as copy
 # import frontend terms
 
 from assignment.gen.gen_binop import gen_binop
-from assignment.gen.gen_block_matmul import gen_block_matmul
 from assignment.gen.gen_const import gen_const
 from assignment.gen.gen_concat import gen_concat
 from assignment.gen.gen_cumsum import gen_cumsum
@@ -219,8 +218,6 @@ class LayoutAssignment:
             case TensorOp.AVG_POOL2D:
                 cs_shapes = self.get_unpadded_cs_shapes(term)
                 kernels = gen_avg_pool2d(term, cs_kernels[0], cs_shapes)
-            case TensorOp.BLOCK_MATMUL:
-                kernels = gen_block_matmul(term, cs_kernels)
             case TensorOp.POLY_CALL | TensorOp.HARD_SWISH:
                 kernels = gen_poly_call(term, cs_kernels[0])
             case _:
@@ -441,7 +438,6 @@ class LayoutAssignment:
                 | TensorOp.SUB
                 | TensorOp.MUL
                 | TensorOp.MATMUL
-                | TensorOp.BLOCK_MATMUL
                 | TensorOp.CONV2D
                 | TensorOp.CONV3D
             ):

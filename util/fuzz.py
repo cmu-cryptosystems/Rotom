@@ -130,35 +130,6 @@ class Fuzz:
         # check that results match up
         assert result == c
 
-    def fuzz_block_matmul(self, kernel, cs_shapes):
-        """Fuzz a matmul kernel"""
-        # create plaintext inputs
-        self.gen_random_inputs(cs_shapes)
-
-        # map inputs to kernel
-        self.map_binop_operands(kernel)
-
-        # create ciphertext inputs
-        circuit_ir = Lower(kernel).run()
-
-        # fuzz kernel
-        args = get_default_args()
-        args.n = self.n
-        toy = Toy(circuit_ir, self.inputs, args)
-        result = toy.fuzz()
-
-        # check results
-        print(self.inputs[0].shape)
-        print(self.inputs[1].shape)
-
-        c = self.inputs[0] @ self.inputs[1]
-
-        # apply layout to c
-        c = apply_layout(c, kernel.layout)
-
-        # check that results match up
-        assert result == c
-
     def fuzz_kernel(self, kernel, cs_shapes):
         """Fuzz a kernel"""
         print("fuzzing kernel:", kernel)
@@ -174,8 +145,6 @@ class Fuzz:
                 self.fuzz_add(kernel, cs_shapes)
             case TensorOp.MATMUL:
                 self.fuzz_matmul(kernel, cs_shapes)
-            case TensorOp.BLOCK_MATMUL:
-                self.fuzz_block_matmul(kernel, cs_shapes)
             case _:
                 raise NotImplementedError(kernel.layout.term.op)
 

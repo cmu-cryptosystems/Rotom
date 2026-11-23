@@ -6,7 +6,6 @@ import pytest
 from assignment.alignment import (
     OperatorSpec,
     Window,
-    block_matmul_spec,
     conv_spec,
     elementwise_spec,
     get_dim_alignment,
@@ -68,12 +67,6 @@ def test_matmul_unsupported_ranks_still_raise():
     a, b, shapes = _tensors(3, 3)
     with pytest.raises(NotImplementedError):
         get_dim_alignment(a @ b, shapes)
-
-
-def test_block_matmul_alignment_matches_previous():
-    assert block_matmul_spec().alignment() == {(0, 0), (1, None), (2, 1), (None, 2)}
-    assert block_matmul_spec().lhs_sum_dims() == (2,)
-    assert block_matmul_spec().rhs_sum_dims() == (1,)
 
 
 @pytest.mark.parametrize("lhs_rank,rhs_rank", [(2, 1), (1, 2), (2, 2), (3, 2)])
