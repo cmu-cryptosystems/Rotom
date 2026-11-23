@@ -64,13 +64,7 @@ class Secret:
                 | TensorOp.CAST
             ):
                 return secrets[0]
-            case (
-                TensorOp.ADD
-                | TensorOp.SUB
-                | TensorOp.MUL
-                | TensorOp.MATMUL
-                | TensorOp.BLOCK_MATMUL
-            ):
+            case TensorOp.ADD | TensorOp.SUB | TensorOp.MUL | TensorOp.MATMUL:
                 a_secret = secrets[0]
                 b_secret = secrets[1]
                 return a_secret or b_secret
@@ -99,13 +93,7 @@ class Secret:
             case TensorOp.TENSOR:
                 kernel_secret = self.get_secret(term, [])
                 self.secret[term] = kernel_secret
-            case (
-                TensorOp.ADD
-                | TensorOp.SUB
-                | TensorOp.MUL
-                | TensorOp.MATMUL
-                | TensorOp.BLOCK_MATMUL
-            ):
+            case TensorOp.ADD | TensorOp.SUB | TensorOp.MUL | TensorOp.MATMUL:
                 cs_secrets = [self.secret[term.cs[0]], self.secret[term.cs[1]]]
                 kernel_secret = self.get_secret(term, cs_secrets)
                 self.secret[term] = kernel_secret

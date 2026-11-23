@@ -1156,7 +1156,22 @@ def match_layout(term, kernels, alignment, roll_flag):
     return matched
 
 
-def output_layout(term, alignment, a_kernel, b_kernel):
+def _renumbered(dim, out_dims):
+    """`dim` with the output dim id its operand dim becomes under the spec."""
+    if dim.dim is None or out_dims[dim.dim] == dim.dim:
+        return dim
+    return Dim(out_dims[dim.dim], dim.extent, dim.stride, dim.dim_type)
+
+
+def output_layout(term, spec, a_kernel, b_kernel):
+    """The output kernel of a binary operator over two aligned operand kernels.
+
+    The operator's structure is read off `spec`: which dims align, which are
+    summed away, and the output dim id each operand dim becomes.
+    """
+    alignment = spec.alignment()
+    lhs_out = spec.lhs_out_dims()
+    rhs_out = spec.rhs_out_dims()
     match term.op:
         case TensorOp.ADD | TensorOp.SUB | TensorOp.MUL:
             output_dims = []
@@ -1164,23 +1179,19 @@ def output_layout(term, alignment, a_kernel, b_kernel):
                 b_dim_index = get_dim_from_alignment(
                     alignment, a_dim, 0, copy(b_kernel.layout.get_dims())
                 ).dim
-                if a_dim.dim is not None and b_dim_index is None:
-                    output_dims.append(a_dim)
-                elif a_dim.dim is None and b_dim_index is not None:
-                    output_dims.append(
-                        Dim(b_dim_index, a_dim.extent, a_dim.stride, a_dim.dim_type)
-                    )
-                elif a_dim.dim is None and b_dim_index is None:
-                    output_dims.append(a_dim)
-                else:
+                if a_dim.dim is not None:
+                    output_dims.append(_renumbered(a_dim, lhs_out))
+                elif b_dim_index is not None:
                     output_dims.append(
                         Dim(
-                            max(a_dim.dim, b_dim_index),
+                            rhs_out[b_dim_index],
                             a_dim.extent,
                             a_dim.stride,
                             a_dim.dim_type,
                         )
                     )
+                else:
+                    output_dims.append(a_dim)
 
             output_layout = dimension_merging(
                 Layout(
@@ -1205,8 +1216,8 @@ def output_layout(term, alignment, a_kernel, b_kernel):
             b_layout = b_kernel.layout
             output_dims = []
 
-            a_sum_dim = get_sum_dim(term, a_kernel)
-            b_sum_dim = get_sum_dim(term, b_kernel)
+            (a_sum_dim,) = spec.lhs_sum_dims()
+            (b_sum_dim,) = spec.rhs_sum_dims()
 
             if len(a_layout.get_dims()) != len(b_layout.get_dims()):
                 for a_dim in a_layout.get_dims():
@@ -1217,22 +1228,19 @@ def output_layout(term, alignment, a_kernel, b_kernel):
                             Dim(None, a_dim.extent, a_dim.stride, DimType.EMPTY)
                         )
                     else:
-                        output_dims.append(a_dim)
+                        output_dims.append(_renumbered(a_dim, lhs_out))
 
                 a_aligned_dims = {a for a, b in alignment if a is not None}
                 for b_dim in b_layout.get_dims():
                     if b_dim.dim is not None and b_dim.dim not in a_aligned_dims:
                         if (None, b_dim.dim) in alignment:
-                            output_dims.append(b_dim)
+                            output_dims.append(_renumbered(b_dim, rhs_out))
             else:
                 for a_dim, b_dim in zip(a_layout.get_dims(), b_layout.get_dims()):
                     if a_dim.dim is not None and b_dim.dim is None:
-                        output_dims.append(a_dim)
+                        output_dims.append(_renumbered(a_dim, lhs_out))
                     elif a_dim.dim is None and b_dim.dim is not None:
-                        if len(alignment) == 4:
-                            b_dim = copy(b_dim)
-                            b_dim.dim = 2
-                        output_dims.append(b_dim)
+                        output_dims.append(_renumbered(b_dim, rhs_out))
                     else:
                         output_dims.append(
                             Dim(None, a_dim.extent, a_dim.stride, DimType.EMPTY)

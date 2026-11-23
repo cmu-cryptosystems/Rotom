@@ -171,13 +171,6 @@ class Shape:
                     c_shape = list(a_shape[:-1]) + list(b_shape[:-2]) + [b_shape[-1]]
 
                 return c_shape
-            case TensorOp.BLOCK_MATMUL:
-                a_shape = copy(self.padded_shapes[term.cs[0]])
-                b_shape = copy(self.padded_shapes[term.cs[1]])
-                assert len(a_shape) == 3 and len(b_shape) == 3
-                assert a_shape[0] == b_shape[0]
-                assert a_shape[2] == b_shape[1]
-                return [a_shape[0], a_shape[1], b_shape[2]]
             case TensorOp.TRANSPOSE:
                 a_shape = copy(self.padded_shapes[term.cs[0]])
                 assert len(a_shape) == 2
@@ -472,15 +465,6 @@ class Shape:
                 for i in range(len(shape_map)):
                     new_shape[term.cs[1][i]] = shape_map[i]
                 return new_shape
-            case TensorOp.BLOCK_MATMUL:
-                a = term.cs[0]
-                b = term.cs[1]
-                a_shape = copy(self.get_shape(a))
-                b_shape = copy(self.get_shape(b))
-                assert len(a_shape) == 3 and len(b_shape) == 3
-                assert a_shape[0] == b_shape[0]
-                assert a_shape[2] == b_shape[1]
-                return [a_shape[0], a_shape[1], b_shape[2]]
             case TensorOp.SUM | TensorOp.PRODUCT:
                 a = term.cs[0]
                 a_shape = copy(self.get_shape(a))

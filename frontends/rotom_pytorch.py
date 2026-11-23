@@ -229,14 +229,6 @@ class Tensor:
         result_term = self._tensor_term.product(dim, layout=layout)
         return _wrap_tensor_term(result_term, secret=self.secret)
 
-    def block_matmul(self, other: "Tensor", layout: Optional[str] = None) -> "Tensor":
-        """Block matrix multiply."""
-        other_tensor = _ensure_tensor(other)
-        result_term = self._tensor_term.block_matmul(
-            other_tensor._tensor_term, layout=layout
-        )
-        return _wrap_tensor_term(result_term, secret=self.secret or other_tensor.secret)
-
     def transpose(self, dim0: int = 0, dim1: int = 1, layout: Optional[str] = None):
         """Transpose dimensions."""
         if dim0 == 0 and dim1 == 1:
@@ -594,11 +586,6 @@ class torch:
         d = dim if dim >= 0 else dim + rank + 1
         uns = [t.unsqueeze(d, layout=layout) for t in tensors]
         return torch.cat(uns, dim, layout=layout)
-
-    @staticmethod
-    def block_matmul(a: Tensor, b: Tensor, layout: Optional[str] = None) -> Tensor:
-        """Block matrix multiplication."""
-        return a.block_matmul(b, layout=layout)
 
     @staticmethod
     def product(input: Tensor, dim: int, layout: Optional[str] = None) -> Tensor:

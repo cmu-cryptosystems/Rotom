@@ -687,8 +687,6 @@ class KernelCost:
                 ops = self.product_ops(ops)
             case KernelOp.MATMUL:
                 ops = self.matmul_ops(ops, self.kernel.cs[0].layout, 1)
-            case KernelOp.BLOCK_MATMUL:
-                ops = self.matmul_ops(ops, self.kernel.cs[0].layout, 2)
             case KernelOp.BSGS_MATMUL:
                 ops = self.bsgs_matmul_ops(ops)
             case KernelOp.STRASSEN_MATMUL:

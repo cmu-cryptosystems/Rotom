@@ -341,11 +341,6 @@ def get_sum_dim(term, kernel):
                 return min(
                     dim.dim for dim in kernel.layout.get_dims() if dim.dim is not None
                 )
-        case TensorOp.BLOCK_MATMUL:
-            if kernel.layout.term == term.cs[0]:
-                return 2
-            else:
-                return 1
 
 
 def split_lists(lst, num_sublists):

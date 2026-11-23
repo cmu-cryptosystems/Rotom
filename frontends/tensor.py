@@ -53,7 +53,6 @@ class TensorOp(Enum):
         PRODUCT: Product along a dimension
         TRANSPOSE: Matrix transpose
         MATMUL: Matrix multiplication
-        BLOCK_MATMUL: Block matrix multiplication
         CONV2D: 2D convolution
         CONV3D: 3D convolution
         POLY_CALL: Polynomial approximation
@@ -72,7 +71,6 @@ class TensorOp(Enum):
     PRODUCT = "Product"  # product along a dimension
     TRANSPOSE = "Transpose"  # transpose
     MATMUL = "MatMul"  # matmul
-    BLOCK_MATMUL = "Block_MatMul"  # block matmul
     CONV2D = "Conv"  # convolutions
     CONV3D = "Conv3D"  # 3D convolutions
     POLY_CALL = "PolyCall"  # polynomial approximation call
@@ -375,24 +373,6 @@ class TensorTerm:
             >>> d = a.__matmul__(b, layout="[0:4:1][1:4:1]")  # With layout
         """
         return TensorTerm(TensorOp.MATMUL, [self, other], layout)
-
-    def block_matmul(
-        self, other: "TensorTerm", layout: Optional[str] = None
-    ) -> "TensorTerm":
-        """Block matrix multiplication.
-
-        Args:
-            other (TensorTerm): The tensor to multiply with
-            layout (str, optional): Tensor layout string for the result
-
-        Returns:
-            TensorTerm: A new tensor term representing the block matrix multiplication
-
-        Example:
-            >>> c = a.block_matmul(b)  # Block matrix multiplication
-            >>> d = a.block_matmul(b, layout="[0:4:1][1:4:1]")  # With layout
-        """
-        return TensorTerm(TensorOp.BLOCK_MATMUL, [self, other], layout)
 
     def transpose(self, layout: Optional[str] = None) -> "TensorTerm":
         """Transpose the tensor.

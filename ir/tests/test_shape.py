@@ -144,18 +144,6 @@ class TestMatrixMultiplication:
         result_shape = shape_analyzer.get_shape(matmul_op)
         assert result_shape == [1, 2, 3, 5]
 
-    def test_block_matmul(self):
-        """Test block matrix multiplication."""
-        a = TensorTerm(TensorOp.TENSOR, ["a", [2, 3, 4], True])
-        b = TensorTerm(TensorOp.TENSOR, ["b", [2, 4, 5], False])
-        block_matmul_op = TensorTerm(TensorOp.BLOCK_MATMUL, [a, b])
-
-        shape_analyzer = Shape(block_matmul_op)
-        shape_analyzer.run()
-
-        result_shape = shape_analyzer.get_shape(block_matmul_op)
-        assert result_shape == [2, 3, 5]
-
     def test_matmul_invalid_shapes(self):
         """Test that invalid matrix multiplication shapes raise errors."""
         # Test mismatched inner dimensions
