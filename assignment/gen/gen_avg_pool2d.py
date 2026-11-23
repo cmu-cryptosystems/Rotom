@@ -1,7 +1,5 @@
 """Layout generation for 2D average pooling (CHW tensors)."""
 
-from copy import deepcopy as copy
-
 from assignment.alignment import conv_spec
 from assignment.gen.gen_conv2d import apply_replication
 from assignment.gen.gen_window import (
@@ -36,7 +34,8 @@ def gen_avg_pool2d(term, cs_kernels, shapes):
     for a_kernel in cs_kernels:
         if a_kernel.layout.rolls:
             continue
-        a_work = copy(a_kernel)
+        # The input is a placeholder, so the search adds the input's own cost.
+        a_work = Kernel(KernelOp.CS, [0], a_kernel.layout)
         replicated_dims, b_dims = replication_dims(spec, a_shape, b_shape)
         for dim in replicated_dims[::-1]:
             a_work = apply_replication(term.cs[0], a_work, dim)
