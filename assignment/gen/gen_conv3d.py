@@ -9,8 +9,14 @@ This mirrors `gen_conv2d` but for 3D convolutions with shapes:
 
 from copy import deepcopy as copy
 
+from assignment.alignment import conv_spec
+from assignment.gen.gen_window import (
+    filter_dims,
+    materialized_shape,
+    output_dims,
+    replication_dims,
+)
 from frontends.tensor_args import Conv3dArgs
-from ir.dim import Dim, DimType
 from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
 from util.util import round_to_ceiling_power_of_2
@@ -61,82 +67,11 @@ def calculate_padding_3d(input_shape, filter_shape, stride, padding):
     return [p_d, p_d, p_h, p_h, p_w, p_w]
 
 
-def add_replicated_dimensions_3d(a_shape, b_shape):
-    # Replicate output channels and filter spatial dims onto the secret input layout.
-    replicated_dims = []
-    b_dims = []
-    c_out = b_shape[0]
-    c_in = b_shape[1]
-    k_d, k_h, k_w = b_shape[2], b_shape[3], b_shape[4]
-
-    # Replicate output channels
-    if c_out > 1:
-        replicated_dims.append(
-            Dim(None, c_out, c_in * a_shape[1] * a_shape[2] * a_shape[3])
-        )
-        b_dims.append(Dim(0, c_out, 1))
-
-    # Replicate spatial kernel dims (based on INPUT spatial strides)
-    if k_d > 1:
-        replicated_dims.append(Dim(None, k_d, a_shape[2] * a_shape[3]))
-        b_dims.append(Dim(2, k_d, 1))
-    if k_h > 1:
-        replicated_dims.append(Dim(None, k_h, a_shape[3]))
-        b_dims.append(Dim(3, k_h, 1))
-    if k_w > 1:
-        replicated_dims.append(Dim(None, k_w, 1))
-        b_dims.append(Dim(4, k_w, 1))
-
-    return replicated_dims, b_dims
-
-
-def _materialized_tensor_shape(output_layout):
-    shape_map = {}
-    for d in output_layout.get_dims():
-        if d.dim_type == DimType.EMPTY or d.dim is None:
-            continue
-        shape_map[d.dim] = shape_map.get(d.dim, 1) * d.extent
-    if not shape_map:
-        return []
-    return [shape_map.get(i, 1) for i in range(max(shape_map.keys()) + 1)]
-
-
-def _conv3d_output_dims_zip(a_dims, b_dims, d_o_p2, h_o_p2, w_o_p2, stride):
-    output_dims = []
-    spatial_out_done = {1: False, 2: False, 3: False}
-    for a_dim, b_dim in zip(copy(a_dims), copy(b_dims)):
-        if a_dim.dim_type == DimType.EMPTY:
-            output_dims.append(Dim(None, a_dim.extent, 1, DimType.EMPTY))
-        elif a_dim.dim in [0] or b_dim.dim in [1, 2, 3, 4]:
-            # Sum dims / filter dims do not appear in output.
-            output_dims.append(Dim(None, a_dim.extent, 1, DimType.EMPTY))
-        elif a_dim.dim is None and b_dim.dim == 0:
-            # output channel
-            output_dims.append(b_dim)
-        elif (
-            a_dim.dim in (1, 2, 3)
-            and a_dim.dim_type == DimType.FILL
-            and b_dim.dim is None
-        ):
-            d = a_dim.dim
-            if spatial_out_done[d]:
-                return None
-            spatial_out_done[d] = True
-            extent = d_o_p2 if d == 1 else (h_o_p2 if d == 2 else w_o_p2)
-            output_dims.append(Dim(d, extent, 1))
-            if stride == 2:
-                output_dims.append(Dim(None, stride, 1, DimType.EMPTY))
-            elif stride != 1:
-                raise NotImplementedError("stride not supported: " + str(stride))
-        else:
-            output_dims.append(Dim(a_dim.dim, a_dim.extent, 1, DimType.FILL))
-    return output_dims
-
-
 def gen_conv3d(term, cs_kernels, shapes):
     a_shape = shapes[0]
     b_shape = shapes[1]
     args = Conv3dArgs.from_term(term)
+    spec = conv_spec([args.stride] * 3)
 
     padding = calculate_padding_3d(a_shape, b_shape, args.stride, args.padding)
     term.cs.append(padding)
@@ -148,20 +83,13 @@ def gen_conv3d(term, cs_kernels, shapes):
         if a_kernel.layout.rolls:
             continue
 
-        replicated_dims, b_dims = add_replicated_dimensions_3d(a_shape, b_shape)
+        replicated_dims, b_dims = replication_dims(spec, a_shape, b_shape)
         for dim in replicated_dims[::-1]:
             a_kernel = apply_replication(args.input, a_kernel, dim)
 
         # Build b layout to align with a layout geometry.
-        for dim in a_kernel.layout.get_dims():
-            if dim.dim == 0:
-                b_dims.append(Dim(1, dim.extent, dim.stride))
-            elif dim.dim is not None:
-                b_dims.append(Dim(None, dim.extent, 1))
-            elif dim.dim_type == DimType.EMPTY:
-                b_dims.append(Dim(None, dim.extent, 1, DimType.EMPTY))
-
-        if len(b_dims) != len(a_kernel.layout.get_dims()):
+        b_dims = filter_dims(spec, a_kernel.layout.get_dims(), b_dims)
+        if b_dims is None:
             continue
 
         b_layout = Layout(b_term, [], b_dims, a_kernel.layout.n, False)
@@ -193,17 +121,20 @@ def gen_conv3d(term, cs_kernels, shapes):
         h_o_p2 = round_to_ceiling_power_of_2(h_o_layout)
         w_o_p2 = round_to_ceiling_power_of_2(w_o_layout)
 
-        output_dims = _conv3d_output_dims_zip(
-            a_kernel.layout.get_dims(), b_dims, d_o_p2, h_o_p2, w_o_p2, stride
+        dims = output_dims(
+            spec,
+            a_kernel.layout.get_dims(),
+            b_dims,
+            {"d_out": d_o_p2, "h_out": h_o_p2, "w_out": w_o_p2},
         )
-        if output_dims is None:
+        if dims is None:
             continue
 
         output_layout = Layout(
-            term, [], output_dims, a_kernel.layout.n, a_kernel.layout.secret
+            term, [], dims, a_kernel.layout.n, a_kernel.layout.secret
         )
         expected = [b_shape[0], d_o_p2, h_o_p2, w_o_p2]
-        if _materialized_tensor_shape(output_layout) != expected:
+        if materialized_shape(output_layout) != expected:
             continue
 
         kernel = Kernel(KernelOp.CONV3D, [a_kernel, b_kernel], output_layout)
