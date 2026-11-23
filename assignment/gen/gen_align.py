@@ -1156,7 +1156,14 @@ def match_layout(term, kernels, alignment, roll_flag):
     return matched
 
 
-def output_layout(term, alignment, a_kernel, b_kernel):
+def _renumbered(dim, out_dims):
+    """`dim` with the output dim id its operand dim becomes under the spec."""
+    if out_dims is None or dim.dim is None or out_dims[dim.dim] == dim.dim:
+        return dim
+    return Dim(out_dims[dim.dim], dim.extent, dim.stride, dim.dim_type)
+
+
+def output_layout(term, alignment, a_kernel, b_kernel, spec=None):
     match term.op:
         case TensorOp.ADD | TensorOp.SUB | TensorOp.MUL:
             output_dims = []
@@ -1208,6 +1215,11 @@ def output_layout(term, alignment, a_kernel, b_kernel):
             a_sum_dim = get_sum_dim(term, a_kernel)
             b_sum_dim = get_sum_dim(term, b_kernel)
 
+            # Output dim ids come from the spec: an operand dim keeps its own
+            # id only when the spec's output numbers it the same.
+            lhs_out = spec.lhs_out_dims() if spec else None
+            rhs_out = spec.rhs_out_dims() if spec else None
+
             if len(a_layout.get_dims()) != len(b_layout.get_dims()):
                 for a_dim in a_layout.get_dims():
                     if a_dim.dim is None:
@@ -1217,22 +1229,22 @@ def output_layout(term, alignment, a_kernel, b_kernel):
                             Dim(None, a_dim.extent, a_dim.stride, DimType.EMPTY)
                         )
                     else:
-                        output_dims.append(a_dim)
+                        output_dims.append(_renumbered(a_dim, lhs_out))
 
                 a_aligned_dims = {a for a, b in alignment if a is not None}
                 for b_dim in b_layout.get_dims():
                     if b_dim.dim is not None and b_dim.dim not in a_aligned_dims:
                         if (None, b_dim.dim) in alignment:
-                            output_dims.append(b_dim)
+                            output_dims.append(_renumbered(b_dim, rhs_out))
             else:
                 for a_dim, b_dim in zip(a_layout.get_dims(), b_layout.get_dims()):
                     if a_dim.dim is not None and b_dim.dim is None:
-                        output_dims.append(a_dim)
+                        output_dims.append(_renumbered(a_dim, lhs_out))
                     elif a_dim.dim is None and b_dim.dim is not None:
-                        if len(alignment) == 4:
+                        if spec is None and len(alignment) == 4:
                             b_dim = copy(b_dim)
                             b_dim.dim = 2
-                        output_dims.append(b_dim)
+                        output_dims.append(_renumbered(b_dim, rhs_out))
                     else:
                         output_dims.append(
                             Dim(None, a_dim.extent, a_dim.stride, DimType.EMPTY)

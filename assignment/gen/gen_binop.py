@@ -12,7 +12,7 @@ Key functions:
 - gen_binop: Main function for generating binary operation layouts
 """
 
-from assignment.alignment import get_dim_alignment
+from assignment.alignment import spec_for_term
 from assignment.gen.gen_align import (
     apply_sum_rolls,
     match_layout,
@@ -111,7 +111,8 @@ def gen_binop(term, cs_kernels, shapes, roll_flag):
         return gen_binop_const(term, cs_kernels)
 
     # get alignment
-    alignment = get_dim_alignment(term, shapes)
+    spec = spec_for_term(term, shapes)
+    alignment = spec.alignment()
 
     # replicate dimensions such that tensor dimensions match in extent
     replicated_kernels = []
@@ -140,7 +141,7 @@ def gen_binop(term, cs_kernels, shapes, roll_flag):
         for matched_a_kernel, matched_b_kernel in matched_layouts:
             # find output layout
             output_kernel = output_layout(
-                term, alignment, matched_a_kernel, matched_b_kernel
+                term, alignment, matched_a_kernel, matched_b_kernel, spec
             )
             # try compacting if no rolls are applied:
             if not output_kernel.layout.rolls:
