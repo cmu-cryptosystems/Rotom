@@ -378,44 +378,6 @@ class KernelCost:
     # Convolution families
     # -------------------------------------------------------------------------
 
-    def conv2d_roll_ops(self, ops):
-        """Calculate 2D convolution operations.
-
-        Args:
-            ops: Dictionary of operation counts
-
-        Returns:
-            dict: Updated operation counts with convolution costs
-        """
-        ct_ops = []
-        ct_adds = []
-        for dim in self.kernel.cs[1].layout.ct_dims:
-            if dim.dim == 0 or dim.dim == 1:
-                ct_adds.append(dim.extent)
-            ct_ops.append(dim.extent)
-
-        num_muls = 0
-        num_adds = 0
-        if ct_ops:
-            num_muls += prod(ct_ops)
-        if ct_adds:
-            num_adds += prod(ct_adds)
-
-        num_ct_real = self.kernel.layout.num_ct()
-
-        rot_and_sums = []
-        for slot_dim in self.kernel.layout.slot_dims:
-            if slot_dim.dim_type == DimType.EMPTY:
-                rot_and_sums.append(slot_dim.extent)
-        rot_and_sum = math.ceil(math.log2(prod(rot_and_sums)))
-        num_adds += num_ct_real * rot_and_sum
-        num_rots = num_ct_real * rot_and_sum
-
-        ops["add"] += num_adds
-        ops["rot"] += num_rots
-        ops["mul"] += num_muls
-        return ops
-
     # -------------------------------------------------------------------------
     # Rolling / shifting families
     # -------------------------------------------------------------------------
@@ -450,31 +412,6 @@ class KernelCost:
         ops["add"] += num_ops * num_ct_real
         ops["rot"] += num_ops * num_ct_real
         ops["mul"] += roll_extent * num_ct_real
-        return ops
-
-    def split_roll_ops(self, ops):
-        """Calculate split roll operations.
-
-        Args:
-            ops: Dictionary of operation counts
-
-        Returns:
-            dict: Updated operation counts with split roll costs
-        """
-        roll = self.kernel.cs[0]
-        roll_extent = roll.dim_to_roll.extent
-        num_ops = roll_extent
-
-        # if the rolls are only between ct_dimensions, then this transformation is free
-        if (
-            roll.dim_to_roll in self.kernel.layout.ct_dims
-            and roll.dim_to_roll_by in self.kernel.layout.ct_dims
-        ):
-            return ops
-
-        ops["add"] += num_ops
-        ops["rot"] += num_ops
-        ops["mul"] += num_ops
         return ops
 
     def bsgs_roll_ops(self, ops):
@@ -691,16 +628,12 @@ class KernelCost:
                 ops = self.bsgs_matmul_ops(ops)
             case KernelOp.STRASSEN_MATMUL:
                 ops = self.strassen_ops(ops)
-            case KernelOp.CONV2D_ROLL:
-                ops = self.conv2d_roll_ops(ops)
             case KernelOp.CONV2D:
                 ops = self.conv2d_ops(ops)
             case KernelOp.CONV3D:
                 ops = self.conv2d_ops(ops)
             case KernelOp.ROLL:
                 ops = self.roll_ops(ops)
-            case KernelOp.SPLIT_ROLL:
-                ops = self.split_roll_ops(ops)
             case KernelOp.BSGS_ROLL:
                 ops = self.bsgs_roll_ops(ops)
             case KernelOp.ROT_ROLL:

@@ -29,11 +29,11 @@ class KernelOp(Enum):
     Operation Categories:
         Tensor ops: TENSOR, CS, CONST, ADD, SUB, MUL, SUM, MEAN, PRODUCT
         Matrix ops: MATMUL, BSGS_MATMUL, STRASSEN_MATMUL
-        Convolution: CONV2D, CONV2D_ROLL
+        Convolution: CONV2D
         Polynomial: POLY
         Conversions: CONVERSION
         Replications: REPLICATE
-        Rotations: ROLL, ROT_ROLL, SPLIT_ROLL, BSGS_ROLL, BSGS_ROT_ROLL, SHIFT
+        Rotations: ROLL, ROT_ROLL, BSGS_ROLL, BSGS_ROT_ROLL, SHIFT
         Shape ops: COMPACT, TRANSPOSE, RESHAPE, PERMUTE
         Indexing: INDEX, COMBINE, REORDER
     """
@@ -53,7 +53,6 @@ class KernelOp(Enum):
     BSGS_MATMUL = "BSGS_MATMUL"
     STRASSEN_MATMUL = "STRASSENS"
     CONV2D = "CONV2D"
-    CONV2D_ROLL = "CONV2D_ROLL"
     CONV3D = "CONV3D"
     # poly
     POLY = "POLY"
@@ -62,7 +61,6 @@ class KernelOp(Enum):
     CONVERSION = "CONVERSION"
     REPLICATE = "REPLICATE"
     ROLL = "ROLL"
-    SPLIT_ROLL = "SPLIT_ROLL"
     BSGS_ROLL = "BSGS_ROLL"
     ROT_ROLL = "ROT_ROLL"
     BSGS_ROT_ROLL = "BSGS_ROT_ROLL"
@@ -210,7 +208,6 @@ class Kernel:
                 return res, seen
             case (
                 KernelOp.ROLL
-                | KernelOp.SPLIT_ROLL
                 | KernelOp.ROT_ROLL
                 | KernelOp.BSGS_ROLL
                 | KernelOp.BSGS_ROT_ROLL

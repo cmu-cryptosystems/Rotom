@@ -496,8 +496,8 @@ class Toy:
             pbar.update(len(roots))
 
             # Evaluate the tensor computation to get the expected result
-            # skip checks for split rolls, replicate
-            if term.op in [KernelOp.SPLIT_ROLL, KernelOp.REPLICATE]:
+            # skip checks for replicate
+            if term.op == KernelOp.REPLICATE:
                 continue
 
             if getattr(self.args, "skip_toy_eval_checks", False):

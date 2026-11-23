@@ -15,7 +15,6 @@ def get_default_args() -> Namespace:
         fuzz=False,
         fuzz_result=False,
         not_secure=False,
-        conv_roll=False,
         fn="",
         benchmark="",
         layout_simplicity_weight=0.0,

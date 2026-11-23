@@ -67,7 +67,6 @@ class TestConvolution3D:
         args = get_default_args()
         args.n = 4096
         args.rolls = True
-        args.conv_roll = False
         args.benchmark = "conv3d_valid_e2e"
 
         d = h = w = 4
@@ -101,7 +100,6 @@ class TestConvolution3D:
         args = get_default_args()
         args.n = 4096
         args.rolls = True
-        args.conv_roll = False
         args.benchmark = f"conv3d_same_layout_{abs(hash(input_layout)) % 10**8}"
 
         d = h = w = 4
@@ -134,7 +132,6 @@ class TestConvolution3D:
         args = get_default_args()
         args.n = 4096
         args.rolls = True
-        args.conv_roll = False
         args.benchmark = f"conv3d_same_splitc_{abs(hash(input_layout)) % 10**8}"
 
         d = h = w = 4
@@ -171,7 +168,6 @@ class TestConvolution3D:
         args = get_default_args()
         args.n = 4096
         args.rolls = True
-        args.conv_roll = False
         args.benchmark = "conv3d_1"
 
         d = h = w = 4
@@ -188,7 +184,6 @@ class TestConvolution3D:
         args = get_default_args()
         args.n = 4096
         args.rolls = True
-        args.conv_roll = False
         args.benchmark = "conv3d_2"
 
         d = h = w = 4
@@ -208,7 +203,6 @@ class TestConvolution3D:
         args = get_default_args()
         args.n = 4096
         args.rolls = True
-        args.conv_roll = False
         args.benchmark = f"conv3d_mc_io_{c_in}_{c_out}"
 
         d = h = w = 4
@@ -234,7 +228,6 @@ class TestConvolution3D:
         args = get_default_args()
         args.n = 4096
         args.rolls = True
-        args.conv_roll = False
         args.benchmark = f"conv3d_mc_dense_{c_in}_{c_out}"
 
         d = h = w = 4
@@ -257,7 +250,6 @@ class TestConvolution3D:
         args = get_default_args()
         args.n = 8192
         args.rolls = True
-        args.conv_roll = False
         args.benchmark = "conv3d_stride2"
 
         d = h = w = 8
@@ -282,7 +274,6 @@ class TestConvolution3D:
         args = get_default_args()
         args.n = 4096
         args.rolls = True
-        args.conv_roll = False
         args.benchmark = "conv3d_identity"
 
         d = h = w = 4

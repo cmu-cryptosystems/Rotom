@@ -38,7 +38,7 @@ def run_rot_roll(candidate):
 
         # update kernel with rewrites
         match kernel.op:
-            case KernelOp.ROLL | KernelOp.SPLIT_ROLL:
+            case KernelOp.ROLL:
                 ct_dims = kernel.layout.ct_dims
                 dims = kernel.layout.get_dims()
                 roll = kernel.cs[0]
