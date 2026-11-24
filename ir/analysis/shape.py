@@ -26,6 +26,19 @@ from frontends.tensor_args import (
 from util.util import round_to_ceiling_power_of_2
 
 
+def _broadcast_shape(a_shape, b_shape):
+    """The shape of an elementwise op: axes align from the right, and an axis
+    of extent 1 takes the other operand's extent."""
+    long, short = (
+        (a_shape, b_shape) if len(a_shape) >= len(b_shape) else (b_shape, a_shape)
+    )
+    out = list(long)
+    for i in range(1, len(short) + 1):
+        if out[-i] == 1:
+            out[-i] = short[-i]
+    return out
+
+
 def _avg_pool_out_hw(
     h_i: int, w_i: int, k: int, s: int, padding: str
 ) -> tuple[int, int]:
@@ -120,10 +133,7 @@ class Shape:
                     return b_shape
                 if b_shape is None:
                     return a_shape
-                if len(a_shape) > len(b_shape):
-                    return a_shape
-                else:
-                    return b_shape
+                return _broadcast_shape(a_shape, b_shape)
             case TensorOp.RESCALE | TensorOp.CAST:
                 # Rescale / cast preserve the shape of the input tensor
                 return copy(self.padded_shapes[term.cs[0]])
@@ -194,10 +204,7 @@ class Shape:
                 # Use logical filter spatial sizes (declared shape), not power-of-2-padded filter.
                 f_h, f_w = args.taps(logical_b)
 
-                (h_o, _, _), (w_o, _, _) = (
-                    window_axis(extent, kernel, s, args.padding)
-                    for extent, kernel, s in zip((h_i, w_i), (f_h, f_w), args.strides)
-                )
+                (h_o, _, _), (w_o, _, _) = args.window([c_o, h_i, w_i], logical_b)
                 # Round to power of 2 for layout compatibility
                 c_shape = [
                     c_o,
@@ -213,16 +220,14 @@ class Shape:
                 logical_b = self.get_shape(args.filter)
                 logical_a = self.get_shape(args.input)
 
-                d_i, h_i, w_i = logical_a[1], logical_a[2], logical_a[3]
                 # Logical output channels (layout gen uses unpadded filter c_out).
-                c_o = logical_b[0]
-                # Use logical filter spatial sizes, not padded filter.
-                k_d, k_h, k_w = logical_b[2], logical_b[3], logical_b[4]
-                (d_o, _, _), (h_o, _, _), (w_o, _, _) = (
-                    window_axis(extent, kernel, s, args.padding)
-                    for extent, kernel, s in zip(
-                        (d_i, h_i, w_i), (k_d, k_h, k_w), args.strides
-                    )
+                c_o = args.out_channels(logical_b)
+                if args.depthwise:
+                    # The channel is carried, in the pieces the input holds it in.
+                    c_o = a_shape[0]
+                # Use logical input and filter spatial sizes, not padded ones.
+                (d_o, _, _), (h_o, _, _), (w_o, _, _) = args.window(
+                    logical_a, logical_b
                 )
 
                 return [
@@ -288,6 +293,17 @@ class Shape:
                 raise NotImplementedError(term.op)
 
     def get_shape(self, term):
+        """The shape of `term`, computed once.
+
+        A term's shape is built from its operands' shapes. Without the memo,
+        every shared operand is walked again by each of its consumers, which
+        is exponential in the depth of a network with skip connections.
+        """
+        if term not in self.shapes:
+            self.shapes[term] = self._shape(term)
+        return copy(self.shapes[term])
+
+    def _shape(self, term):
         match term.op:
             case TensorOp.TENSOR:
                 return TensorPlaceholderArgs.from_term(term).shape
@@ -302,10 +318,7 @@ class Shape:
                     return b_shape
                 if b_shape is None:
                     return a_shape
-                if len(a_shape) > len(b_shape):
-                    return a_shape
-                else:
-                    return b_shape
+                return _broadcast_shape(a_shape, b_shape)
             case TensorOp.RESCALE | TensorOp.CAST:
                 # Rescale / cast preserve the shape of the input tensor
                 return copy(self.get_shape(term.cs[0]))
@@ -355,10 +368,7 @@ class Shape:
                 h_i = a_shape[1]
                 w_i = a_shape[2]
 
-                (h_o, _, _), (w_o, _, _) = (
-                    window_axis(extent, kernel, s, args.padding)
-                    for extent, kernel, s in zip((h_i, w_i), (f_h, f_w), args.strides)
-                )
+                (h_o, _, _), (w_o, _, _) = args.window([c_o, h_i, w_i], b_shape)
                 c_shape = [c_o, h_o, w_o]
                 return c_shape
             case TensorOp.CONV3D:
@@ -368,16 +378,8 @@ class Shape:
                 a_shape = copy(self.get_shape(a))
                 b_shape = copy(self.get_shape(b))
 
-                c_o = b_shape[0]
-                k_d, k_h, k_w = b_shape[2], b_shape[3], b_shape[4]
-                d_i, h_i, w_i = a_shape[1], a_shape[2], a_shape[3]
-
-                (d_o, _, _), (h_o, _, _), (w_o, _, _) = (
-                    window_axis(extent, kernel, s, args.padding)
-                    for extent, kernel, s in zip(
-                        (d_i, h_i, w_i), (k_d, k_h, k_w), args.strides
-                    )
-                )
+                c_o = args.out_channels(b_shape)
+                (d_o, _, _), (h_o, _, _), (w_o, _, _) = args.window(a_shape, b_shape)
 
                 return [c_o, d_o, h_o, w_o]
             case TensorOp.INDEX:

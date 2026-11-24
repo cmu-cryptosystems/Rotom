@@ -13,7 +13,7 @@ import numpy as np
 
 from util.silu_polycall_eval import eval_silu_polycall
 
-from .tensor_args import axis_strides, window_axis
+from .tensor_args import axis_paddings, axis_strides, window_axis
 
 
 class TensorEvaluator:
@@ -72,10 +72,8 @@ class TensorEvaluator:
             filter_shape = filter_tensor.shape
         strides = axis_strides(stride, 2)
         (h_o, pad_top, pad_bot), (w_o, pad_left, pad_right) = (
-            window_axis(
-                int(input_shape[axis + 1]), int(filter_shape[axis + 2]), s, padding
-            )
-            for axis, s in enumerate(strides)
+            window_axis(int(input_shape[axis + 1]), int(filter_shape[axis + 2]), s, pad)
+            for axis, (s, pad) in enumerate(zip(strides, axis_paddings(padding, 2)))
         )
         output_shape = [filter_shape[0], h_o, w_o]
 
@@ -160,57 +158,44 @@ class TensorEvaluator:
         return out
 
     @staticmethod
-    def _eval_conv3d(
-        input_tensor: np.ndarray,
-        filter_tensor: np.ndarray,
-        stride: int,
-        padding: str,
-    ) -> np.ndarray:
-        # Input: [C_in, D, H, W]
-        # Filter: [C_out, C_in, Kd, Kh, Kw]
+    def _eval_conv3d(args, input_tensor: np.ndarray, filter_tensor: np.ndarray):
+        """Input ``[C_in, D, H, W]``; filter ``[C_out, C_in, K_d, K_h, K_w]``,
+        or ``[1, K_d, K_h, K_w, C]`` when depthwise."""
         in_shape = input_tensor.shape
         f_shape = filter_tensor.shape
         if len(in_shape) != 4:
             raise ValueError(f"Conv3D expects input rank 4 [C,D,H,W], got {in_shape}")
         if len(f_shape) != 5:
-            raise ValueError(
-                f"Conv3D expects filter rank 5 [Cout,Cin,Kd,Kh,Kw], got {f_shape}"
-            )
+            raise ValueError(f"Conv3D expects a rank 5 filter, got {f_shape}")
+        channels = args.out_channels(f_shape)
+        if args.depthwise and channels != in_shape[0]:
+            raise ValueError(f"depthwise filter {f_shape} for {in_shape[0]} channels")
+        if not args.depthwise and f_shape[1] != in_shape[0]:
+            raise ValueError(f"filter {f_shape} for {in_shape[0]} input channels")
 
-        c_in, d_in, h_in, w_in = in_shape
-        c_out, _c_in_f, k_d, k_h, k_w = f_shape
-        strides = axis_strides(stride, 3)
-        (d_o, pf, pb), (h_o, pt, pbot), (w_o, pl, pr) = (
-            window_axis(extent, kernel, s, padding)
-            for extent, kernel, s in zip((d_in, h_in, w_in), (k_d, k_h, k_w), strides)
+        axes = args.window(in_shape, f_shape)
+        padded = np.pad(
+            np.asarray(input_tensor, dtype=np.float64),
+            [(0, 0)] + [(before, after) for _, before, after in axes],
         )
-        pad = (pf, pb, pt, pbot, pl, pr)
-
-        if any(x != 0 for x in pad):
-            padded = np.zeros((c_in, d_in + pf + pb, h_in + pt + pbot, w_in + pl + pr))
-            padded[:, pf : pf + d_in, pt : pt + h_in, pl : pl + w_in] = input_tensor
-            input_tensor = padded
-
-        out = np.zeros((c_out, d_o, h_o, w_o))
-        for in_c in range(c_in):
-            for out_c in range(c_out):
-                f_in_idx = min(in_c, f_shape[1] - 1)
-                for od in range(d_o):
-                    d_start = od * strides[0]
-                    d_end = d_start + k_d
-                    for oh in range(h_o):
-                        h_start = oh * strides[1]
-                        h_end = h_start + k_h
-                        for ow in range(w_o):
-                            w_start = ow * strides[2]
-                            w_end = w_start + k_w
-                            patch = input_tensor[
-                                in_c, d_start:d_end, h_start:h_end, w_start:w_end
-                            ]
-                            out[out_c, od, oh, ow] += float(
-                                np.sum(patch * filter_tensor[out_c, f_in_idx])
-                            )
-        return out
+        outs = [out for out, _, _ in axes]
+        strides = args.strides
+        result = np.zeros([channels] + outs)
+        # One slice of the padded input per tap.
+        for tap in np.ndindex(*args.taps(f_shape)):
+            patch = padded[
+                (slice(None),)
+                + tuple(
+                    slice(t, t + s * out, s) for t, s, out in zip(tap, strides, outs)
+                )
+            ]
+            if args.depthwise:
+                weights = filter_tensor[(0,) + tap]
+                result += weights[:, None, None, None] * patch
+            else:
+                weights = filter_tensor[(slice(None), slice(None)) + tap]
+                result += np.tensordot(weights, patch, axes=1)
+        return result
 
     def _eval_poly(
         self, x: np.ndarray, func: Any, inputs: Dict[str, Any]
@@ -340,9 +325,7 @@ class TensorEvaluator:
                 from .tensor_args import Conv3dArgs
 
                 args = Conv3dArgs.from_term(term)
-                return self._eval_conv3d(
-                    env[args.input], env[args.filter], args.stride, args.padding
-                )
+                return self._eval_conv3d(args, env[args.input], env[args.filter])
             case "Const":
                 return term.cs[0]
             case "Index":

@@ -378,138 +378,158 @@ def check_alignment(spec, alignment, a_kernel, b_kernel):
     )
 
 
-def get_aligned_dimensions(alignment, a_dims, b_dims):
-    a_alignment = {}
-    b_alignment = {}
+def _facing_dims(dims, other_dims, partners, side):
+    """`dims` relabeled with the dims of the other operand that face them.
+
+    Args:
+        dims: the pieces of one operand's layout
+        other_dims: the pieces of the other operand's layout
+        partners: for each dim of this operand, the other operand's dims the
+            alignment pairs it with (None for replication)
+        side: "a" or "b", the operand `dims` belongs to, for error messages
+
+    Returns:
+        The other operand laid out like `dims`: one piece per piece, holding
+        the facing dim, with gaps kept as gaps.
+
+    Raises:
+        KeyError: If a piece has no facing dim, or faces more than one
+    """
+    other = "b" if side == "a" else "a"
+    partners = {dim: list(found) for dim, found in partners.items()}
+    remaining = {}
+    stride = {}
+    for other_dim in other_dims:
+        if other_dim.dim not in remaining:
+            remaining[other_dim.dim] = other_dim.extent
+            stride[other_dim.dim] = other_dim.extent
+        else:
+            remaining[other_dim.dim] *= other_dim.extent
+            stride[other_dim.dim] *= other_dim.extent
+
+    facing = []
+    for piece in dims:
+        if piece.dim_type == DimType.EMPTY:
+            facing.append(copy(piece))
+            continue
+        extent = piece.extent
+        dim = copy(piece)
+        if piece.dim not in partners or len(partners[piece.dim]) == 0:
+            raise KeyError(f"missing alignment for {side}-dim {piece.dim}")
+        _MISSING = object()
+        picked = _MISSING
+        for cand in partners[piece.dim]:
+            if cand in remaining:
+                picked = cand
+                break
+        if picked is _MISSING:
+            raise KeyError(
+                f"no remaining aligned {other}-dim for {side}-dim {piece.dim}; "
+                f"candidates={partners[piece.dim]}, remaining={list(remaining.keys())}"
+            )
+        dim.dim = picked
+        if remaining[dim.dim] <= extent:
+            dim.extent = remaining[dim.dim]
+            dim.stride = stride[dim.dim] // dim.extent
+            extent //= remaining[dim.dim]
+            del remaining[dim.dim]
+            stride[dim.dim] //= dim.extent
+            partners[piece.dim].remove(dim.dim)
+        else:
+            dim.extent = extent
+            dim.stride = stride[dim.dim] // dim.extent
+            remaining[dim.dim] //= extent
+            stride[dim.dim] //= dim.extent
+            extent = 1
+        if extent != 1:
+            # The piece faces more than one dim, and one piece holds one.
+            raise KeyError(f"{side}-piece {piece} faces more than one {other}-dim")
+        facing.append(dim)
+
+    for piece, dim in zip(dims, facing):
+        if piece.dim is not None and dim.dim is not None:
+            dim.stride = piece.stride
+    return facing
+
+
+def _partners(alignment):
+    """`(a_partners, b_partners)`: the dims each operand's dims are paired with."""
+    a_partners = {}
+    b_partners = {}
     for a, b in alignment:
-        if a not in a_alignment:
-            a_alignment[a] = []
-        a_alignment[a].append(b)
-        if b not in b_alignment:
-            b_alignment[b] = []
-        b_alignment[b].append(a)
-    a_remaining_extents = {}
-    b_remaining_extents = {}
-    a_stride = {}
-    b_stride = {}
-    for a_dim in a_dims:
-        if a_dim.dim not in a_remaining_extents:
-            a_remaining_extents[a_dim.dim] = a_dim.extent
-            a_stride[a_dim.dim] = a_dim.extent
-        else:
-            a_remaining_extents[a_dim.dim] *= a_dim.extent
-            a_stride[a_dim.dim] *= a_dim.extent
+        a_partners.setdefault(a, []).append(b)
+        b_partners.setdefault(b, []).append(a)
+    return a_partners, b_partners
 
-    for b_dim in b_dims:
-        if b_dim.dim not in b_remaining_extents:
-            b_remaining_extents[b_dim.dim] = b_dim.extent
-            b_stride[b_dim.dim] = b_dim.extent
-        else:
-            b_remaining_extents[b_dim.dim] *= b_dim.extent
-            b_stride[b_dim.dim] *= b_dim.extent
 
-    aligned_b_dims = []
-    for a_dim in a_dims:
-        if a_dim.dim_type == DimType.EMPTY:
-            aligned_b_dims.append(copy(a_dim))
-            continue
-        extent = a_dim.extent
-        dim = copy(a_dim)
-        a_dim_dim = a_dim.dim
-        if a_dim_dim not in a_alignment or len(a_alignment[a_dim_dim]) == 0:
-            raise KeyError(f"missing alignment for a-dim {a_dim_dim}")
-        _MISSING = object()
-        picked = _MISSING
-        for cand in a_alignment[a_dim_dim]:
-            if cand in b_remaining_extents:
-                picked = cand
-                break
-        if picked is _MISSING:
-            raise KeyError(
-                f"no remaining aligned b-dim for a-dim {a_dim_dim}; "
-                f"candidates={a_alignment[a_dim_dim]}, remaining={list(b_remaining_extents.keys())}"
-            )
-        dim.dim = picked
-        if b_remaining_extents[dim.dim] <= extent:
-            dim.extent = b_remaining_extents[dim.dim]
-            dim.stride = b_stride[dim.dim] // dim.extent
-            extent //= b_remaining_extents[dim.dim]
-            del b_remaining_extents[dim.dim]
-            b_stride[dim.dim] //= dim.extent
-            a_alignment[a_dim_dim].remove(dim.dim)
-        elif b_remaining_extents[dim.dim] > extent:
-            dim.extent = extent
-            dim.stride = b_stride[dim.dim] // dim.extent
-            b_remaining_extents[dim.dim] //= extent
-            b_stride[dim.dim] //= dim.extent
-            extent = 1
-        else:
-            raise NotImplementedError
-        if extent != 1:
-            # The piece faces more than one b-dim, and one piece holds one.
-            raise KeyError(f"a-piece {a_dim} faces more than one b-dim")
-        aligned_b_dims.append(dim)
+def get_aligned_dimensions(alignment, a_dims, b_dims):
+    """`(aligned_b_dims, aligned_a_dims)`: each operand laid out like the
+    other, piece for piece.
 
-    aligned_a_dims = []
-    for b_dim in b_dims:
-        if b_dim.dim_type == DimType.EMPTY:
-            aligned_a_dims.append(copy(b_dim))
-            continue
-        extent = b_dim.extent
-        dim = copy(b_dim)
-        b_dim_dim = b_dim.dim
-        if b_dim_dim not in b_alignment or len(b_alignment[b_dim_dim]) == 0:
-            raise KeyError(f"missing alignment for b-dim {b_dim_dim}")
-        _MISSING = object()
-        picked = _MISSING
-        for cand in b_alignment[b_dim_dim]:
-            if cand in a_remaining_extents:
-                picked = cand
-                break
-        if picked is _MISSING:
-            raise KeyError(
-                f"no remaining aligned a-dim for b-dim {b_dim_dim}; "
-                f"candidates={b_alignment[b_dim_dim]}, remaining={list(a_remaining_extents.keys())}"
-            )
-        dim.dim = picked
-        if a_remaining_extents[dim.dim] <= extent:
-            dim.extent = a_remaining_extents[dim.dim]
-            dim.stride = a_stride[dim.dim] // dim.extent
-            extent //= a_remaining_extents[dim.dim]
-            del a_remaining_extents[dim.dim]
-            a_stride[dim.dim] //= dim.extent
-            b_alignment[b_dim_dim].remove(dim.dim)
-        elif a_remaining_extents[dim.dim] > extent:
-            dim.extent = extent
-            dim.stride = a_stride[dim.dim] // dim.extent
-            a_remaining_extents[dim.dim] //= extent
-            a_stride[dim.dim] //= dim.extent
-            extent = 1
-        else:
-            raise NotImplementedError
-        if extent != 1:
-            # The piece faces more than one a-dim, and one piece holds one.
-            raise KeyError(f"b-piece {b_dim} faces more than one a-dim")
-        aligned_a_dims.append(dim)
-
-    for a_dim, b_dim in zip(a_dims, aligned_b_dims):
-        if a_dim.dim is not None and b_dim.dim is not None:
-            b_dim.stride = a_dim.stride
-    for b_dim, a_dim in zip(b_dims, aligned_a_dims):
-        if b_dim.dim is not None and a_dim.dim is not None:
-            a_dim.stride = b_dim.stride
-
-    assert len(aligned_b_dims) == len(a_dims)
-    assert len(aligned_a_dims) == len(b_dims)
-
+    Raises:
+        KeyError: If either operand cannot be laid out like the other
+    """
+    a_partners, b_partners = _partners(alignment)
+    aligned_b_dims = _facing_dims(a_dims, b_dims, a_partners, "a")
+    aligned_a_dims = _facing_dims(b_dims, a_dims, b_partners, "b")
     return aligned_b_dims, aligned_a_dims
 
 
+def plaintext_side(alignment, a_kernel, b_kernel):
+    """The side (0 or 1) of an operand that is a plaintext in the other
+    operand's layout, or None.
+
+    That is a public operand, not replicated, whose every dim faces a dim of
+    the other operand. It needs no layout of its own and no replication.
+    """
+    if (
+        not b_kernel.layout.secret
+        and b_kernel.op == KernelOp.CS
+        and all(a is not None for a, _ in alignment)
+    ):
+        return 1
+    if (
+        not a_kernel.layout.secret
+        and a_kernel.op == KernelOp.CS
+        and all(b is not None for _, b in alignment)
+    ):
+        return 0
+    return None
+
+
+def _dims_like(dims, partners):
+    """A public operand's layout, read off the other operand's `dims`: each
+    piece holds the dim it faces, or replication where the public operand has
+    an axis of extent 1, whatever extents the two operands were padded to."""
+    out = []
+    for piece in dims:
+        if piece.dim_type == DimType.EMPTY or piece.dim is None:
+            out.append(copy(piece))
+            continue
+        (partner,) = partners[piece.dim]
+        out.append(Dim(partner, piece.extent, piece.stride, DimType.FILL))
+    return out
+
+
 def match_public_kernel(alignment, a_kernel, b_kernel, left):
+    """The public operand (the lhs if `left`) laid out like the other one.
+
+    Only that direction has to exist: a replicated piece of the public
+    operand may face several dims of the other, which one piece of the other
+    could not be laid out like.
+    """
+    a_partners, b_partners = _partners(alignment)
+    a_dims, b_dims = a_kernel.layout.get_dims(), b_kernel.layout.get_dims()
     try:
-        aligned_b_dims, aligned_a_dims = get_aligned_dimensions(
-            alignment, a_kernel.layout.get_dims(), b_kernel.layout.get_dims()
-        )
+        side = plaintext_side(alignment, a_kernel, b_kernel)
+        if left and side == 0:
+            aligned_a_dims = _dims_like(b_dims, b_partners)
+        elif left:
+            aligned_a_dims = _facing_dims(b_dims, a_dims, b_partners, "b")
+        elif side == 1:
+            aligned_b_dims = _dims_like(a_dims, a_partners)
+        else:
+            aligned_b_dims = _facing_dims(a_dims, b_dims, a_partners, "a")
     except KeyError:
         return None
 
@@ -1266,27 +1286,29 @@ def output_layout(term, spec, a_kernel, b_kernel):
     The operator's structure is read off `spec`: which dims align, which are
     summed away, and the output dim id each operand dim becomes.
     """
-    alignment = spec.alignment()
     lhs_out = spec.lhs_out_dims()
     rhs_out = spec.rhs_out_dims()
     match term.op:
         case TensorOp.ADD | TensorOp.SUB | TensorOp.MUL:
+            # Each piece of the output is the piece of the operand that holds
+            # a dim there. Replication faces the other operand's pieces, which
+            # may be several, so the two layouts are cut where either begins.
+            a_dims, b_dims = match_kernel_dims(a_kernel, b_kernel)
+            pairs, _, _ = _paired_dims(a_dims, b_dims)
+            # A shorter lhs was brought to the rhs's length by a leading gap,
+            # which the output holds only where the rhs has a dim.
+            lead, held = 0, len(a_kernel)
+            while held < len(b_kernel) and pairs[lead][1].dim is None:
+                held *= pairs[lead][0].extent
+                lead += 1
+            if held >= len(b_kernel):
+                pairs = pairs[lead:]
             output_dims = []
-            for a_dim in a_kernel.layout.dims:
-                b_dim_index = get_dim_from_alignment(
-                    alignment, a_dim, 0, copy(b_kernel.layout.get_dims())
-                ).dim
+            for a_dim, b_dim in pairs:
                 if a_dim.dim is not None:
                     output_dims.append(_renumbered(a_dim, lhs_out))
-                elif b_dim_index is not None:
-                    output_dims.append(
-                        Dim(
-                            rhs_out[b_dim_index],
-                            a_dim.extent,
-                            a_dim.stride,
-                            a_dim.dim_type,
-                        )
-                    )
+                elif b_dim.dim is not None:
+                    output_dims.append(_renumbered(b_dim, rhs_out))
                 else:
                     output_dims.append(a_dim)
 

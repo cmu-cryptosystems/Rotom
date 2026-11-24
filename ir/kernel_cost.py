@@ -581,26 +581,6 @@ class KernelCost:
             ops[op] += count
         return ops
 
-    def conv2d_ops(self, ops):
-        """Calculate convolution operations.
-
-        Args:
-            ops: Dictionary of operation counts
-
-        Returns:
-            dict: Updated operation counts with convoltuion costs
-        """
-        input_dims = self.kernel.cs[0].layout.get_dims()
-        output_dims = self.kernel.layout.get_dims()
-
-        input_dim_len = int(prod([input_dim.extent for input_dim in input_dims]))
-        output_dim_len = int(prod([output_dim.extent for output_dim in output_dims]))
-
-        ops["mul"] += output_dim_len
-        ops["add"] += output_dim_len * int(math.log2(input_dim_len))
-        ops["rot"] += int(math.sqrt(output_dim_len * int(math.log2(input_dim_len))))
-        return ops
-
     # -------------------------------------------------------------------------
     # Aggregated operation counting across families
     # -------------------------------------------------------------------------
@@ -656,8 +636,6 @@ class KernelCost:
                 ops = self.bsgs_matmul_ops(ops)
             case KernelOp.STRASSEN_MATMUL:
                 ops = self.strassen_ops(ops)
-            case KernelOp.CONV3D:
-                ops = self.conv2d_ops(ops)
             case KernelOp.CONV_DIRECT:
                 ops = self.conv_direct_ops(ops)
             case KernelOp.ROLL:
@@ -796,8 +774,6 @@ class KernelCost:
                         d += 1
                     case KernelOp.MATMUL:
                         # HACK: depth actually varies if masking is required or not
-                        d += 2
-                    case KernelOp.CONV3D:
                         d += 2
                     case KernelOp.CONV_DIRECT:
                         # the weights, then the mask after a sum over slots

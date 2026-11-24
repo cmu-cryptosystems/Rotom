@@ -16,6 +16,7 @@ The module works closely with the kernel IR to generate optimized HE circuits
 while maintaining correctness of the computation graph semantics.
 """
 
+import math
 import os
 from copy import deepcopy as copy
 
@@ -67,6 +68,16 @@ from util.layout_simplicity import (
 from util.util import round_to_ceiling_power_of_2
 
 
+def _better(ranked, best) -> bool:
+    """True when a candidate's `(cost, child layouts)` beats the best so far:
+    a lower cost, or the same cost up to rounding and smaller child layouts."""
+    cost, children = ranked
+    best_cost, best_children = best
+    if math.isclose(cost, best_cost, rel_tol=1e-9, abs_tol=1e-12):
+        return children < best_children
+    return cost < best_cost
+
+
 class LayoutAssignment:
     """Layout Assignment pass that assigns layouts to tensors in the computation graph.
 
@@ -100,6 +111,13 @@ class LayoutAssignment:
         self.n = args.n if args and hasattr(args, "n") else 4096
         self.kernels = {}
         self.kernel_costs = {}
+        # (cost, child layouts) of the best candidate per term and layout
+        self.kernel_ranks = {}
+        # number of consumers of each term
+        self.consumers = {}
+        # (term, layout) -> (cost down to the shared terms below it, the
+        # shared (term, layout) pairs below it)
+        self.segments = {}
         self.candidates = {}
         self.roll_flag = args.rolls if args and hasattr(args, "rolls") else False
         self.network = args.net if args and hasattr(args, "net") else "lan"
@@ -185,7 +203,8 @@ class LayoutAssignment:
             ):
                 kernels = gen_unary(term, cs_kernels[0])
             case TensorOp.MEAN:
-                kernels = gen_mean(term, cs_kernels[0])
+                cs_shapes = self.get_unpadded_cs_shapes(term)
+                kernels = gen_mean(term, cs_kernels[0], cs_shapes[0])
             case TensorOp.CONV2D:
                 cs_shapes = self.get_unpadded_cs_shapes(term)
                 kernels = gen_conv2d(term, cs_kernels[0], cs_shapes)
@@ -241,6 +260,12 @@ class LayoutAssignment:
         # run secret analysis and shape analysis
         self.secret.run()
         self.shape.run()
+
+        for term in self.comp.post_order():
+            operands = term.cs[0] if term.op == TensorOp.CONCAT else term.cs
+            for operand in operands:
+                if isinstance(operand, TensorTerm):
+                    self.consumers[operand] = self.consumers.get(operand, 0) + 1
 
         # generate optimized candidate kernels
         for term in self.comp.post_order():
@@ -638,19 +663,6 @@ class LayoutAssignment:
                 for k, s in zip(norm_kernel, norm_shape)
             )
             if not fits:
-                # Conv3D(valid): layout keeps input-sized spatial extents; lowering masks outside
-                # the logical output box. Analysis shape is [C_out, D_out_p2, H_out_p2, W_out_p2].
-                if (
-                    getattr(kernel.layout.term, "op", None) == TensorOp.CONV3D
-                    and len(kernel.layout.term.cs) >= 4
-                    and kernel.layout.term.cs[3] == "valid"
-                    and len(kernel_shape) == len(shape) == 4
-                    and kernel_shape[0] == shape[0]
-                    and all(k >= s for k, s in zip(kernel_shape[1:], shape[1:]))
-                ):
-                    new_kernels.append(kernel)
-                    continue
-
                 # Keep searching: a term can have multiple candidate kernels and some
                 # may be shape-compatible even when others are not.
                 layout_dims = [
@@ -678,7 +690,13 @@ class LayoutAssignment:
             # get cs kernels
             cs_kernels = get_cs_op_kernels(kernel)
             # get cs costs
+            # The cost of a candidate is its own, plus what it reads down to
+            # the shared terms (terms with more than one consumer), plus each
+            # shared (term, layout) below it once. Two consumers that read
+            # one layout of a term pay for it once; two layouts, twice.
             cs_costs = 0
+            shared = set()
+            read = set()
             for cs_kernel in cs_kernels:
                 cs_idx = cs_kernel.cs[0]
                 if term.op == TensorOp.CONCAT:
@@ -690,13 +708,21 @@ class LayoutAssignment:
                     self.kernel_costs[cs_term] = {}
                 costs_for_cs = self.kernel_costs[cs_term]
                 # Keys are always merged layouts (see stores below and in this loop).
-                if merged_cs_layout in costs_for_cs:
-                    cs_costs += costs_for_cs[merged_cs_layout]
-                else:
+                key = (cs_term, merged_cs_layout)
+                if merged_cs_layout not in costs_for_cs:
                     cost = KernelCost(cs_kernel, self.network).total_cost()
                     # Do not overwrite an existing subtree total if another path registered it.
                     costs_for_cs.setdefault(merged_cs_layout, cost)
-                    cs_costs += costs_for_cs[merged_cs_layout]
+                    self.segments.setdefault(key, (cost, frozenset()))
+                if key in read:
+                    continue
+                read.add(key)
+                segment, below = self.segments[key]
+                shared |= below
+                if self.consumers.get(cs_term, 0) > 1:
+                    shared.add(key)
+                else:
+                    cs_costs += segment
 
             cs_kernel_list = []
             for cs_kernel in cs_kernels:
@@ -707,7 +733,8 @@ class LayoutAssignment:
                 )
 
             # get total kernel cost
-            kernel_cost = KernelCost(kernel, self.network).total_cost() + cs_costs
+            segment_cost = KernelCost(kernel, self.network).total_cost() + cs_costs
+            kernel_cost = segment_cost
             if self.layout_simplicity_weight:
                 kernel_cost += (
                     self.layout_simplicity_weight
@@ -735,6 +762,9 @@ class LayoutAssignment:
                                 self.secret.secret,
                             )
                         )
+            # the penalties above belong to this candidate's segment
+            segment_cost = kernel_cost
+            kernel_cost += sum(self.segments[key][0] for key in shared)
             kernel_layout = dimension_merging(kernel.layout)
 
             # initialize
@@ -743,12 +773,22 @@ class LayoutAssignment:
                 self.kernel_costs[term] = {}
 
             # optimize
-            if kernel_layout not in self.kernels[term]:
+            # Candidates of equal cost are told apart by the layouts they read,
+            # so two consumers of one term settle on the same layout of it
+            # whatever order the candidates come in.
+            children = tuple(
+                sorted(
+                    repr(dimension_merging(cs_kernel.layout))
+                    for cs_kernel in cs_kernels
+                )
+            )
+            ranked = (kernel_cost, children)
+            best = self.kernel_ranks.setdefault(term, {})
+            if kernel_layout not in best or _better(ranked, best[kernel_layout]):
                 self.kernels[term][kernel_layout] = KernelDag(kernel, cs_kernel_list)
                 self.kernel_costs[term][kernel_layout] = kernel_cost
-            elif kernel_cost < self.kernel_costs[term][kernel_layout]:
-                self.kernels[term][kernel_layout] = KernelDag(kernel, cs_kernel_list)
-                self.kernel_costs[term][kernel_layout] = kernel_cost
+                self.segments[(term, kernel_layout)] = (segment_cost, frozenset(shared))
+                best[kernel_layout] = ranked
 
     def search(self, term):
         """Pick the minimum-cost kernel DAG for `term`.

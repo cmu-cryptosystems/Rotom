@@ -28,6 +28,7 @@ Layout Example:
     >>> d = a.sum(0, layout="[0:1:1]")  # Sum with specific layout
 """
 
+import hashlib
 from enum import Enum
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -87,6 +88,26 @@ class TensorOp(Enum):
     GATHER = "Gather"  # a plaintext vector of elements gathered from a tensor
 
 
+# A child whose string is longer than this is written as a digest of it.
+_LONG_CHILD = 96
+
+
+def _child_str(child) -> str:
+    """A term's child as it appears in the term's string.
+
+    A term is hashed by its string. Writing every child in full repeats a
+    shared subterm once per use, so a network of residual blocks has a string
+    that doubles per block. A long child is named by its op and a digest of
+    its string instead, which keeps every string short and still tells apart
+    two terms that differ anywhere below.
+    """
+    text = str(child)
+    if isinstance(child, TensorTerm) and len(text) > _LONG_CHILD:
+        digest = hashlib.blake2b(text.encode(), digest_size=8).hexdigest()
+        return f"<{child.op.value} {digest}>"
+    return text
+
+
 class TensorTerm:
     """A term in a tensor computation.
 
@@ -134,6 +155,16 @@ class TensorTerm:
         self.cs = cs
         self.layout = layout
 
+    def __deepcopy__(self, memo):
+        """A term is a value: a deep copy of anything that holds one shares it.
+
+        Layouts hold their term, and the layout search deep-copies kernels and
+        layouts for every candidate. Copying the term copied the whole program
+        below it each time, and past about a dozen layers of a network it
+        exceeded the recursion limit.
+        """
+        return self
+
     def __hash__(self):
         """Compute hash of the tensor term for use in sets and dictionaries.
 
@@ -164,7 +195,7 @@ class TensorTerm:
         """
         # Cache the string representation to avoid recomputing for large graphs
         if not hasattr(self, "_str_cache"):
-            cs = " ".join([str(c) for c in self.cs])
+            cs = " ".join([_child_str(c) for c in self.cs])
             match self.op:
                 case TensorOp.TENSOR:
                     self._str_cache = str(self.cs[0])
@@ -177,13 +208,17 @@ class TensorTerm:
                 case TensorOp.CONST:
                     self._str_cache = str(self.cs[0])
                 case TensorOp.INDEX:
-                    self._str_cache = f"({self.cs[0]}[{self.cs[1]}])"
+                    self._str_cache = f"({_child_str(self.cs[0])}[{self.cs[1]}])"
                 case TensorOp.CONV2D:
                     args = Conv2dArgs.from_term(self)
-                    self._str_cache = f"(conv2d {str(args.input)} {str(args.filter)})"
+                    self._str_cache = (
+                        f"(conv2d {_child_str(args.input)} {_child_str(args.filter)})"
+                    )
                 case TensorOp.CONV3D:
                     args = Conv3dArgs.from_term(self)
-                    self._str_cache = f"(conv3d {str(args.input)} {str(args.filter)})"
+                    self._str_cache = (
+                        f"(conv3d {_child_str(args.input)} {_child_str(args.filter)})"
+                    )
                 case _:
                     self._str_cache = f"({self.op} {cs})"
         return self._str_cache
@@ -566,9 +601,26 @@ class TensorTerm:
         - Output tensor shape: [C_out, D_out, H_out, W_out]
         - `stride` is an int for all spatial dims, or one stride per axis
           `(stride_d, stride_h, stride_w)`.
-        - `padding` is "valid" or "same".
+        - `padding` is "valid" or "same", or one entry per axis: a mode or
+          the `(before, after)` cells of zero padding (see
+          `tensor_args.window_axis`).
         """
         return TensorTerm(TensorOp.CONV3D, [a, b, stride, padding], layout)
+
+    @staticmethod
+    def depthwise_conv3d(
+        a: "TensorTerm",
+        b: "TensorTerm",
+        stride: int | tuple[int, int, int],
+        padding: Any,
+        layout: Optional[str] = None,
+    ) -> "TensorTerm":
+        """Create a depthwise 3D convolution: each channel has its own taps.
+
+        The filter is ``[1, K_d, K_h, K_w, C]``, as ``depthwise_conv2d``'s is
+        ``[1, K_h, K_w, C]``.
+        """
+        return TensorTerm(TensorOp.CONV3D, [a, b, stride, padding, "depthwise"], layout)
 
     @staticmethod
     def concat(
