@@ -203,7 +203,8 @@ class LayoutAssignment:
             ):
                 kernels = gen_unary(term, cs_kernels[0])
             case TensorOp.MEAN:
-                kernels = gen_mean(term, cs_kernels[0])
+                cs_shapes = self.get_unpadded_cs_shapes(term)
+                kernels = gen_mean(term, cs_kernels[0], cs_shapes[0])
             case TensorOp.CONV2D:
                 cs_shapes = self.get_unpadded_cs_shapes(term)
                 kernels = gen_conv2d(term, cs_kernels[0], cs_shapes)

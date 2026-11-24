@@ -9,8 +9,37 @@ from ir.layout import Layout
 from ir.layout_utils import dimension_merging
 
 
-def gen_mean(term, kernels):
-    """Like ``gen_sum`` but reduces all listed axes and records ``1/count`` for lowering."""
+def _layout_dims_of_axes(axes, shape, active_dim_indices):
+    """The layout dims that hold the tensor axes `axes`, or None.
+
+    A layout has no piece for an axis of extent 1, so its dims are the
+    tensor's other axes in order: for a `[C, 1, H, W]` tensor laid out on dims
+    0, 2, 3, axis 2 is the second of them, and axis 1 is none. An axis of
+    extent 1 contributes nothing: the mean over it is the identity.
+    """
+    held = list(range(len(active_dim_indices)))
+    if shape is not None and len(active_dim_indices) < len(shape):
+        held = [axis for axis, extent in enumerate(shape) if extent != 1]
+        if len(held) != len(active_dim_indices):
+            return None
+    dims = []
+    for axis in axes:
+        if shape is not None and 0 <= axis < len(shape) and shape[axis] == 1:
+            continue
+        if axis not in held:
+            return None
+        dims.append(active_dim_indices[held.index(axis)])
+    return dims
+
+
+def gen_mean(term, kernels, shape=None):
+    """Like ``gen_sum`` but reduces all listed axes and records ``1/count`` for lowering.
+
+    Args:
+        term: the MEAN term
+        kernels: the operand's kernels
+        shape: the operand's shape, which says which axes have extent 1
+    """
     axes = term.cs[1]
     if isinstance(axes, int):
         axes = (axes,)
@@ -28,13 +57,24 @@ def gen_mean(term, kernels):
                 if d.dim is not None and d.dim_type != DimType.EMPTY
             }
         )
-        sum_dim_values = []
-        for dim_idx in axes:
-            if not (0 <= int(dim_idx) < len(active_dim_indices)):
-                sum_dim_values = None
-                break
-            sum_dim_values.append(active_dim_indices[int(dim_idx)])
+        sum_dim_values = _layout_dims_of_axes(axes, shape, active_dim_indices)
         if sum_dim_values is None:
+            continue
+        if not sum_dim_values:
+            # Every axis has extent 1: the mean is the tensor itself.
+            output_kernels.add(
+                Kernel(
+                    KernelOp.CAST,
+                    [Kernel(KernelOp.CS, [0], kernel.layout)],
+                    Layout(
+                        term,
+                        kernel.layout.rolls,
+                        kernel.layout.get_dims(),
+                        kernel.layout.n,
+                        kernel.layout.secret,
+                    ),
+                )
+            )
             continue
         sum_dim_set = frozenset(sum_dim_values)
 
