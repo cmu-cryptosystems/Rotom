@@ -322,3 +322,36 @@ def test_downsampling_block_with_a_conversion_matches_eval():
     term = conv(y, "w4", 16, 16, 3, 1, 8) + y
     kernel = _run(term, inputs, 4096)
     assert any(k.op == KernelOp.CONVERSION for k in kernel.post_order())
+
+
+def test_layouts_with_a_dims_digits_in_another_order_are_not_aligned():
+    from assignment.gen.gen_align import _same_digits
+
+    def pieces(layout):
+        return [p for p in parse_layout(layout, 64, True).get_dims() if p.dim == 0]
+
+    assert _same_digits(pieces("[0:2:2][0:2:1][1:16:1]"), pieces("[0:4:1][1:16:1]"))
+    assert not _same_digits(pieces("[0:2:1][0:2:2][1:16:1]"), pieces("[0:4:1][1:16:1]"))
+
+
+@pytest.mark.parametrize("channels,n", [(4, 512), (8, 1024)])
+def test_residual_add_of_branches_with_reordered_channel_digits(channels, n):
+    """A conv can place the channel's low digit ahead of its high digit; the
+    shortcut it is added to holds the channel in order."""
+    rng = np.random.default_rng(0)
+    size = 8
+    inputs = {"x": rng.normal(size=(2, size, size))}
+
+    def weights(name, shape):
+        inputs[name] = rng.normal(size=shape) * 0.3
+        return TensorTerm.Tensor(name, list(shape), False)
+
+    def conv(x, name, c_in):
+        y = TensorTerm.conv2d(x, weights(name, (channels, c_in, 3, 3)), 1, "same")
+        shape = (channels, size, size)
+        return y * weights(name + "_s", shape) + weights(name + "_b", shape)
+
+    x = TensorTerm.Tensor("x", [2, size, size], True)
+    h = conv(x, "w0", 2).poly_call("relu", -8.0, 8.0)
+    out = conv(h, "w1", channels).poly_call("relu", -8.0, 8.0)
+    _run(conv(out, "w2", channels) + h, inputs, n)
