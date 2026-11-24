@@ -470,10 +470,16 @@ class KernelCost:
     def compact_ops(self, ops):
         """Calculate the ops to perform a compaction operation
 
-        The cost of compaction is based on the number of ciphertexts
-        that are reduced. Each reduced ciphertext corresponds to a
+        Without rolls a compaction is lowered as a relayout whose input has
+        zero gaps: count its groups. With rolls, each ciphertext removed is a
         rotate-and-sum.
         """
+        source = self.kernel.cs[0].layout
+        if not source.rolls and not self.kernel.layout.rolls:
+            counts = relayout_ops(source, self.kernel.layout, zero_gaps=True)
+            for op, count in counts.items():
+                ops[op] += count
+            return ops
         num_ct_real_reduced = (
             self.kernel.cs[0].layout.num_ct() - self.kernel.layout.num_ct()
         )
