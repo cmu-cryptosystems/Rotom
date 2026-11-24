@@ -426,11 +426,7 @@ class TensorEvaluator:
             case "Gather":
                 # cs = [source term, weights]: a vector of ``weights.n`` zeros
                 # with the source's elements at the slots ``weights`` names.
-                source = np.asarray(env[term.cs[0]], dtype=np.float64)
-                slots, index = term.cs[1].entries()
-                out = np.zeros(term.cs[1].n, dtype=np.float64)
-                out[slots] = source[index]
-                return out
+                return term.cs[1].vector(env[term.cs[0]])
             case _:
                 raise NotImplementedError(op_name)
 

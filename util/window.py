@@ -145,7 +145,7 @@ def position_indices(layout, shape, copies=False):
         return _INDEX_CACHE[key]
     n = int(layout.n)
     positions = np.arange(layout.num_ct() * n, dtype=np.int64)
-    index = np.zeros((positions.shape[0], len(shape)), dtype=np.int64)
+    index = np.zeros((positions.shape[0], len(shape)), dtype=np.int32)
     held = np.ones(positions.shape[0], dtype=bool)
     for dims, coord in (
         (layout.ct_dims, positions // n),
@@ -159,7 +159,8 @@ def position_indices(layout, shape, copies=False):
                 held &= digit == 0
     held &= (index < np.asarray(shape, dtype=np.int64)).all(axis=1)
     index[~held] = -1
-    if len(_INDEX_CACHE) >= 16:
+    # A table is a few MB per ciphertext; a kernel needs two at a time.
+    if len(_INDEX_CACHE) >= 4:
         _INDEX_CACHE.clear()
     _INDEX_CACHE[key] = index
     return index
@@ -353,6 +354,13 @@ class GroupWeights:
             values[relation.offset] = tap
         index = tuple(values[label][related] for label in spec.rhs)
         return np.nonzero(related)[0], index
+
+    def vector(self, source):
+        """The plaintext: `source`'s elements at the slots this group fills."""
+        slots, index = self.entries()
+        out = np.zeros(self.n, dtype=np.float64)
+        out[slots] = np.asarray(source, dtype=np.float64)[index]
+        return out
 
 
 def layout_shape(layout):
