@@ -1,6 +1,7 @@
 from ir.he import HEOp, HETerm
 from lower.layout_cts import LayoutCiphertexts
 from util.layout_util import _get_apply_layout_plan
+from util.shape_util import get_term_shape
 
 
 def lower_index(env, kernel):
@@ -15,7 +16,7 @@ def lower_index(env, kernel):
     out_layout = kernel.layout
     in_term = in_layout.term
     out_term = out_layout.term
-    in_rank = len(in_term.cs[1])
+    in_rank = len(get_term_shape(in_term))
 
     # Normalize index spec to rank.
     index_spec = out_term.cs[1]
@@ -26,6 +27,12 @@ def lower_index(env, kernel):
     if len(idx_items) < in_rank:
         idx_items += [slice(None, None, None)] * (in_rank - len(idx_items))
     idx_items = idx_items[:in_rank]
+    # An int counts from the end when negative.
+    in_shape = get_term_shape(in_term)
+    idx_items = [
+        item + in_shape[d] if isinstance(item, int) and item < 0 else item
+        for d, item in enumerate(idx_items)
+    ]
 
     # Build mapping output logical index -> input logical index according to index spec.
     in_dim_to_out_dim = {}

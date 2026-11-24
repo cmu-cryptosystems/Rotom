@@ -608,6 +608,9 @@ def spec_for_term(term, shapes) -> OperatorSpec:
             return reduce_spec(len(shapes[0]), term.cs[1])
         case TensorOp.RESHAPE:
             args = ReshapeArgs.from_term(term)
+            if list(args.shape) == [args.dim]:
+                # One part: the dim keeps its place.
+                return identity_spec(len(shapes[0]))
             # The term replaces `dim` by new dim ids. It is a split when those
             # ids are `dim` and `dim + 1` and no later input dim keeps an id
             # they take.
@@ -623,7 +626,13 @@ def spec_for_term(term, shapes) -> OperatorSpec:
                 args.shape[args.dim + 1],
             )
         case TensorOp.INDEX:
-            return index_spec(len(shapes[0]), term.cs[1])
+            index = term.cs[1] if isinstance(term.cs[1], tuple) else (term.cs[1],)
+            # An int counts from the end when negative.
+            index = tuple(
+                item + shapes[0][dim] if isinstance(item, int) and item < 0 else item
+                for dim, item in enumerate(index)
+            )
+            return index_spec(len(shapes[0]), index)
         case _:
             raise NotImplementedError(f"alignment: {term.op}")
 
