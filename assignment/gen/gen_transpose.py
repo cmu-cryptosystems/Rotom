@@ -15,6 +15,7 @@ from copy import deepcopy as copy
 from ir.dim import Dim
 from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
+from ir.roll import Roll
 
 
 def gen_transpose(term, kernels):
@@ -30,17 +31,12 @@ def gen_transpose(term, kernels):
 
     Returns:
         Set of Kernel objects representing transpose operation layouts
-
-    Raises:
-        NotImplementedError: If kernels have roll operations (not yet supported)
     """
     output_kernels = set()
     for kernel in kernels:
-        if kernel.layout.rolls:
-            raise NotImplementedError("still need to explore transpose with rolls")
-
+        dims = kernel.layout.get_dims()
         new_dims = []
-        for dim in kernel.layout.get_dims():
+        for dim in dims:
             if dim.dim is not None:
                 new_dims.append(
                     Dim(
@@ -53,11 +49,17 @@ def gen_transpose(term, kernels):
             else:
                 new_dims.append(copy(dim))
 
+        # A transpose renames the dims and moves no data, so each roll stays
+        # on the same two pieces.
+        new_rolls = []
+        for roll in kernel.layout.rolls:
+            rolled, rolled_by = roll.roll_index(dims)
+            new_rolls.append(Roll(new_dims[rolled], new_dims[rolled_by]))
+
         transposed_layout = Layout(
             term,
-            copy(kernel.layout.rolls),
+            new_rolls,
             new_dims,
-            {},
             kernel.layout.n,
             kernel.layout.secret,
         )
