@@ -66,6 +66,14 @@ class Dim:
             assert self.dim is None
         assert self.stride > 0
 
+    def __deepcopy__(self, memo):
+        """A copy of the dimension. Its fields are immutable, so they are
+        shared; the layout search copies dimensions millions of times."""
+        dim = Dim.__new__(Dim)
+        dim.__dict__.update(self.__dict__)
+        memo[id(self)] = dim
+        return dim
+
     def __hash__(self):
         """Hash the dimension"""
         return hash(str(self))
