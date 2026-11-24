@@ -288,6 +288,17 @@ class Shape:
                 raise NotImplementedError(term.op)
 
     def get_shape(self, term):
+        """The shape of `term`, computed once.
+
+        A term's shape is built from its operands' shapes. Without the memo,
+        every shared operand is walked again by each of its consumers, which
+        is exponential in the depth of a network with skip connections.
+        """
+        if term not in self.shapes:
+            self.shapes[term] = self._shape(term)
+        return copy(self.shapes[term])
+
+    def _shape(self, term):
         match term.op:
             case TensorOp.TENSOR:
                 return TensorPlaceholderArgs.from_term(term).shape
