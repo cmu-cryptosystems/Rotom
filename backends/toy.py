@@ -1,6 +1,3 @@
-import multiprocessing as mp
-import sys
-from concurrent.futures import ProcessPoolExecutor
 from typing import Any, Literal
 
 import numpy as np
@@ -10,51 +7,51 @@ np.set_printoptions(legacy="1.25")
 from tqdm import tqdm
 
 from frontends.tensor import TensorOp
+from frontends.tensor_evaluator import TensorEvaluator
 from ir.he import HEOp, HETerm
 from ir.kernel import KernelOp
 from util.layout_util import *
 from util.silu_polycall_eval import eval_silu_polycall
 
 
-def _collect_het_nodes(root: HETerm) -> set[HETerm]:
-    """All ``HETerm`` nodes reachable from ``root`` (follows every ``cs`` edge)."""
-    nodes: set[HETerm] = set()
-    stack: list[HETerm] = [root]
-    while stack:
-        t = stack.pop()
-        if t in nodes:
-            continue
-        nodes.add(t)
-        for c in t.cs:
-            if isinstance(c, HETerm):
-                stack.append(c)
-    return nodes
+def _operands(term: HETerm) -> list[HETerm]:
+    """The ciphertexts and plaintexts a term is computed from."""
+    match term.op:
+        case HEOp.CS:
+            return [term.cs[0]] if isinstance(term.cs[0], HETerm) else []
+        case HEOp.ADD | HEOp.SUB | HEOp.MUL:
+            return [term.cs[0], term.cs[1]]
+        case HEOp.ROT | HEOp.POLY_CALL | HEOp.RESCALE:
+            return [term.cs[0]]
+        case (
+            HEOp.PACK
+            | HEOp.PUNCTURED_PACK
+            | HEOp.INDICES
+            | HEOp.CS_PACK
+            | HEOp.CONST
+            | HEOp.MASK
+            | HEOp.ZERO_MASK
+        ):
+            return []
+        case _:
+            raise NotImplementedError(term.op)
 
 
-def _build_remaining_uses(root: HETerm) -> dict[HETerm, int]:
-    """Incoming-use counts: how many parent terms reference each node as an operand."""
-    nodes = _collect_het_nodes(root)
-    rem = {t: 0 for t in nodes}
-    for t in nodes:
-        for c in t.cs:
-            if isinstance(c, HETerm):
-                rem[c] += 1
-    return rem
+def _toy_post_order(root: HETerm, seen: set[HETerm] | None = None) -> list[HETerm]:
+    """Post-order like ``HETerm.helper_post_order``, but through ``HEOp.CS``.
 
+    The stock ``post_order`` stops at a ``CS``, which stands for a ciphertext
+    of an earlier kernel. Following it gives a topological order of the whole
+    circuit, so a term is evaluated once and dropped after its last use.
 
-def _toy_post_order(root: HETerm) -> list[HETerm]:
-    """Post-order like ``HETerm.helper_post_order``, but recurses through ``HEOp.CS``.
-
-    The stock ``post_order`` omits nodes only reachable under ``CS``, which forced
-    coarse ``env.clear()`` per ciphertext. Including ``CS`` children yields a full
-    topological order so we can drop ``env`` entries when uses hit zero (same idea
-    as ``OpenFHE.update_dependencies``).
+    Terms in ``seen`` are skipped and the terms visited are added to it, so
+    one set carried across roots orders each term once.
 
     Implemented with an explicit stack so very deep DAGs (e.g. large ResNet HE IR)
     do not hit Python's recursion limit.
     """
     order: list[HETerm] = []
-    seen: set[HETerm] = set()
+    seen = set() if seen is None else seen
     stack: list[tuple[HETerm, Literal["enter", "exit"]]] = [(root, "enter")]
 
     while stack:
@@ -64,78 +61,12 @@ def _toy_post_order(root: HETerm) -> list[HETerm]:
                 continue
             seen.add(term)
             stack.append((term, "exit"))
-            match term.op:
-                case HEOp.CS:
-                    if isinstance(term.cs[0], HETerm):
-                        stack.append((term.cs[0], "enter"))
-                case (
-                    HEOp.PACK
-                    | HEOp.PUNCTURED_PACK
-                    | HEOp.INDICES
-                    | HEOp.CS_PACK
-                    | HEOp.CONST
-                ):
-                    pass
-                case HEOp.ADD | HEOp.SUB | HEOp.MUL:
-                    stack.append((term.cs[1], "enter"))
-                    stack.append((term.cs[0], "enter"))
-                case HEOp.ROT | HEOp.POLY_CALL | HEOp.RESCALE:
-                    stack.append((term.cs[0], "enter"))
-                case HEOp.MASK | HEOp.ZERO_MASK:
-                    pass
-                case _:
-                    raise NotImplementedError(term.op)
+            for operand in reversed(_operands(term)):
+                stack.append((operand, "enter"))
         else:
             order.append(term)
 
     return order
-
-
-# (lo, hi, degree, n_nodes) -> ascending q coefficients for silu poly branch
-_SILU_POLY_Q_CACHE: dict[tuple[float, float, int, int], list[float]] = {}
-
-
-# --- optional multiprocessing (Linux + ``fork`` only; see ``Toy._ct_roots_parallel``) ---
-_mp_worker_toy: Any = None
-_mp_roots_for_workers: list | None = None
-
-
-def _toy_mp_worker_init(circuit_ir, inputs, args) -> None:
-    global _mp_worker_toy
-    _mp_worker_toy = Toy(circuit_ir, inputs, args)
-
-
-def _toy_mp_run_chunk(indices: list[int]) -> list[tuple[int, Any]]:
-    """Evaluate ciphertext roots whose global indices are ``indices``.
-
-    ``_mp_roots_for_workers`` must be set in the parent **before** forking workers
-    so children inherit the list via copy-on-write (avoids pickling the IR per task).
-    """
-    global _mp_worker_toy, _mp_roots_for_workers
-    assert _mp_worker_toy is not None and _mp_roots_for_workers is not None
-    toy = _mp_worker_toy
-    roots = _mp_roots_for_workers
-    local: list[tuple[int, Any]] = []
-    for i in indices:
-        ct = roots[i]
-        toy.env.clear()
-        toy._eval_ct_root_with_use_counts(ct)
-        local.append((i, toy.env.pop(ct)))
-    return local
-
-
-def _chunk_indices(n_items: int, num_workers: int) -> list[list[int]]:
-    w = min(num_workers, n_items)
-    if w < 1:
-        return []
-    base, rem = divmod(n_items, w)
-    chunks: list[list[int]] = []
-    start = 0
-    for i in range(w):
-        sz = base + (1 if i < rem else 0)
-        chunks.append(list(range(start, start + sz)))
-        start += sz
-    return chunks
 
 
 def _flatten_ct_roots(cts: dict) -> list[HETerm]:
@@ -148,6 +79,31 @@ def _flatten_ct_roots(cts: dict) -> list[HETerm]:
         else:
             roots.append(ct)
     return roots
+
+
+def _schedule(circuit_ir):
+    """The order to evaluate a circuit in, and how often each term is read.
+
+    Returns:
+        (steps, uses): ``steps`` holds, per kernel, its ciphertexts and the
+        terms to evaluate for them that no earlier kernel evaluated. ``uses``
+        counts the terms that read each term, plus one for each time a kernel
+        lists it as a ciphertext.
+    """
+    steps = []
+    uses: dict[HETerm, int] = {}
+    seen: set[HETerm] = set()
+    for kernel, cts in circuit_ir.items():
+        roots = _flatten_ct_roots(cts)
+        order = []
+        for root in roots:
+            order.extend(_toy_post_order(root, seen))
+            uses[root] = uses.get(root, 0) + 1
+        for term in order:
+            for operand in _operands(term):
+                uses[operand] = uses.get(operand, 0) + 1
+        steps.append((kernel, roots, order))
+    return steps, uses
 
 
 def _packed_ct_lists_to_float64(packed_cts: list) -> np.ndarray:
@@ -174,11 +130,9 @@ class Toy:
         env: Environment for storing intermediate results
         input_cache: Cache for packed input tensors
 
-    Parallelism:
-        On Linux, :meth:`run` and :meth:`fuzz` evaluate ciphertexts in a ``fork`` process
-        pool (default 8 workers via ``args.toy_mp_workers``, or ``--toy-mp-workers`` from
-        CLI). Set ``toy_mp_workers`` to ``1`` for single-process execution. Non-Linux
-        platforms always run single-process.
+    Evaluation:
+        :meth:`run` and :meth:`fuzz` evaluate each term of the circuit once,
+        kernel by kernel, and drop a value after its last use.
     """
 
     def __init__(self, circuit_ir, inputs, args):
@@ -199,6 +153,9 @@ class Toy:
         # id(TensorTerm) -> dense result of TensorTerm.eval(inputs).  Keyed by
         # object identity (not TensorTerm.__hash__), since __eq__ is hash-based.
         self._tensor_term_dense_by_id: dict[int, Any] = {}
+        # TensorTerm -> value, for the expected result of each kernel
+        self._evaluator = TensorEvaluator()
+        self._tensor_env: dict[Any, Any] = {}
 
     @staticmethod
     def _pack_cache_key(layout) -> tuple[int, int]:
@@ -218,58 +175,30 @@ class Toy:
         self._tensor_term_dense_by_id[tid] = dense
         return dense
 
-    def _eval_ct_root_with_use_counts(self, ct_term: HETerm):
-        """Evaluate one ciphertext DAG and free ``env`` entries as operands go dead."""
-        remaining = _build_remaining_uses(ct_term)
-        for t in _toy_post_order(ct_term):
-            self.env[t] = self.eval(t)
-            for c in t.cs:
-                if isinstance(c, HETerm):
-                    remaining[c] -= 1
-                    if remaining[c] == 0:
-                        self.env.pop(c, None)
+    def _expected(self, tensor_term):
+        """The value of a kernel's tensor term, sharing subterms across kernels."""
+        return self._evaluator.eval(tensor_term, self.inputs, self._tensor_env)
 
-    def _eval_ct_roots_sequential(self, roots: list[HETerm]) -> list[Any]:
-        out: list[Any] = []
-        for ct in roots:
-            self._eval_ct_root_with_use_counts(ct)
-            out.append(self.env.pop(ct))
-        return out
+    def _release(self, term, uses):
+        uses[term] -= 1
+        if uses[term] == 0:
+            self.env.pop(term, None)
 
-    def _eval_ct_roots_parallel(
-        self, roots: list[HETerm], num_workers: int
-    ) -> list[Any]:
-        global _mp_roots_for_workers
-        n = len(roots)
-        workers = min(int(num_workers), n)
-        chunks = _chunk_indices(n, workers)
-        if len(chunks) <= 1:
-            return self._eval_ct_roots_sequential(roots)
-        _mp_roots_for_workers = roots
-        try:
-            ctx = mp.get_context("fork")
-            with ProcessPoolExecutor(
-                max_workers=len(chunks),
-                mp_context=ctx,
-                initializer=_toy_mp_worker_init,
-                initargs=(self.circuit_ir, self.inputs, self.args),
-            ) as ex:
-                parts = list(ex.map(_toy_mp_run_chunk, chunks))
-        finally:
-            _mp_roots_for_workers = None
+    def kernel_results(self):
+        """Evaluate the circuit once, yielding each kernel with its ciphertexts.
 
-        flat: list[tuple[int, Any]] = []
-        for p in parts:
-            flat.extend(p)
-        flat.sort(key=lambda x: x[0])
-        return [v for _, v in flat]
-
-    def _eval_ct_roots(self, roots: list[HETerm]) -> list[Any]:
-        """Evaluate ciphertext roots in ``roots`` order (parallel on Linux when enabled)."""
-        nw = int(getattr(self.args, "toy_mp_workers", 8))
-        if nw <= 1 or sys.platform != "linux" or len(roots) <= 1:
-            return self._eval_ct_roots_sequential(roots)
-        return self._eval_ct_roots_parallel(roots, nw)
+        A value stays in ``env`` until every term that reads it has been
+        evaluated and every kernel that lists it has been yielded.
+        """
+        steps, uses = _schedule(self.circuit_ir)
+        for kernel, roots, order in steps:
+            for term in order:
+                self.env[term] = self.eval(term)
+                for operand in _operands(term):
+                    self._release(operand, uses)
+            yield kernel, [self.env[root] for root in roots]
+            for root in roots:
+                self._release(root, uses)
 
     def _as_np_vec(self, v):
         """Return a 1-D ``float64`` vector; avoid ``astype`` when already ``float64``."""
@@ -496,10 +425,8 @@ class Toy:
         results = []
         total_cts = sum(len(cts) for cts in self.circuit_ir.values())
         pbar = tqdm(total=total_cts, desc="Toy", unit="ct", dynamic_ncols=True)
-        for term, cts in self.circuit_ir.items():
-            roots = _flatten_ct_roots(cts)
-            results = self._eval_ct_roots(roots)
-            pbar.update(len(roots))
+        for term, results in self.kernel_results():
+            pbar.update(len(results))
 
             # Evaluate the tensor computation to get the expected result
             # skip checks for replicate
@@ -510,7 +437,7 @@ class Toy:
                 continue
 
             # Evaluate the tensor computation to get the expected result
-            eval_result = term.layout.term.eval(self.inputs)
+            eval_result = self._expected(term.layout.term)
             if term.op == KernelOp.PUNCTURED_TENSOR:
                 expected = apply_punctured_layout(eval_result, term.layout)
             elif term.op == KernelOp.CONST:
@@ -568,10 +495,7 @@ class Toy:
 
     def fuzz(self):
         results = []
-        for term, cts in self.circuit_ir.items():
-            roots = _flatten_ct_roots(cts)
-            results = self._eval_ct_roots(roots)
-
+        for term, results in self.kernel_results():
             expected = apply_layout(
                 self._dense_eval_for_tensor_term(term.layout.term), term.layout
             )

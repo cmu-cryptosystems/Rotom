@@ -23,5 +23,4 @@ def get_default_args() -> Namespace:
         # End-to-end tests that call check_results() still validate the final output.
         skip_toy_eval_checks=False,
         # Toy.run() / fuzz(): Linux fork process pool size; 1 disables parallelism.
-        toy_mp_workers=8,
     )
