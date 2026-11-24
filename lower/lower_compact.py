@@ -2,6 +2,7 @@ from copy import deepcopy as copy
 
 from ir.layout import Layout
 from lower.layout_cts import LayoutCiphertexts
+from lower.lower_conversion import lower_relayout
 from util.layout_util import (
     align_dimension_extents_compact,
     align_dimension_extents_compact_skip_empty_gaps,
@@ -15,7 +16,20 @@ from util.util import separate_dims
 
 
 def lower_compact(env, kernel):
-    """Lower a COMPACT kernel by packing non-empty slots into a smaller layout.
+    """Lower a COMPACT kernel: ciphertexts move into the gaps of fewer ones.
+
+    The gaps of the input are zero, so a ciphertext that moves whole is a
+    rotation and an add, with no mask (``lower_relayout``). A layout with
+    rolls keeps its own lowering.
+    """
+    source = kernel.cs[0].layout
+    if source.rolls or kernel.layout.rolls:
+        return _lower_rolled_compact(env, kernel)
+    return lower_relayout(env[kernel.cs[0]], source, kernel.layout, zero_gaps=True)
+
+
+def _lower_rolled_compact(env, kernel):
+    """Pack non-empty slots into a smaller layout, one ciphertext axis at a time.
 
     Each step rotates ciphertexts so slices that differ only along a ciphertext
     axis line up in-slot, then sums them—folding that axis from ``ct_dims`` into
