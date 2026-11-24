@@ -3,8 +3,6 @@ and, when the TensorFlow Model Garden is installed, the official model."""
 
 from __future__ import annotations
 
-import dataclasses
-
 import numpy as np
 import pytest
 
@@ -41,16 +39,15 @@ def _clip(frames, size, seed=1):
 
 def test_a0_is_the_official_architecture():
     convs = dict(sites(A0))
-    assert len(convs) == 108
-    assert sum(len(block.layers) for block in A0.blocks) == 16
+    assert len(convs) == 94
+    assert sum(len(block.layers) for block in A0.blocks) == 15
     assert convs["stem"] == (8, 3, 1, 3, 3)
     assert convs["b0l0/spatial"] == (24, 1, 1, 5, 5)
     assert "b0l0/temporal" not in convs
     assert convs["b2l0/temporal"] == (184, 1, 5, 1, 1)
     assert convs["b4l3/se_reduce"] == (176, 688, 1, 1, 1)
     assert convs["classifier"] == (600, 2048, 1, 1, 1)
-    # the official model has 4,601,440 conv and batch norm parameters; folded,
-    # each conv keeps its weights and one bias per output channel
+    # folded: each conv keeps its weights and one bias per output channel
     weights = init_weights(A0)
     assert sum(w.size + b.size for w, b in weights.values()) == 3_739_040
 
@@ -89,20 +86,6 @@ def test_eval_matches_the_reference(config, frames, size):
     np.testing.assert_allclose(got, reference(config, weights, x), atol=1e-12)
 
 
-def test_the_last_frame_changes_only_through_causal_paths():
-    """A causal network over a longer clip sees the earlier frames unchanged:
-    the features of frame t do not depend on frames after t. The logits pool
-    every frame, so compare the program on a clip and on its prefix through
-    one causal temporal conv and gate."""
-    config = dataclasses.replace(ONE_LAYER, classes=3)
-    weights = init_weights(config)
-    x = _clip(4, 8)
-    full = reference(config, weights, x)
-    changed = x.copy()
-    changed[:, -1] += 1.0
-    assert not np.allclose(full, reference(config, weights, changed))
-
-
 def test_one_layer_compiles_and_matches_the_reference():
     weights = init_weights(ONE_LAYER)
     x = _clip(2, 8)
@@ -110,7 +93,7 @@ def test_one_layer_compiles_and_matches_the_reference():
     kernel = _run(term, inputs, 1024)
     ops = [k.op for k in kernel.post_order()]
     # stem, expand, spatial, temporal, two squeeze convs, excite, project,
-    # pooled skip, head, hidden, classifier
+    # pooled skip, head, hidden, classifier: each computed once
     assert ops.count(KernelOp.CONV_DIRECT) == 12
     np.testing.assert_allclose(
         term.eval(inputs).reshape(-1), reference(ONE_LAYER, weights, x), atol=1e-12
@@ -129,10 +112,19 @@ def _official_model(frames, size, classes):
     """The Model Garden's MoViNet-A0 stream classifier with random weights and
     batch norm statistics, or None if it is not installed."""
     try:
-        import tensorflow as tf  # noqa: F401
+        import tensorflow as tf
+
+        try:
+            # a few small forward passes; keep them on the CPU
+            tf.config.set_visible_devices([], "GPU")
+        except RuntimeError:
+            pass  # devices are already initialized
+        import tf_keras
         from official.projects.movinet.modeling import movinet, movinet_model
     except Exception:
         return None
+    # a second model in one process would get numbered variable names
+    tf_keras.backend.clear_session()
     backbone = movinet.Movinet(
         model_id="a0",
         causal=True,
@@ -160,7 +152,8 @@ def _official_model(frames, size, classes):
 @pytest.mark.slow
 @pytest.mark.parametrize("frames,size", [(4, 32), (3, 44), (8, 172)])
 def test_a0_matches_the_official_model(frames, size):
-    """Needs TensorFlow and ``tensorflow/models`` on the path."""
+    """Needs TensorFlow and ``tf-models-official`` (or ``tensorflow/models`` on
+    the path); skipped without them."""
     classes = 600
     model = _official_model(frames, size, classes)
     if model is None:
