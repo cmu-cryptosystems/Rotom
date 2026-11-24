@@ -12,6 +12,7 @@ from assignment.alignment import (
     identity_spec,
     index_spec,
     matmul_spec,
+    paired_pieces,
     permute_spec,
     reduce_spec,
     spec_for_term,
@@ -374,7 +375,7 @@ def test_elementwise_rolls_must_match():
     pieces = _pieces(0, 1)
     assert spec.with_rolls(pieces, pieces, [(0, 1)], [(0, 1)]).aligned()
     assert not spec.with_rolls(pieces, pieces, [(0, 1)], []).aligned()
-    # Layouts with different piece counts compare rolls by label.
+    # Layouts of different sizes do not face: their rolls compare by label.
     longer = _pieces(0, 1, None)
     assert spec.with_rolls(longer, pieces, [(0, 1)], [(0, 1)]).aligned()
     assert not spec.with_rolls(longer, pieces, [(0, 1)], []).aligned()
@@ -405,6 +406,54 @@ def test_a_fragment_roll_is_a_roll_of_a_digit():
     assert Relation("k@1", "j", "(k@1-j)", modulus=2) in rolled.relations
     assert Relation("k", "k@2", "k@1", stride=2) in rolled.relations
     assert rolled.aligned()
+
+
+def test_pieces_are_cut_where_the_other_layouts_begin():
+    # [j:2][i:4] facing [R:8]: the replication is read as [R:2][R:4].
+    assert paired_pieces([(1, 2, 1), (0, 4, 1)], [(None, 8, 1)]) == (
+        ((1, 2, 1), (0, 4, 1)),
+        ((None, 2, 4), (None, 4, 1)),
+        (0, 1),
+        (None,),
+    )
+    # Both layouts are cut: [i:4][j:2] facing [R:2][R:4].
+    lhs, rhs, lhs_at, rhs_at = paired_pieces(
+        [(0, 4, 1), (1, 2, 1)], [(None, 2, 1), (None, 4, 1)]
+    )
+    assert lhs == ((0, 2, 2), (0, 2, 1), (1, 2, 1))
+    assert [extent for _, extent, _ in rhs] == [2, 2, 2]
+    assert (lhs_at, rhs_at) == ((None, 2), (0, None))
+    # Layouts of different sizes do not pair.
+    assert paired_pieces([(0, 4, 1)], [(None, 8, 1)]) is None
+
+
+def test_a_dim_in_one_piece_faces_the_same_dim_in_two():
+    spec = elementwise_spec(1, 1)
+    whole = [(0, 8, 1)]
+    assert spec.with_rolls(whole, [(0, 2, 4), (0, 4, 1)]).aligned()
+    assert spec.with_rolls(whole, [(0, 4, 1), (0, 2, 4)]).mismatches() == (
+        "piece 0 is d0@2 on the lhs and d0@1 on the rhs",
+        "piece 1 is d0@1 on the lhs and d0@4 on the rhs",
+    )
+
+
+def test_rolls_by_replication_are_compared_where_the_replication_sits():
+    # t[b,i,k] @ m[k,j]. The lhs holds i in two pieces where the rhs holds one
+    # replicated piece, and rolls k by the replication that faces j.
+    spec = matmul_spec(3, 2)
+    lhs = [(2, 8, 1), (1, 4, 2), (1, 2, 1), (0, 4, 1), (None, 8, 1)]
+    rhs = [(0, 8, 1), (None, 4, 8), (None, 8, 1), (1, 8, 1)]
+    # The rhs rolls k by j as well: one traversal.
+    rolled = spec.with_rolls(lhs, rhs, [(0, 4)], [(0, 3)])
+    assert rolled.lhs == rolled.rhs == ("(k-j)", "i@2", "i@1", "b", "j")
+    assert rolled.aligned()
+    # The rhs rolls k by its own replication, which faces i and b: both rolls
+    # are "k by a replicated piece", at different positions.
+    rolled = spec.with_rolls(lhs, rhs, [(0, 4)], [(0, 2)])
+    assert rolled.mismatches() == (
+        "rhs roll(0 by 2) is over a piece the other layout holds in parts",
+        "piece 0 is (k-j) on the lhs and k on the rhs",
+    )
 
 
 def _run(term, inputs, n, name):

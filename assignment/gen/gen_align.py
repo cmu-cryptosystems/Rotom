@@ -5,6 +5,7 @@ construction.
 
 from copy import deepcopy as copy
 
+from assignment.alignment import paired_pieces
 from frontends.tensor import TensorOp
 from ir.dim import Dim, DimType
 from ir.kernel import Kernel, KernelOp
@@ -440,6 +441,9 @@ def get_aligned_dimensions(alignment, a_dims, b_dims):
             extent = 1
         else:
             raise NotImplementedError
+        if extent != 1:
+            # The piece faces more than one b-dim, and one piece holds one.
+            raise KeyError(f"a-piece {a_dim} faces more than one b-dim")
         aligned_b_dims.append(dim)
 
     aligned_a_dims = []
@@ -479,6 +483,9 @@ def get_aligned_dimensions(alignment, a_dims, b_dims):
             extent = 1
         else:
             raise NotImplementedError
+        if extent != 1:
+            # The piece faces more than one a-dim, and one piece holds one.
+            raise KeyError(f"b-piece {b_dim} faces more than one a-dim")
         aligned_a_dims.append(dim)
 
     for a_dim, b_dim in zip(a_dims, aligned_b_dims):
@@ -1173,6 +1180,35 @@ def _renumbered(dim, out_dims):
     return Dim(out_dims[dim.dim], dim.extent, dim.stride, dim.dim_type)
 
 
+def _paired_dims(a_dims, b_dims):
+    """`paired_pieces` over the dims of two aligned layouts.
+
+    Returns:
+        (pairs, a_at, b_at): the (a dim, b dim) pairs, and for each dim given
+        the index of its pair, or None if the dim was cut.
+    """
+
+    def pieces(dims):
+        return [(dim.dim, dim.extent, dim.stride) for dim in dims]
+
+    def cut_dims(dims, cut):
+        made = []
+        cut = list(cut)
+        for dim in dims:
+            held = 1
+            while held < dim.extent:
+                d, extent, stride = cut.pop(0)
+                made.append(Dim(d, extent, stride, dim.dim_type))
+                held *= extent
+        return made
+
+    paired = paired_pieces(pieces(a_dims), pieces(b_dims))
+    assert paired is not None, "aligned layouts hold the same positions"
+    a_cut, b_cut, a_at, b_at = paired
+    pairs = list(zip(cut_dims(a_dims, a_cut), cut_dims(b_dims, b_cut)))
+    return pairs, a_at, b_at
+
+
 def output_layout(term, spec, a_kernel, b_kernel):
     """The output kernel of a binary operator over two aligned operand kernels.
 
@@ -1229,32 +1265,18 @@ def output_layout(term, spec, a_kernel, b_kernel):
             (a_sum_dim,) = spec.lhs_sum_dims()
             (b_sum_dim,) = spec.rhs_sum_dims()
 
-            if len(a_layout.get_dims()) != len(b_layout.get_dims()):
-                for a_dim in a_layout.get_dims():
-                    if a_dim.dim is None:
-                        output_dims.append(a_dim)
-                    elif a_dim.dim == a_sum_dim:
-                        output_dims.append(
-                            Dim(None, a_dim.extent, a_dim.stride, DimType.EMPTY)
-                        )
-                    else:
-                        output_dims.append(_renumbered(a_dim, lhs_out))
-
-                a_aligned_dims = {a for a, b in alignment if a is not None}
-                for b_dim in b_layout.get_dims():
-                    if b_dim.dim is not None and b_dim.dim not in a_aligned_dims:
-                        if (None, b_dim.dim) in alignment:
-                            output_dims.append(_renumbered(b_dim, rhs_out))
-            else:
-                for a_dim, b_dim in zip(a_layout.get_dims(), b_layout.get_dims()):
-                    if a_dim.dim is not None and b_dim.dim is None:
-                        output_dims.append(_renumbered(a_dim, lhs_out))
-                    elif a_dim.dim is None and b_dim.dim is not None:
-                        output_dims.append(_renumbered(b_dim, rhs_out))
-                    else:
-                        output_dims.append(
-                            Dim(None, a_dim.extent, a_dim.stride, DimType.EMPTY)
-                        )
+            # The operands hold the same positions, but a dim one holds in
+            # two pieces can face a single replicated piece of the other.
+            pairs, a_at, b_at = _paired_dims(a_layout.get_dims(), b_layout.get_dims())
+            for a_dim, b_dim in pairs:
+                if a_dim.dim is not None and b_dim.dim is None:
+                    output_dims.append(_renumbered(a_dim, lhs_out))
+                elif a_dim.dim is None and b_dim.dim is not None:
+                    output_dims.append(_renumbered(b_dim, rhs_out))
+                else:
+                    output_dims.append(
+                        Dim(None, a_dim.extent, a_dim.stride, DimType.EMPTY)
+                    )
 
             a_rolls = [
                 roll for roll in a_layout.rolls if roll.dim_to_roll.dim != a_sum_dim
@@ -1267,9 +1289,11 @@ def output_layout(term, spec, a_kernel, b_kernel):
 
             roll_indices = []
             for roll in a_rolls:
-                roll_indices.append(roll.roll_index(a_kernel.layout.get_dims()))
+                rolled, rolled_by = roll.roll_index(a_kernel.layout.get_dims())
+                roll_indices.append((a_at[rolled], a_at[rolled_by]))
             for roll in b_rolls:
-                roll_indices.append(roll.roll_index(b_kernel.layout.get_dims()))
+                rolled, rolled_by = roll.roll_index(b_kernel.layout.get_dims())
+                roll_indices.append((b_at[rolled], b_at[rolled_by]))
 
             new_rolls = []
             for roll_index in roll_indices:

@@ -258,9 +258,17 @@ class OperatorSpec:
         if self.rhs is None:
             raise ValueError(f"a unary operator has one layout: {self}")
         lhs_pieces, rhs_pieces = tuple(lhs_pieces), tuple(rhs_pieces)
+        cut_rolls = []
+        paired = paired_pieces(lhs_pieces, rhs_pieces)
+        faces = paired is not None
+        if faces:
+            # Layouts of one size face each other position by position, once
+            # each piece is cut where the other layout's pieces begin.
+            lhs_pieces, rhs_pieces, lhs_at, rhs_at = paired
+            lhs_rolls = _moved_rolls("lhs", lhs_rolls, lhs_at, cut_rolls)
+            rhs_rolls = _moved_rolls("rhs", rhs_rolls, rhs_at, cut_rolls)
         lhs = _Side(lhs_pieces, self.lhs, lhs_rolls)
         rhs = _Side(rhs_pieces, self.rhs, rhs_rolls)
-        faces = len(lhs_pieces) == len(rhs_pieces)
         if faces:
             lhs.other, rhs.other = rhs, lhs
 
@@ -299,6 +307,7 @@ class OperatorSpec:
             named[0],
             named[1],
             tuple(dict.fromkeys(rolled_by_contracted)),
+            tuple(cut_rolls),
         )
 
     def lhs_out_dims(self) -> Tuple[Optional[int], ...]:
@@ -318,7 +327,13 @@ class RolledSpec:
     therefore traversed by a new index ``d``, the diagonal, and the tensor
     index is recovered by a relation.
 
-    ``lhs`` and ``rhs`` hold one traversal label per piece:
+    Two layouts of one size face each other position by position, so their
+    pieces are first cut where the other layout's pieces begin
+    (``paired_pieces``): ``[j:2][i:4]`` facing ``[R:8]`` reads the replication
+    as ``[R:2][R:4]``. A roll is a roll of whole pieces, so one over a piece
+    that had to be cut has no counterpart on the other layout.
+
+    ``lhs`` and ``rhs`` hold one traversal label per piece, after the cuts:
     - an unrolled piece of a whole dim keeps the dim's label (``k``)
     - a strided piece or a piece of a split dim is a digit, named by its
       stride (``k@4``); the digits recover the dim through a chain of relations
@@ -328,8 +343,8 @@ class RolledSpec:
       operand, or ``_`` when it faces none
 
     Two rolled layouts are aligned when the operands share one traversal: each
-    position holds the same label on both, and no label the output keeps is
-    rolled by a contracted one.
+    position holds the same label on both, no label the output keeps is
+    rolled by a contracted one, and no roll is over a piece that was cut.
     """
 
     spec: "OperatorSpec"
@@ -340,6 +355,7 @@ class RolledSpec:
     lhs_rolls: Tuple[Tuple[str, str], ...]
     rhs_rolls: Tuple[Tuple[str, str], ...]
     output_rolled_by_contracted: Tuple[str, ...]
+    cut_rolls: Tuple[str, ...] = ()
 
     def __str__(self):
         text = f"{' '.join(self.lhs)}, {' '.join(self.rhs)} -> "
@@ -354,13 +370,17 @@ class RolledSpec:
             f"{label} is rolled by a contracted label"
             for label in self.output_rolled_by_contracted
         ]
+        why += [
+            f"{roll} is over a piece the other layout holds in parts"
+            for roll in self.cut_rolls
+        ]
         if self.faces:
             for position, (a, b) in enumerate(zip(self.lhs, self.rhs)):
                 if a != b and "_" not in (a, b):
                     why.append(f"piece {position} is {a} on the lhs and {b} on the rhs")
             return tuple(why)
-        # The layouts have different piece counts, so positions do not face
-        # each other: compare the rolls of the labels both operands hold.
+        # The layouts differ in size, so positions do not face each other:
+        # compare the rolls of the labels both operands hold.
         sides = (
             ("lhs", self.lhs_rolls, self.rhs_rolls, self.spec.rhs or ()),
             ("rhs", self.rhs_rolls, self.lhs_rolls, self.spec.lhs),
@@ -373,6 +393,62 @@ class RolledSpec:
 
     def aligned(self) -> bool:
         return not self.mismatches()
+
+
+def paired_pieces(lhs_pieces, rhs_pieces):
+    """Two layouts' pieces, cut where the other's begin, so that they pair off.
+
+    ``[j:2][i:4]`` and ``[R:8]`` hold the same eight positions in two pieces
+    and in one; cutting the second into ``[R:2][R:4]`` pairs every piece with
+    the piece at its positions. The outer part of a cut piece keeps the
+    coarser stride: ``[i:8:1]`` cut at 4 is ``[i:2:4][i:4:1]``.
+
+    Args:
+        lhs_pieces, rhs_pieces: each layout's pieces in order, as
+            `(dim, extent, stride)`
+
+    Returns:
+        (lhs, rhs, lhs_at, rhs_at): the cut pieces of each layout, equal in
+        number and extents, and for each piece given its position among them,
+        or None if it was cut. None if the layouts differ in size.
+    """
+    rest = [list(lhs_pieces), list(rhs_pieces)]
+    whole = [[True] * len(lhs_pieces), [True] * len(rhs_pieces)]
+    index = [0, 0]
+    cut = ([], [])
+    at = ([None] * len(lhs_pieces), [None] * len(rhs_pieces))
+    while rest[0] and rest[1]:
+        extent = min(rest[0][0][1], rest[1][0][1])
+        for side in (0, 1):
+            dim, held, stride = rest[side][0]
+            if held == extent:
+                if whole[side][index[side]]:
+                    at[side][index[side]] = len(cut[side])
+                cut[side].append((dim, held, stride))
+                rest[side].pop(0)
+                index[side] += 1
+            else:
+                inner = held // extent
+                cut[side].append((dim, extent, stride * inner))
+                rest[side][0] = (dim, inner, stride)
+                whole[side][index[side]] = False
+    if rest[0] or rest[1]:
+        return None
+    return tuple(cut[0]), tuple(cut[1]), tuple(at[0]), tuple(at[1])
+
+
+def _moved_rolls(side, rolls, at, cut_rolls):
+    """`rolls` on the positions of the cut pieces.
+
+    A roll over a piece that was cut is dropped and described in `cut_rolls`.
+    """
+    moved = []
+    for piece, by in rolls:
+        if at[piece] is None or at[by] is None:
+            cut_rolls.append(f"{side} roll({piece} by {by})")
+        else:
+            moved.append((at[piece], at[by]))
+    return moved
 
 
 def _base(label: str) -> str:
