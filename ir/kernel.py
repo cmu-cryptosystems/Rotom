@@ -29,7 +29,7 @@ class KernelOp(Enum):
     Operation Categories:
         Tensor ops: TENSOR, CS, CONST, ADD, SUB, MUL, SUM, MEAN, PRODUCT
         Matrix ops: MATMUL, BSGS_MATMUL, STRASSEN_MATMUL
-        Convolution: CONV_DIRECT, CONV3D
+        Convolution: CONV_DIRECT
         Polynomial: POLY
         Conversions: CONVERSION
         Replications: REPLICATE
@@ -52,7 +52,6 @@ class KernelOp(Enum):
     MATMUL = "MATMUL"
     BSGS_MATMUL = "BSGS_MATMUL"
     STRASSEN_MATMUL = "STRASSENS"
-    CONV3D = "CONV3D"
     CONV_DIRECT = "CONV_DIRECT"
     # poly
     POLY = "POLY"

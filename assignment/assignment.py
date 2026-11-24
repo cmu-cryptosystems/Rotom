@@ -638,19 +638,6 @@ class LayoutAssignment:
                 for k, s in zip(norm_kernel, norm_shape)
             )
             if not fits:
-                # Conv3D(valid): layout keeps input-sized spatial extents; lowering masks outside
-                # the logical output box. Analysis shape is [C_out, D_out_p2, H_out_p2, W_out_p2].
-                if (
-                    getattr(kernel.layout.term, "op", None) == TensorOp.CONV3D
-                    and len(kernel.layout.term.cs) >= 4
-                    and kernel.layout.term.cs[3] == "valid"
-                    and len(kernel_shape) == len(shape) == 4
-                    and kernel_shape[0] == shape[0]
-                    and all(k >= s for k, s in zip(kernel_shape[1:], shape[1:]))
-                ):
-                    new_kernels.append(kernel)
-                    continue
-
                 # Keep searching: a term can have multiple candidate kernels and some
                 # may be shape-compatible even when others are not.
                 layout_dims = [
