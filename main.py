@@ -30,6 +30,7 @@ from benchmarks.rotom_benchmarks.matmul.matmul_256_128 import matmul_256_128
 
 # heir benchmarks
 from benchmarks.rotom_benchmarks.mlp_mnist_square import mlp_mnist_square
+from benchmarks.rotom_benchmarks.movinet import movinet_a0, movinet_tiny
 from benchmarks.rotom_benchmarks.resnet_silu import resnet_silu, resnet_silu_one_layer
 from benchmarks.rotom_benchmarks.ttm import ttm
 
@@ -135,6 +136,12 @@ def run_benchmark_or_microbenchmark(args):
                     args.n = n
                 case "resnet_silu_one_layer":
                     tensor_ir, inputs, n = resnet_silu_one_layer()
+                    args.n = n
+                case "movinet_tiny":
+                    tensor_ir, inputs, n = movinet_tiny()
+                    args.n = n
+                case "movinet_a0":
+                    tensor_ir, inputs, n = movinet_a0()
                     args.n = n
                 case "ttm":
                     tensor_ir, inputs = ttm()
