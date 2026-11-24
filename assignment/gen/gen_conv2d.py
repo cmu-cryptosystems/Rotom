@@ -25,7 +25,7 @@ from frontends.tensor_args import Conv2dArgs, axis_strides, window_axis
 from ir.kernel import Kernel, KernelOp
 from ir.kernel_cost import KernelCost
 from ir.layout import Layout
-from util.window import Window, window_keys
+from util.window import Window, window_keys, window_mismatches
 
 
 def apply_replication(term, kernel, dim):
@@ -84,6 +84,9 @@ def direct_kernels(term, window, a_kernel):
         z_dims, out_dims = dims
         z_layout = Layout(term, [], z_dims, a_layout.n, a_layout.secret)
         output_layout = Layout(term, [], out_dims, a_layout.n, a_layout.secret)
+        # Z has to sit on the input, so that only the taps rotate.
+        if window_mismatches(window, a_layout, z_layout):
+            continue
         try:
             window_keys(window, a_layout, z_layout)
         except ValueError:

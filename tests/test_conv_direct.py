@@ -8,7 +8,7 @@ from assignment.assignment import LayoutAssignment
 from assignment.gen.gen_window import FILLS, direct_dims
 from frontends.tensor import TensorTerm
 from ir.he import HEOp, HETerm
-from ir.kernel import KernelOp
+from ir.kernel import Kernel, KernelOp
 from ir.kernel_cost import KernelCost
 from ir.layout import Layout
 from lower.lower import Lower
@@ -22,6 +22,7 @@ from util.window import (
     position_indices,
     summed_pieces,
     window_keys,
+    window_mismatches,
     window_ops,
 )
 
@@ -128,6 +129,69 @@ def test_groups_compute_the_convolution(case, fill):
     packed = np.concatenate(cts)
     held = index[:, 0] >= 0
     assert np.allclose(packed[held], expected[tuple(index[held].T)])
+
+
+@pytest.mark.parametrize("case", range(len(CASES)))
+@pytest.mark.parametrize("fill", FILLS)
+def test_generated_layouts_are_aligned(case, fill):
+    window, in_layout, n = CASES[case]
+    a, z, _ = _layouts(window, in_layout, n, fill)
+    assert window_mismatches(window, a, z) == ()
+
+
+@pytest.mark.parametrize(
+    "case,z_layout,why",
+    [
+        # h_out and w_out swapped
+        (
+            0,
+            "[0:4:1];[2:8:1][1:8:1][3:4:1]",
+            (
+                "h_out=1 is at slot 4 of Z and h=1 is at slot 32 of the input",
+                "w_out=1 is at slot 32 of Z and w=1 is at slot 4 of the input",
+            ),
+        ),
+        # stride 2: the freed positions are outside the outputs, not between
+        (
+            1,
+            "[0:8:1];[G:2][1:4:1][G:2][2:4:1][3:4:1]",
+            (
+                "h_out=1 is at slot 32 of Z and h=2 is at slot 64 of the input",
+                "w_out=1 is at slot 4 of Z and w=2 is at slot 8 of the input",
+            ),
+        ),
+        # h_out on ciphertexts, h in the slots
+        (
+            0,
+            "[0:4:1][1:8:1];[G:8][2:8:1][3:4:1]",
+            (
+                "h_out=1 is at slot 0 of Z and h=1 is at slot 32 of the input",
+                "h_out and h are split over ciphertexts differently",
+            ),
+        ),
+    ],
+)
+def test_a_layout_off_the_input_is_misaligned(case, z_layout, why):
+    """Z has to put each index where the input index it is related to sits."""
+    window, in_layout, n = CASES[case]
+    a = parse_layout(in_layout, n, True)
+    assert window_mismatches(window, a, parse_layout(z_layout, n, True)) == why
+
+
+def test_a_misaligned_layout_is_not_generated(monkeypatch):
+    import assignment.gen.gen_conv2d as gen
+
+    window, in_layout, n = CASES[0]
+    a_kernel = Kernel(KernelOp.CS, [0], parse_layout(in_layout, n, True))
+    term = TensorTerm.Tensor("z", list(window.out_shape), True)
+    assert gen.direct_kernels(term, window, a_kernel)
+
+    def swapped(window, a_layout, fill):
+        z_dims, out_dims = direct_dims(window, a_layout, fill)
+        return z_dims[:1] + [z_dims[2], z_dims[1]] + z_dims[3:], out_dims
+
+    monkeypatch.setattr(gen, "direct_dims", swapped)
+    assert gen.direct_kernels(term, window, a_kernel) == set()
 
 
 @pytest.mark.parametrize("case", range(len(CASES)))
