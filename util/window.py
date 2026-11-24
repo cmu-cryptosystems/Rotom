@@ -410,7 +410,9 @@ class GroupWeights:
         """The plaintext: `source`'s elements at the slots this group fills."""
         slots, index = self.entries()
         out = np.zeros(self.n, dtype=np.float64)
-        out[slots] = np.asarray(source, dtype=np.float64)[index]
+        # The filter in the spec's shape: a depthwise filter drops its unit axis.
+        source = np.asarray(source, dtype=np.float64).reshape(self.window.filter_shape)
+        out[slots] = source[index]
         return out
 
 
