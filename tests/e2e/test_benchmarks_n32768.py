@@ -24,6 +24,7 @@ from benchmarks.rotom_benchmarks.logreg import logreg
 from benchmarks.rotom_benchmarks.matmul.matmul_128_64 import matmul_128_64
 from benchmarks.rotom_benchmarks.matmul.matmul_256_128 import matmul_256_128
 from benchmarks.rotom_benchmarks.mlp_mnist_square import mlp_mnist_square
+from benchmarks.rotom_benchmarks.movinet import movinet_tiny
 from benchmarks.rotom_benchmarks.resnet_silu import resnet_silu, resnet_silu_one_layer
 from benchmarks.rotom_benchmarks.ttm import ttm
 from lower.lower import Lower
@@ -47,6 +48,8 @@ BENCHMARKS = {
     "bert_attention": bert_attention,
     "resnet_silu_one_layer": resnet_silu_one_layer,
     "resnet_silu": resnet_silu,
+    # movinet_a0 is left out: its layout search alone takes over half an hour
+    "movinet_tiny": movinet_tiny,
 }
 
 
