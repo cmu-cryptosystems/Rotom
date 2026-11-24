@@ -430,11 +430,19 @@ class TensorEvaluator:
             case _:
                 raise NotImplementedError(op_name)
 
-    def eval(self, term: Any, inputs: Dict[str, Any]) -> Any:
-        env: Dict[Any, Any] = {}
+    def eval(
+        self, term: Any, inputs: Dict[str, Any], env: Dict[Any, Any] | None = None
+    ) -> Any:
+        """Evaluate ``term``.
+
+        ``env`` holds the values of terms already evaluated on the same
+        ``inputs``; the terms evaluated here are added to it.
+        """
+        env = {} if env is None else env
         last = None
         for t in term.post_order():
-            env[t] = self.eval_term(t, env, inputs)
+            if t not in env:
+                env[t] = self.eval_term(t, env, inputs)
             last = t
         assert last is not None
         return env[last]
