@@ -86,7 +86,7 @@ def _resnet20_stem_ir_upto(
     t = R._bn_affine_hw(t, "bn1", 16, h, w, inputs)
     if stop == "bn":
         return t
-    return R._silu_poly(t)
+    return R._silu_poly(t, inputs, "stem_conv1_bn")
 
 
 @pytest.mark.slow
