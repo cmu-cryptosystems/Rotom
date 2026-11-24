@@ -669,6 +669,15 @@ class TensorTerm:
         """Hard-swish activation."""
         return TensorTerm(TensorOp.HARD_SWISH, [self], layout)
 
+    def hard_sigmoid_centered(self, layout: Optional[str] = None) -> "TensorTerm":
+        """``hard_sigmoid(x) - 1/2``, which is ``clip(x / 6, -1/2, 1/2)``.
+
+        ``hard_sigmoid(0)`` is 1/2, which would fill a layout's gaps. This
+        form is odd, so the slots that hold zero stay zero; add the half back
+        as a public tensor.
+        """
+        return self.poly_call("hard_sigmoid_centered", -3.0, 3.0, layout)
+
     def helper_post_order(self, seen):
         """Helper routine for post-order traversal.
 

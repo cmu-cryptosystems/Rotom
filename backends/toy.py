@@ -347,6 +347,8 @@ class Toy:
             return eval_silu_polycall(vec, -8.0, 8.0, getattr(self, "inputs", None))
         elif poly_func == "hard_swish":
             return vec * np.clip(vec + 3.0, 0.0, 6.0) / 6.0
+        elif poly_func == "hard_sigmoid_centered":
+            return np.clip(vec / 6.0, -0.5, 0.5)
         else:
             raise NotImplementedError(
                 f"Poly func {poly_func!r} not implemented for eval"

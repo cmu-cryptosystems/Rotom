@@ -18,7 +18,7 @@ from frontends.tensor import TensorTerm
 from ir.kernel import Kernel, KernelOp
 from ir.kernel_cost import KernelCost
 from lower.lower import Lower
-from tests.test_conv_direct import _he_ops
+from tests.test_conv_direct import _he_ops, _run
 from tests.test_util import get_default_args
 from util.checker import check_results
 from util.layout_util import parse_layout
@@ -179,3 +179,21 @@ def test_a_conv_output_converted_to_each_of_its_other_layouts(channels, n):
             check_results(term, inputs, kernel, results, 0, args)
             converted += 1
     assert converted
+
+
+def test_a_public_operand_on_conv3d_channels_held_exactly_on_ciphertexts():
+    """80 channels on 5 ciphertexts of 16: the bias is padded to 128 on its
+    own, and is laid out like the conv output instead."""
+    rng = np.random.default_rng(6)
+    x = TensorTerm.Tensor("x", [8, 2, 4, 4], True, "[0:8:1][1:2:1][2:4:1][3:4:1]")
+    w = TensorTerm.Tensor("w", [80, 8, 1, 1, 1], False)
+    inputs = {
+        "x": rng.normal(size=(8, 2, 4, 4)),
+        "w": rng.normal(size=(80, 8, 1, 1, 1)),
+    }
+    conv = TensorTerm.conv3d(x, w, 1, "same")
+    for name, shape in (("bias", (80, 1, 1, 1)), ("full", (80, 2, 4, 4))):
+        inputs[name] = rng.normal(size=shape)
+        public = TensorTerm.Tensor(name, list(shape), False)
+        _run(conv + public, inputs, 4096)
+        _run(conv * public, inputs, 4096)
