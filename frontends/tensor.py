@@ -566,9 +566,26 @@ class TensorTerm:
         - Output tensor shape: [C_out, D_out, H_out, W_out]
         - `stride` is an int for all spatial dims, or one stride per axis
           `(stride_d, stride_h, stride_w)`.
-        - `padding` is "valid" or "same".
+        - `padding` is "valid" or "same", or one entry per axis: a mode or
+          the `(before, after)` cells of zero padding (see
+          `tensor_args.window_axis`).
         """
         return TensorTerm(TensorOp.CONV3D, [a, b, stride, padding], layout)
+
+    @staticmethod
+    def depthwise_conv3d(
+        a: "TensorTerm",
+        b: "TensorTerm",
+        stride: int | tuple[int, int, int],
+        padding: Any,
+        layout: Optional[str] = None,
+    ) -> "TensorTerm":
+        """Create a depthwise 3D convolution: each channel has its own taps.
+
+        The filter is ``[1, K_d, K_h, K_w, C]``, as ``depthwise_conv2d``'s is
+        ``[1, K_h, K_w, C]``.
+        """
+        return TensorTerm(TensorOp.CONV3D, [a, b, stride, padding, "depthwise"], layout)
 
     @staticmethod
     def concat(

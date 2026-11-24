@@ -667,7 +667,8 @@ def spec_for_term(term, shapes) -> OperatorSpec:
                 raise NotImplementedError(f"conv2d groups: {args.groups}")
             return conv_spec(args.strides, depthwise=args.depthwise)
         case TensorOp.CONV3D:
-            return conv_spec(Conv3dArgs.from_term(term).strides)
+            args = Conv3dArgs.from_term(term)
+            return conv_spec(args.strides, depthwise=args.depthwise)
         case (
             TensorOp.POLY_CALL
             | TensorOp.HARD_SWISH

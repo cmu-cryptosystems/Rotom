@@ -21,7 +21,7 @@ from assignment.gen.gen_window import (
     FILLS,
     direct_dims,
 )
-from frontends.tensor_args import Conv2dArgs, window_axis
+from frontends.tensor_args import Conv2dArgs
 from ir.kernel import Kernel, KernelOp
 from ir.kernel_cost import KernelCost
 from ir.layout import Layout
@@ -55,13 +55,15 @@ def apply_replication(term, kernel, dim):
     return Kernel(KernelOp.REPLICATE, [kernel], replicated_layout)
 
 
-def conv_window(term, a_shape, b_shape):
-    """The window of a CONV2D term over unpadded operand shapes.
+def conv_window(args, a_shape, b_shape):
+    """The window of a convolution over unpadded operand shapes.
 
-    A depthwise term carries TFLite's ``[1, K_h, K_w, C]`` filter, which the
-    window reads as the spec's ``[K_h, K_w, C]``.
+    A depthwise term carries TFLite's ``[1, *taps, C]`` filter, which the
+    window reads as the spec's ``[*taps, C]``.
+
+    Args:
+        args: the term's ``Conv2dArgs`` or ``Conv3dArgs``
     """
-    args = Conv2dArgs.from_term(term)
     taps = args.taps(b_shape)
     channels = args.out_channels(b_shape)
     if args.depthwise:
@@ -72,10 +74,7 @@ def conv_window(term, a_shape, b_shape):
         filter_shape = taps + (channels,)
     else:
         filter_shape = tuple(b_shape)
-    axes = [
-        window_axis(a_shape[axis + 1], tap, s, args.padding)
-        for axis, (tap, s) in enumerate(zip(taps, args.strides))
-    ]
+    axes = args.window(a_shape, b_shape)
     return Window(
         conv_spec(args.strides, depthwise=args.depthwise),
         tuple(a_shape),
@@ -137,8 +136,13 @@ def gen_conv2d(term, cs_kernels, shapes):
     Returns:
         Set of CONV_DIRECT kernels and their compactions
     """
+    window = conv_window(Conv2dArgs.from_term(term), shapes[0], shapes[1])
+    return window_kernels(term, window, cs_kernels)
+
+
+def window_kernels(term, window, cs_kernels):
+    """The direct kernels of a windowed term, one input layout at a time."""
     output_kernels = set()
-    window = conv_window(term, shapes[0], shapes[1])
     for a_kernel in cs_kernels:
         # assumes that a layout does not have any rolls applied to it
         if a_kernel.layout.rolls:

@@ -11,7 +11,7 @@ pulling in the full tensor frontend (e.g. lower, assignment, ir/analysis).
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 
 def axis_strides(stride: Any, axes: int) -> Tuple[int, ...]:
@@ -28,8 +28,22 @@ def axis_strides(stride: Any, axes: int) -> Tuple[int, ...]:
     return strides
 
 
+def axis_paddings(padding: Any, axes: int) -> Tuple[Any, ...]:
+    """A conv padding as one entry per spatial axis.
+
+    ``"valid"`` or ``"same"`` applies to every axis; a sequence gives each
+    axis its own mode or its own ``(before, after)`` cells of zero padding.
+    """
+    if isinstance(padding, str):
+        return (padding,) * axes
+    pads = tuple(p if isinstance(p, str) else (int(p[0]), int(p[1])) for p in padding)
+    if len(pads) != axes:
+        raise ValueError(f"expected {axes} paddings, got {padding!r}")
+    return pads
+
+
 def window_axis(
-    extent: int, kernel: int, stride: int, padding: str
+    extent: int, kernel: int, stride: int, padding: Any
 ) -> Tuple[int, int, int]:
     """One spatial axis of a windowed operator (conv, pooling).
 
@@ -38,8 +52,13 @@ def window_axis(
 
     ``"same"`` with stride 1 keeps the extent and splits ``kernel - 1`` of
     padding with the extra cell after. ``"same"`` with a larger stride pads
-    ``kernel // 2`` on both sides, as ``torch.nn.Conv2d`` does.
+    ``kernel // 2`` on both sides, as ``torch.nn.Conv2d`` does. A pair is the
+    padding itself: ``(kernel - 1, 0)`` is causal, and TensorFlow's ``SAME``
+    is ``tf_same_padding``.
     """
+    if not isinstance(padding, str):
+        before, after = padding
+        return (extent + before + after - kernel) // stride + 1, before, after
     if padding == "valid":
         return (extent - kernel) // stride + 1, 0, 0
     if padding != "same":
@@ -49,6 +68,58 @@ def window_axis(
         return extent, total // 2, total - total // 2
     pad = kernel // 2
     return (extent + 2 * pad - kernel) // stride + 1, pad, pad
+
+
+def tf_same_padding(extent: int, kernel: int, stride: int) -> Tuple[int, int]:
+    """TensorFlow's ``SAME`` padding of one axis: ``ceil(extent / stride)``
+    outputs, with the extra cell after."""
+    out = -(-extent // stride)
+    total = max((out - 1) * stride + kernel - extent, 0)
+    return total // 2, total - total // 2
+
+
+class _ConvArgs:
+    """What Conv2dArgs and Conv3dArgs share: a window over the axes after the
+    channel."""
+
+    #: number of spatial axes
+    axes = 0
+
+    @property
+    def strides(self) -> Tuple[int, ...]:
+        """The stride of each spatial axis."""
+        return axis_strides(self.stride, self.axes)
+
+    @property
+    def depthwise(self) -> bool:
+        """True when each channel is convolved on its own.
+
+        The filter is then TFLite's ``[1, *taps, C * multiplier]``, not
+        ``[C_out, C_in, *taps]``.
+        """
+        return self.groups == "depthwise"
+
+    def taps(self, filter_shape) -> Tuple[int, ...]:
+        """The kernel extent of each spatial axis, for a filter of this shape."""
+        if self.depthwise:
+            return tuple(int(k) for k in filter_shape[1 : 1 + self.axes])
+        return tuple(int(k) for k in filter_shape[-self.axes :])
+
+    def out_channels(self, filter_shape) -> int:
+        """The number of output channels of a filter of the given shape."""
+        return int(filter_shape[-1] if self.depthwise else filter_shape[0])
+
+    def window(self, in_shape, filter_shape):
+        """``(out_extent, pad_before, pad_after)`` of each spatial axis."""
+        return [
+            window_axis(int(extent), tap, stride, padding)
+            for extent, tap, stride, padding in zip(
+                in_shape[1:],
+                self.taps(filter_shape),
+                self.strides,
+                axis_paddings(self.padding, self.axes),
+            )
+        ]
 
 
 @dataclass(frozen=True)
@@ -69,40 +140,16 @@ class PolyCallArgs:
 
 
 @dataclass(frozen=True)
-class Conv2dArgs:
-    """Structured view of a CONV2D term (term.cs = [input, filter, stride, padding]).
-    After assignment, term.cs may have computed padding at index 4; use get_computed_padding(term).
-    """
+class Conv2dArgs(_ConvArgs):
+    """Structured view of a CONV2D term (term.cs = [input, filter, stride, padding, groups])."""
 
     input: Any
     filter: Any  # noqa: A003
     stride: Any
-    padding: str
+    padding: Any
     groups: Any
 
-    @property
-    def strides(self) -> Tuple[int, int]:
-        """The stride of the H and W axes."""
-        return axis_strides(self.stride, 2)
-
-    @property
-    def depthwise(self) -> bool:
-        """True when each channel is convolved on its own.
-
-        The filter is then TFLite's ``[1, K_h, K_w, C * multiplier]``, not
-        ``[C_out, C_in, K_h, K_w]``.
-        """
-        return self.groups == "depthwise"
-
-    def taps(self, filter_shape) -> Tuple[int, int]:
-        """``(K_h, K_w)`` of a filter of the given shape."""
-        if self.depthwise:
-            return int(filter_shape[1]), int(filter_shape[2])
-        return int(filter_shape[-2]), int(filter_shape[-1])
-
-    def out_channels(self, filter_shape) -> int:
-        """The number of output channels of a filter of the given shape."""
-        return int(filter_shape[3] if self.depthwise else filter_shape[0])
+    axes = 2
 
     @classmethod
     def from_term(cls, term: Any) -> "Conv2dArgs":
@@ -119,33 +166,18 @@ class Conv2dArgs:
             groups=groups,
         )
 
-    @staticmethod
-    def get_computed_padding(term: Any) -> Optional[List[int]]:
-        """Return [pad_top, pad_bottom, pad_left, pad_right] if set by assignment (term.cs[4])."""
-        if len(term.cs) > 5 and isinstance(term.cs[5], list):
-            return term.cs[5]
-        if len(term.cs) > 4 and isinstance(term.cs[4], list):
-            return term.cs[4]
-        return None
-
 
 @dataclass(frozen=True)
-class Conv3dArgs:
-    """Structured view of a CONV3D term (term.cs = [input, filter, stride, padding]).
-
-    After assignment, term.cs may have computed padding at index 4; for Conv3D this is
-    `[pad_front, pad_back, pad_top, pad_bottom, pad_left, pad_right]`.
-    """
+class Conv3dArgs(_ConvArgs):
+    """Structured view of a CONV3D term (term.cs = [input, filter, stride, padding, groups])."""
 
     input: Any
     filter: Any  # noqa: A003
     stride: Any
-    padding: str
+    padding: Any
+    groups: Any = 1
 
-    @property
-    def strides(self) -> Tuple[int, int, int]:
-        """The stride of the D, H and W axes."""
-        return axis_strides(self.stride, 3)
+    axes = 3
 
     @classmethod
     def from_term(cls, term: Any) -> "Conv3dArgs":
@@ -154,14 +186,8 @@ class Conv3dArgs:
             filter=term.cs[1],
             stride=term.cs[2],
             padding=term.cs[3],
+            groups=term.cs[4] if len(term.cs) > 4 else 1,
         )
-
-    @staticmethod
-    def get_computed_padding(term: Any) -> Optional[List[int]]:
-        """Return [pf, pb, pt, pbot, pl, pr] if set by assignment (term.cs[4])."""
-        if len(term.cs) > 4:
-            return term.cs[4]
-        return None
 
 
 @dataclass(frozen=True)
