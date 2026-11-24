@@ -3,7 +3,9 @@
 ``resnet_model.resnet20`` uses ``nn.SiLU``; by default ``tensor_ir.eval`` and Toy both call
 ``util.silu_polycall_eval.eval_silu_polycall`` with the same ``inputs`` dict, bounds from each
 ``PolyCall("silu", lo, hi)``, and poly degree/node count pinned by
-:func:`populate_resnet20_inputs`. Set ``inputs["__rotom_silu_eval_mode"] = "exact"`` to match
+:func:`populate_resnet20_inputs`. Each SiLU site can have bounds of its own
+(``RESNET20_DACAPO_SILU_BOUNDS`` for the DaCapo checkpoint). Set
+``inputs["__rotom_silu_eval_mode"] = "exact"`` to match
 PyTorch's exact SiLU. Batch norm
 is plaintext ``x * scale + shift``. Global pooling
 uses ``sum`` over H/W; ``fc`` weights are scaled by ``1/64`` so ``sum`` matches PyTorch
@@ -15,10 +17,12 @@ Shortcuts use a fixed 1×1 stride-2 conv (plaintext) equivalent to Option A padd
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Mapping
 
 import numpy as np
 import torch.nn as nn
+from benchmarks.e2e.resnet.resnet_data import CKPT_FILE, load_checkpoint
+from benchmarks.e2e.resnet.resnet_model import resnet20
 from frontends.tensor import TensorTerm
 from util.silu_polycall_eval import (
     DEFAULT_SILU_POLY_DEGREE,
@@ -26,6 +30,47 @@ from util.silu_polycall_eval import (
     SILU_POLY_DEGREE_KEY,
     SILU_POLY_NODES_KEY,
 )
+
+RESNET20_SILU_BOUNDS_KEY = "__rotom_resnet20_silu_bounds"
+
+# One fit for every SiLU site, when the inputs name no bounds of their own.
+GLOBAL_SILU_BOUNDS = (-20.0, 20.0)
+
+# The range of each SiLU's input for the DaCapo ``resnet20.silu.model``
+# checkpoint: its minimum and maximum over the 50,000 CIFAR-10 training images
+# (``silu_poly_calibration.calibrate_silu_input_bounds``, ``global_min`` and
+# ``global_max``), rounded outward. Sites are named as in
+# ``silu_poly_calibration.resnet20_silu_site_names``.
+#
+# A polynomial fitted to one site's range is far closer to SiLU there than one
+# fitted to [-20, 20]: with degree 15 the checkpoint keeps 92.1% top-1 on the
+# CIFAR-10 test set (92.3% with exact SiLU), where one degree-11 fit on
+# [-20, 20] gives 64.5%.
+RESNET20_DACAPO_SILU_BOUNDS: dict[str, tuple[float, float]] = {
+    "stem_conv1_bn": (-11.15, 11.46),
+    "layer1_block0_post_conv1_bn": (-20.68, 10.62),
+    "layer1_block0_post_add": (-15.09, 20.75),
+    "layer1_block1_post_conv1_bn": (-12.48, 7.31),
+    "layer1_block1_post_add": (-9.57, 16.61),
+    "layer1_block2_post_conv1_bn": (-15.44, 8.93),
+    "layer1_block2_post_add": (-8.84, 11.98),
+    "layer2_block0_post_conv1_bn": (-8.98, 7.32),
+    "layer2_block0_post_add": (-8.36, 13.63),
+    "layer2_block1_post_conv1_bn": (-8.83, 4.94),
+    "layer2_block1_post_add": (-7.86, 12.87),
+    "layer2_block2_post_conv1_bn": (-8.47, 5.70),
+    "layer2_block2_post_add": (-6.72, 14.60),
+    "layer3_block0_post_conv1_bn": (-8.04, 7.26),
+    "layer3_block0_post_add": (-9.49, 17.49),
+    "layer3_block1_post_conv1_bn": (-8.02, 6.77),
+    "layer3_block1_post_add": (-11.97, 20.75),
+    "layer3_block2_post_conv1_bn": (-10.30, 9.12),
+    "layer3_block2_post_add": (-25.91, 34.07),
+}
+
+# Degree 15 has the multiplicative depth of degree 11 (four levels) and fits
+# the wider of these ranges; degree 11 on them gives 91.1%.
+RESNET20_DACAPO_SILU_DEGREE = 15
 
 
 def option_a_shortcut_weights(in_ch: int, out_ch: int, planes: int) -> np.ndarray:
@@ -102,13 +147,28 @@ def _fill_basic_block(
     _fill_bn_affine(inputs, f"{block_id}_bn2", block.bn2)
 
 
-def populate_resnet20_inputs(model: nn.Module, inputs: dict) -> None:
+def populate_resnet20_inputs(
+    model: nn.Module,
+    inputs: dict,
+    silu_bounds: Mapping[str, tuple[float, float]] | None = None,
+    silu_degree: int = DEFAULT_SILU_POLY_DEGREE,
+) -> None:
     """Fill ``inputs`` with numpy weights for the ResNet-20 TensorTerm builders.
 
     Also sets ``SILU_POLY_DEGREE_KEY`` / ``SILU_POLY_NODES_KEY`` so ``tensor_ir.eval`` and
     Toy use the same SiLU polynomial fit (see ``util.silu_polycall_eval``).
+
+    Args:
+        model: a ``resnet_model.resnet20``
+        inputs: cleared, then filled
+        silu_bounds: the fit range of each SiLU site by name; every site uses
+            ``GLOBAL_SILU_BOUNDS`` without it. The ranges belong to the weights:
+            ``RESNET20_DACAPO_SILU_BOUNDS`` is for the DaCapo checkpoint.
+        silu_degree: the degree of the SiLU polynomial
     """
     inputs.clear()
+    if silu_bounds is not None:
+        inputs[RESNET20_SILU_BOUNDS_KEY] = dict(silu_bounds)
     _fill_conv_weights(inputs, "conv1_w", model.conv1)
     _fill_bn_affine(inputs, "bn1", model.bn1)
 
@@ -131,13 +191,50 @@ def populate_resnet20_inputs(model: nn.Module, inputs: dict) -> None:
     for i in range(1, 3):
         _fill_basic_block(inputs, model.layer3[i], f"l3_{i}", 64)
 
-    inputs[SILU_POLY_DEGREE_KEY] = DEFAULT_SILU_POLY_DEGREE
+    inputs[SILU_POLY_DEGREE_KEY] = int(silu_degree)
     inputs[SILU_POLY_NODES_KEY] = DEFAULT_SILU_POLY_NODES
 
 
-def _silu_poly(x: TensorTerm) -> TensorTerm:
-    # POLY_CALL("silu", …) for lowering; eval/Toy default to the shared poly on [-20, 20].
-    return x.poly_call("silu", -20.0, 20.0)
+def populate_dacapo_resnet20_inputs(
+    inputs: dict, checkpoint_path: str = CKPT_FILE
+) -> nn.Module:
+    """Fill ``inputs`` from the DaCapo checkpoint, with its SiLU ranges and degree.
+
+    Returns:
+        The PyTorch model the weights were read from, in eval mode.
+    """
+    checkpoint = load_checkpoint(checkpoint_path)
+    if checkpoint is None or "state_dict" not in checkpoint:
+        raise FileNotFoundError(f"Missing DaCapo checkpoint at {checkpoint_path}")
+    model = resnet20(num_classes=10)
+    # DaCapo saved the weights from a DataParallel model.
+    model.load_state_dict(
+        {
+            key.removeprefix("module."): value
+            for key, value in checkpoint["state_dict"].items()
+        }
+    )
+    model.eval()
+    populate_resnet20_inputs(
+        model,
+        inputs,
+        silu_bounds=RESNET20_DACAPO_SILU_BOUNDS,
+        silu_degree=RESNET20_DACAPO_SILU_DEGREE,
+    )
+    return model
+
+
+def _silu_poly(x: TensorTerm, inputs: dict, site: str) -> TensorTerm:
+    """``POLY_CALL("silu", lo, hi)`` on the range ``inputs`` gives the site."""
+    bounds = inputs.get(RESNET20_SILU_BOUNDS_KEY)
+    lo, hi = GLOBAL_SILU_BOUNDS if bounds is None else bounds[site]
+    return x.poly_call("silu", float(lo), float(hi))
+
+
+def _block_site(block_id: str, place: str) -> str:
+    """The SiLU site of a block: ``("l2_0", "post_add")`` is ``layer2_block0_post_add``."""
+    layer, block = block_id[1:].split("_")
+    return f"layer{layer}_block{block}_{place}"
 
 
 def _basic_block_silu_poly(
@@ -154,7 +251,7 @@ def _basic_block_silu_poly(
     out = _conv_same(x, f"{block_id}_conv1_w", inputs, stride)
     h1, w1 = _spatial_hw_after_conv3(h, w, stride)
     out = _bn_affine_hw(out, f"{block_id}_bn1", out_ch, h1, w1, inputs)
-    out = _silu_poly(out)
+    out = _silu_poly(out, inputs, _block_site(block_id, "post_conv1_bn"))
     out = _conv_same(out, f"{block_id}_conv2_w", inputs, 1)
     out = _bn_affine_hw(out, f"{block_id}_bn2", out_ch, h1, w1, inputs)
 
@@ -166,7 +263,7 @@ def _basic_block_silu_poly(
     else:
         shortcut = x
     out = out + shortcut
-    out = _silu_poly(out)
+    out = _silu_poly(out, inputs, _block_site(block_id, "post_add"))
     return out, h1, w1
 
 
@@ -220,7 +317,7 @@ def build_resnet20_stem_plus_l1_0_block_graph(inputs: dict) -> TensorTerm:
     x = _conv_same(x, "conv1_w", inputs, 1)
     h, w = _spatial_hw_after_conv3(h, w, 1)
     x = _bn_affine_hw(x, "bn1", 16, h, w, inputs)
-    x = _silu_poly(x)
+    x = _silu_poly(x, inputs, "stem_conv1_bn")
     x, h, w = _basic_block_silu_poly(x, "l1_0", 16, 16, 1, inputs, h, w)
     return x
 
@@ -278,7 +375,7 @@ def build_resnet20_silu_poly_graph_to_depth(
     x = _conv_same(x, "conv1_w", inputs, 1)
     h, w = _spatial_hw_after_conv3(h, w, 1)
     x = _bn_affine_hw(x, "bn1", 16, h, w, inputs)
-    x = _silu_poly(x)
+    x = _silu_poly(x, inputs, "stem_conv1_bn")
     if depth == "stem":
         return x
 
