@@ -33,6 +33,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ir.dim import DimType
+from ir.layout import Layout
 
 
 @dataclass(frozen=True)
@@ -132,16 +133,16 @@ def dim_positions(layout, dim, extent):
 _INDEX_CACHE = {}
 
 
-def position_indices(layout, shape, copies=False):
+def position_indices(layout, shape):
     """The tensor index held at each position of `layout`.
 
     Returns:
         A ``(num_ct * n, len(shape))`` array, row ``ct * n + slot``. A row is
         -1 where the position holds no element (a gap, padding past `shape`)
-        or, unless `copies`, holds a copy other than the first.
+        or holds a copy other than the first.
     """
     shape = tuple(int(s) for s in shape)
-    key = (layout.layout_str(), int(layout.n), shape, copies)
+    key = (layout.layout_str(), int(layout.n), shape)
     if key in _INDEX_CACHE:
         return _INDEX_CACHE[key]
     n = int(layout.n)
@@ -154,10 +155,10 @@ def position_indices(layout, shape, copies=False):
     ):
         for piece, stride in zip(dims, _position_strides(dims)):
             digit = (coord // stride) % piece.extent
-            if piece.dim is not None:
-                index[:, piece.dim] += digit * piece.stride
-            elif piece.dim_type == DimType.EMPTY or not copies:
+            if piece.dim is None:
                 held &= digit == 0
+            else:
+                index[:, piece.dim] += digit * piece.stride
     held &= (index < np.asarray(shape, dtype=np.int64)).all(axis=1)
     index[~held] = -1
     # A table is a few MB per ciphertext; a kernel needs two at a time.
@@ -424,44 +425,81 @@ def layout_shape(layout):
     return tuple(shape.get(dim, 1) for dim in range(max(shape, default=-1) + 1))
 
 
+def conversion_layouts(kernel):
+    """The layouts a CONVERSION kernel moves between, when it is a relayout.
+
+    A relayout takes each element from its place in one layout to its place
+    in the other. It covers layouts without rolls; a rolled conversion keeps
+    its own lowering.
+
+    Returns:
+        (source, target), or None
+    """
+    from_dims, _, child = kernel.cs
+    target = kernel.layout
+    if target.rolls or child.layout.rolls:
+        return None
+    source = Layout(child.layout.term, [], list(from_dims), target.n, target.secret)
+    if source.num_ct() != child.layout.num_ct():
+        return None
+    return source, target
+
+
+def copy_pieces(layout):
+    """The replicated pieces of a layout.
+
+    Returns:
+        (ct_pieces, slot_pieces), each a list of (extent, position stride)
+    """
+    found = []
+    for dims in (layout.ct_dims, layout.slot_dims):
+        found.append(
+            [
+                (int(piece.extent), int(stride))
+                for piece, stride in zip(dims, _position_strides(dims))
+                if piece.dim is None and piece.dim_type == DimType.FILL
+            ]
+        )
+    return tuple(found)
+
+
+def first_copy_ct(layout, ct):
+    """The ciphertext holding the first copy of what ciphertext `ct` holds."""
+    for extent, stride in copy_pieces(layout)[0]:
+        ct -= (ct // stride) % extent * stride
+    return ct
+
+
+_RELAYOUT_CACHE = {}
+
+
 def relayout_keys(in_layout, out_layout):
     """The groups that move a tensor from one layout to another.
 
     The identity as a window: each element moves from its first copy in
-    `in_layout` to every copy `out_layout` holds. Rolls are not handled.
+    `in_layout` to its first copy in `out_layout`. The output's other copies
+    are made from the first (``copy_pieces``).
 
     Returns:
         A ``(groups, 3)`` array of (output ciphertext, input ciphertext, shift)
     """
     n = int(out_layout.n)
+    key = (in_layout.layout_str(), out_layout.layout_str(), n)
+    if key in _RELAYOUT_CACHE:
+        return _RELAYOUT_CACHE[key]
     num_in_ct = max(int(in_layout.num_ct()), 1)
-    shape = layout_shape(out_layout)
     keys = np.zeros((1, 3), dtype=np.int64)
-
-    def combine(keys, terms):
-        terms = _unique_keys(terms, n, num_in_ct)
-        keys = (keys[:, None, :] + terms[None, :, :]).reshape(-1, 3)
-        return _unique_keys(keys, n, num_in_ct)
-
-    for dim, extent in enumerate(shape):
+    for dim, extent in enumerate(layout_shape(out_layout)):
         out_ct, out_slot = dim_positions(out_layout, dim, extent)
         in_ct, in_slot = dim_positions(in_layout, dim, extent)
         both = (out_ct >= 0) & (in_ct >= 0)
-        keys = combine(
-            keys, np.stack([out_ct, in_ct, in_slot - out_slot], axis=1)[both]
-        )
-    # Each copy the output holds is another place to write.
-    for dims, in_ct in ((out_layout.ct_dims, True), (out_layout.slot_dims, False)):
-        for piece, stride in zip(dims, _position_strides(dims)):
-            if piece.dim is None and piece.dim_type == DimType.FILL:
-                at = np.arange(piece.extent, dtype=np.int64) * stride
-                zero = np.zeros_like(at)
-                keys = combine(
-                    keys,
-                    np.stack(
-                        [at if in_ct else zero, zero, zero if in_ct else -at], axis=1
-                    ),
-                )
+        terms = np.stack([out_ct, in_ct, in_slot - out_slot], axis=1)[both]
+        terms = _unique_keys(terms, n, num_in_ct)
+        keys = (keys[:, None, :] + terms[None, :, :]).reshape(-1, 3)
+        keys = _unique_keys(keys, n, num_in_ct)
+    if len(_RELAYOUT_CACHE) >= 4096:
+        _RELAYOUT_CACHE.clear()
+    _RELAYOUT_CACHE[key] = keys
     return keys
 
 
@@ -471,21 +509,24 @@ def relayout_mask(in_layout, out_layout, key):
     n = int(out_layout.n)
     out_ct, in_ct, shift = (int(k) for k in key)
     shape = layout_shape(out_layout)
-    out = position_indices(out_layout, shape, copies=True)[
-        out_ct * n : (out_ct + 1) * n
-    ]
+    out = position_indices(out_layout, shape)[out_ct * n : (out_ct + 1) * n]
     source = position_indices(in_layout, shape)[in_ct * n : (in_ct + 1) * n]
     source = np.roll(source, -shift, axis=0)
     return ((out[:, 0] >= 0) & (out == source).all(axis=1)).astype(int).tolist()
 
 
 def relayout_ops(in_layout, out_layout):
-    """The HE operations of a relayout: a masked rotation per group."""
+    """The HE operations of a relayout: a masked rotation per group, then a
+    rotate-and-add per doubling of each copy the output holds in slots."""
     keys = relayout_keys(in_layout, out_layout)
     n = int(out_layout.n)
     moved = keys[keys[:, 2] != 0]
+    written = int(np.unique(keys[:, 0]).shape[0])
+    doublings = written * sum(
+        int(math.ceil(math.log2(extent))) for extent, _ in copy_pieces(out_layout)[1]
+    )
     return {
         "mul": int(keys.shape[0]),
-        "rot": int(np.unique(moved[:, 1] * n + moved[:, 2]).shape[0]),
-        "add": int(keys.shape[0]) - int(np.unique(keys[:, 0]).shape[0]),
+        "rot": int(np.unique(moved[:, 1] * n + moved[:, 2]).shape[0]) + doublings,
+        "add": int(keys.shape[0]) - written + doublings,
     }

@@ -6,6 +6,7 @@ import pytest
 from assignment.alignment import conv_spec
 from assignment.assignment import LayoutAssignment
 from assignment.gen.gen_window import FILLS, direct_dims
+from backends.toy import Toy
 from frontends.tensor import TensorTerm
 from ir.he import HEOp, HETerm
 from ir.kernel import Kernel, KernelOp
@@ -24,6 +25,7 @@ from util.window import (
     window_keys,
     window_mismatches,
     window_ops,
+    relayout_ops,
 )
 
 
@@ -334,32 +336,64 @@ def test_two_convs_match_eval_and_count_the_first_conv():
     )
 
 
-@pytest.mark.parametrize(
-    "source,target,n",
-    [
-        (
-            "[0:2:8][1:8:1][0:2:4][2:8:1][G:2][0:4:1][G:2]",
-            "[0:2:8][1:8:1][0:2:4][2:8:1][0:2:2][G:4][0:2:1]",
-            4096,
-        ),
-        ("[0:4:1];[G:4][1:8:1][2:8:1]", "[1:8:1][0:4:1][2:8:1][G:4]", 256),
-        ("[1:8:1][2:8:1][0:4:1]", "[0:2:2];[G:2][0:2:1][2:8:1][1:8:1]", 256),
-        ("[0:4:1][1:8:1][2:8:1]", "[R:2:1];[0:4:1][2:8:1][1:8:1]", 256),
-    ],
-)
-def test_relayout_moves_every_element(source, target, n):
-    from util.window import layout_shape, relayout_keys, relayout_mask
+RELAYOUTS = [
+    (
+        "[0:2:8][1:8:1][0:2:4][2:8:1][G:2][0:4:1][G:2]",
+        "[0:2:8][1:8:1][0:2:4][2:8:1][0:2:2][G:4][0:2:1]",
+        4096,
+    ),
+    ("[0:4:1];[G:4][1:8:1][2:8:1]", "[1:8:1][0:4:1][2:8:1][G:4]", 256),
+    ("[1:8:1][2:8:1][0:4:1]", "[0:2:2];[G:2][0:2:1][2:8:1][1:8:1]", 256),
+    # copies in slots, on ciphertexts, and in the source
+    ("[0:4:1][1:8:1][2:8:1]", "[R:2:1];[0:4:1][2:8:1][1:8:1]", 256),
+    ("[G:4][0:4:1][1:8:1]", "[1:8:1][R:4:1][0:4:1]", 128),
+    ("[R:4:1];[0:4:1][1:8:1]", "[1:8:1];[R:4:1][0:4:1]", 32),
+    ("[R:2:1][0:4:1];[G:2][1:8:1][2:2:1]", "[1:8:1];[R:2:1][2:2:1][R:2:1][0:4:1]", 32),
+]
 
+
+def _conversion(source, target, n):
+    """A CONVERSION kernel between two layouts of one placeholder tensor."""
+    from util.window import layout_shape
+
+    shape = layout_shape(parse_layout(target, n, True))
+    term = TensorTerm.Tensor("x", list(shape), True)
     a = parse_layout(source, n, True)
     b = parse_layout(target, n, True)
-    x = np.random.default_rng(0).normal(size=layout_shape(b))
-    in_cts = [np.asarray(ct, dtype=np.float64) for ct in apply_layout(x, a)]
-    cts = [np.zeros(n) for _ in range(b.num_ct())]
-    for key in relayout_keys(a, b):
-        out_ct, in_ct, shift = (int(k) for k in key)
-        cts[out_ct] += np.roll(in_cts[in_ct], -shift) * relayout_mask(a, b, key)
-    expected = [np.asarray(ct, dtype=np.float64) for ct in apply_layout(x, b)]
-    assert np.allclose(np.concatenate(cts), np.concatenate(expected))
+    a = Layout(term, [], a.get_dims(), n, True)
+    b = Layout(term, [], b.get_dims(), n, True)
+    child = Kernel(KernelOp.TENSOR, [], a)
+    kernel = Kernel(
+        KernelOp.CONVERSION, [tuple(a.get_dims()), tuple(b.get_dims()), child], b
+    )
+    return kernel, {"x": np.random.default_rng(0).normal(size=shape)}
+
+
+@pytest.mark.parametrize("source,target,n", RELAYOUTS)
+def test_relayout_moves_every_element(source, target, n):
+    kernel, inputs = _conversion(source, target, n)
+    args = get_default_args()
+    args.n = n
+    args.backend = "toy"
+    # the toy backend checks each kernel's ciphertexts against its layout
+    Toy(Lower(kernel).run(), inputs, args).run()
+
+
+@pytest.mark.parametrize("source,target,n", RELAYOUTS)
+def test_relayout_cost_counts_the_lowered_circuit(source, target, n):
+    kernel, _ = _conversion(source, target, n)
+    circuit = Lower(kernel).run()
+    counts = {"mul": 0, "rot": 0, "add": 0}
+    seen = set()
+    for root in circuit[kernel].values():
+        for term in root.post_order():
+            if term in seen:
+                continue
+            seen.add(term)
+            name = {HEOp.MUL: "mul", HEOp.ROT: "rot", HEOp.ADD: "add"}.get(term.op)
+            if name:
+                counts[name] += 1
+    assert counts == relayout_ops(kernel.cs[2].layout, kernel.layout)
 
 
 def test_downsampling_block_with_a_conversion_matches_eval():
@@ -386,3 +420,36 @@ def test_downsampling_block_with_a_conversion_matches_eval():
     term = conv(y, "w4", 16, 16, 3, 1, 8) + y
     kernel = _run(term, inputs, 4096)
     assert any(k.op == KernelOp.CONVERSION for k in kernel.post_order())
+
+
+def test_layouts_with_a_dims_digits_in_another_order_are_not_aligned():
+    from assignment.gen.gen_align import _same_digits
+
+    def pieces(layout):
+        return [p for p in parse_layout(layout, 64, True).get_dims() if p.dim == 0]
+
+    assert _same_digits(pieces("[0:2:2][0:2:1][1:16:1]"), pieces("[0:4:1][1:16:1]"))
+    assert not _same_digits(pieces("[0:2:1][0:2:2][1:16:1]"), pieces("[0:4:1][1:16:1]"))
+
+
+@pytest.mark.parametrize("channels,n", [(4, 512), (8, 1024)])
+def test_residual_add_of_branches_with_reordered_channel_digits(channels, n):
+    """A conv can place the channel's low digit ahead of its high digit; the
+    shortcut it is added to holds the channel in order."""
+    rng = np.random.default_rng(0)
+    size = 8
+    inputs = {"x": rng.normal(size=(2, size, size))}
+
+    def weights(name, shape):
+        inputs[name] = rng.normal(size=shape) * 0.3
+        return TensorTerm.Tensor(name, list(shape), False)
+
+    def conv(x, name, c_in):
+        y = TensorTerm.conv2d(x, weights(name, (channels, c_in, 3, 3)), 1, "same")
+        shape = (channels, size, size)
+        return y * weights(name + "_s", shape) + weights(name + "_b", shape)
+
+    x = TensorTerm.Tensor("x", [2, size, size], True)
+    h = conv(x, "w0", 2).poly_call("relu", -8.0, 8.0)
+    out = conv(h, "w1", channels).poly_call("relu", -8.0, 8.0)
+    _run(conv(out, "w2", channels) + h, inputs, n)
