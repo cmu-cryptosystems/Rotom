@@ -134,6 +134,16 @@ class TensorTerm:
         self.cs = cs
         self.layout = layout
 
+    def __deepcopy__(self, memo):
+        """A term is a value: a deep copy of anything that holds one shares it.
+
+        Layouts hold their term, and the layout search deep-copies kernels and
+        layouts for every candidate. Copying the term copied the whole program
+        below it each time, and past about a dozen layers of a network it
+        exceeded the recursion limit.
+        """
+        return self
+
     def __hash__(self):
         """Compute hash of the tensor term for use in sets and dictionaries.
 
