@@ -181,7 +181,7 @@ def test_a_conv_output_converted_to_each_of_its_other_layouts(channels, n):
     assert converted
 
 
-def test_a_public_operand_on_channels_held_exactly_on_ciphertexts():
+def test_a_public_operand_on_conv3d_channels_held_exactly_on_ciphertexts():
     """80 channels on 5 ciphertexts of 16: the bias is padded to 128 on its
     own, and is laid out like the conv output instead."""
     rng = np.random.default_rng(6)
