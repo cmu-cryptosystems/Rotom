@@ -268,6 +268,33 @@ def check_ct_roll_alignment(alignment, a_kernel, b_kernel):
     return True
 
 
+def _digit_strides(pieces):
+    """The index stride of each binary digit the pieces hold, outermost first.
+
+    ``[0:4:2]`` holds two digits, worth 4 and 2. A replicated piece holds no
+    index, so its digits are None.
+    """
+    strides = []
+    for piece in pieces:
+        extent = piece.extent
+        while extent > 1:
+            extent //= 2
+            strides.append(None if piece.dim is None else piece.stride * extent)
+    return strides
+
+
+def _same_digits(a_pieces, b_pieces):
+    """True when two runs of pieces put the same index digit at each position.
+
+    ``[0:2:1][0:2:2]`` and ``[0:4:1]`` cover the same extent of dim 0 but hold
+    its elements in a different order.
+    """
+    return all(
+        a is None or b is None or a == b
+        for a, b in zip(_digit_strides(a_pieces), _digit_strides(b_pieces))
+    )
+
+
 def check_dim_alignment(alignment, a_kernel, b_kernel):
     a_dims = a_kernel.layout.get_dims()
     b_dims = b_kernel.layout.get_dims()
@@ -298,6 +325,10 @@ def check_dim_alignment(alignment, a_kernel, b_kernel):
         a_extent = prod([dim.extent for dim in a_dims[a_start : a_next + 1]])
         b_extent = prod([dim.extent for dim in b_dims[b_start : b_next + 1]])
         if a_extent == b_extent:
+            if not _same_digits(
+                a_dims[a_start : a_next + 1], b_dims[b_start : b_next + 1]
+            ):
+                return False
             a_next += 1
             b_next += 1
             a_start = a_next
