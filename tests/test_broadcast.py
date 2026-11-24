@@ -94,3 +94,39 @@ def test_a_gate_from_a_mean_scales_its_features():
     term = x * x.mean((2, 3))
     kernel = _run(term, inputs, 2048)
     assert any(k.op == KernelOp.REPLICATE for k in kernel.post_order())
+
+
+@pytest.mark.parametrize("n", [256, 4096])
+def test_a_public_bias_on_a_strided_conv_output(n):
+    """The conv leaves its channel in pieces between gaps; the bias is laid
+    out like it, replicated over H and W."""
+    rng = np.random.default_rng(4)
+    x = TensorTerm.Tensor("x", [3, 16, 16], True)
+    w = TensorTerm.Tensor("w", [4, 3, 3, 3], False)
+    b = TensorTerm.Tensor("b", [4, 1, 1], False)
+    inputs = {
+        "x": rng.normal(size=(3, 16, 16)),
+        "w": rng.normal(size=(4, 3, 3, 3)),
+        "b": rng.normal(size=(4, 1, 1)),
+    }
+    kernel = _run(TensorTerm.conv2d(x, w, 2, "same") + b, inputs, n)
+    # the bias is a plaintext in the conv's layout: nothing is replicated
+    assert [k.op for k in kernel.post_order()] == [
+        KernelOp.TENSOR,
+        KernelOp.CONV_DIRECT,
+        KernelOp.TENSOR,
+        KernelOp.ADD,
+    ]
+
+
+def test_a_public_scale_per_position_on_a_conv_output():
+    rng = np.random.default_rng(5)
+    x = TensorTerm.Tensor("x", [3, 16, 16], True)
+    w = TensorTerm.Tensor("w", [4, 3, 3, 3], False)
+    scale = TensorTerm.Tensor("scale", [1, 8, 8], False)
+    inputs = {
+        "x": rng.normal(size=(3, 16, 16)),
+        "w": rng.normal(size=(4, 3, 3, 3)),
+        "scale": rng.normal(size=(1, 8, 8)),
+    }
+    _run(TensorTerm.conv2d(x, w, 2, "same") * scale, inputs, 4096)
