@@ -62,7 +62,9 @@ def lower_compact(env, kernel):
     target_cts = kernel.layout.num_ct()
 
     while remaining_ct_dims and len(layout_cts.cts) > target_cts:
-        pending = [d for d in remaining_ct_dims if d.dim is not None]
+        # Only the pieces the output holds in slots move; the rest stay on
+        # ciphertexts.
+        pending = [d for d in remaining_ct_dims if d.dim is not None and d in slot_dims]
         if not pending:
             break
         if merge_outer_first:
