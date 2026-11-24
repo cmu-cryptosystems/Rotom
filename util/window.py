@@ -22,6 +22,7 @@ Key functions:
 - dim_positions: the position of each index of one dim under a layout
 - position_indices: the tensor index held at each position of a layout
 - window_keys: the groups of a window under two layouts
+- window_mismatches: why a layout of ``Z`` is not aligned with the input
 - window_ops: the HE operation counts of the kernel
 - GroupWeights: the filter elements one group multiplies by
 """
@@ -240,6 +241,55 @@ def window_keys(window, in_layout, z_layout):
         _KEY_CACHE.clear()
     _KEY_CACHE[key] = keys
     return keys
+
+
+def window_mismatches(window, in_layout, z_layout):
+    """Why ``Z`` is not aligned with the input; empty when it is.
+
+    ``Z`` is aligned with the input when every index of ``Z`` sits at the slot
+    of the input index the spec relates it to at tap 0:
+
+    - a label both hold (``c_in``) sits where the same index of the input does
+    - a window's output (``h_out``) sits where ``h = stride * h_out`` does
+
+    so the rotations of the kernel are the taps' alone. Ciphertexts are picked,
+    not rotated: there, distinct indices only have to stay on distinct
+    ciphertexts. A label only the filter holds (``c_out``) has no input index
+    and is free to sit anywhere.
+    """
+    spec = window.spec
+    why = []
+    for z_dim, label in enumerate(window.z_labels):
+        relation = window.window_of(label)
+        if label in spec.lhs:
+            source, step, const = label, 1, 0
+        elif relation is not None:
+            source, step, const = relation.label, relation.stride, relation.const
+        else:
+            continue
+        lhs_dim = spec.lhs.index(source)
+        z_ct, z_slot = dim_positions(z_layout, z_dim, window.z_shape[z_dim])
+        in_ct, in_slot = dim_positions(in_layout, lhs_dim, window.in_shape[lhs_dim])
+        z_at = np.arange(window.z_shape[z_dim])
+        in_at = step * z_at + const
+        inside = (in_at >= 0) & (in_at < window.in_shape[lhs_dim])
+        z_at, in_at = z_at[inside], in_at[inside]
+        if (z_ct[z_at] < 0).any() or (in_ct[in_at] < 0).any():
+            why.append(f"a layout does not hold every index of {label}")
+            continue
+        moved = np.nonzero(z_slot[z_at] != in_slot[in_at])[0]
+        if moved.size:
+            i = moved[0]
+            why.append(
+                f"{label}={z_at[i]} is at slot {z_slot[z_at[i]]} of Z and "
+                f"{source}={in_at[i]} is at slot {in_slot[in_at[i]]} of the input"
+            )
+        pairs = np.unique(np.stack([z_ct[z_at], in_ct[in_at]], axis=1), axis=0)
+        if not (
+            np.unique(pairs[:, 0]).size == np.unique(pairs[:, 1]).size == len(pairs)
+        ):
+            why.append(f"{label} and {source} are split over ciphertexts differently")
+    return tuple(why)
 
 
 def summed_pieces(window, z_layout):
