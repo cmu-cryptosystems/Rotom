@@ -1215,27 +1215,29 @@ def output_layout(term, spec, a_kernel, b_kernel):
     The operator's structure is read off `spec`: which dims align, which are
     summed away, and the output dim id each operand dim becomes.
     """
-    alignment = spec.alignment()
     lhs_out = spec.lhs_out_dims()
     rhs_out = spec.rhs_out_dims()
     match term.op:
         case TensorOp.ADD | TensorOp.SUB | TensorOp.MUL:
+            # Each piece of the output is the piece of the operand that holds
+            # a dim there. Replication faces the other operand's pieces, which
+            # may be several, so the two layouts are cut where either begins.
+            a_dims, b_dims = match_kernel_dims(a_kernel, b_kernel)
+            pairs, _, _ = _paired_dims(a_dims, b_dims)
+            # A shorter lhs was brought to the rhs's length by a leading gap,
+            # which the output holds only where the rhs has a dim.
+            lead, held = 0, len(a_kernel)
+            while held < len(b_kernel) and pairs[lead][1].dim is None:
+                held *= pairs[lead][0].extent
+                lead += 1
+            if held >= len(b_kernel):
+                pairs = pairs[lead:]
             output_dims = []
-            for a_dim in a_kernel.layout.dims:
-                b_dim_index = get_dim_from_alignment(
-                    alignment, a_dim, 0, copy(b_kernel.layout.get_dims())
-                ).dim
+            for a_dim, b_dim in pairs:
                 if a_dim.dim is not None:
                     output_dims.append(_renumbered(a_dim, lhs_out))
-                elif b_dim_index is not None:
-                    output_dims.append(
-                        Dim(
-                            rhs_out[b_dim_index],
-                            a_dim.extent,
-                            a_dim.stride,
-                            a_dim.dim_type,
-                        )
-                    )
+                elif b_dim.dim is not None:
+                    output_dims.append(_renumbered(b_dim, rhs_out))
                 else:
                     output_dims.append(a_dim)
 
