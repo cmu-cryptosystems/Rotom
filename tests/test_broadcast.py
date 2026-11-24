@@ -130,3 +130,21 @@ def test_a_public_scale_per_position_on_a_conv_output():
         "scale": rng.normal(size=(1, 8, 8)),
     }
     _run(TensorTerm.conv2d(x, w, 2, "same") * scale, inputs, 4096)
+
+
+def test_a_public_operand_on_channels_held_exactly_on_ciphertexts():
+    """80 channels on 5 ciphertexts of 16: the bias is padded to 128 on its
+    own, and is laid out like the conv output instead."""
+    rng = np.random.default_rng(6)
+    x = TensorTerm.Tensor("x", [8, 4, 4], True)
+    w = TensorTerm.Tensor("w", [80, 8, 1, 1], False)
+    inputs = {"x": rng.normal(size=(8, 4, 4)), "w": rng.normal(size=(80, 8, 1, 1))}
+    conv = TensorTerm.conv2d(x, w, 1, "same")
+    held_exactly = False
+    for name, shape in (("bias", (80, 1, 1)), ("full", (80, 4, 4))):
+        inputs[name] = rng.normal(size=shape)
+        public = TensorTerm.Tensor(name, list(shape), False)
+        for term in (conv + public, conv * public):
+            kernel = _run(term, inputs, 256)
+            held_exactly |= any(dim.extent == 5 for dim in kernel.layout.get_dims())
+    assert held_exactly
