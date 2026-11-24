@@ -7,25 +7,18 @@ from lower.layout_cts import LayoutCiphertexts
 from lower.lower_util import rotate_and_sum
 from util.layout_util import get_cts_by_dim, get_dim_indices, get_segments, mul_vec
 from util.util import get_mask_from_segment
-from util.window import relayout_keys, relayout_mask
-
-
-def conversion_layouts(kernel):
-    """The layouts a conversion moves between, when it can be lowered as a
-    relayout: no rolls, and source dims that pack the input's ciphertexts."""
-    child = kernel.cs[2]
-    if kernel.layout.rolls or child.layout.rolls:
-        return None
-    source = Layout(
-        child.layout.term, [], list(kernel.cs[0]), kernel.layout.n, child.layout.secret
-    )
-    if source.num_ct() != child.layout.num_ct():
-        return None
-    return source, kernel.layout
+from util.window import (
+    conversion_layouts,
+    copy_pieces,
+    first_copy_ct,
+    relayout_keys,
+    relayout_mask,
+)
 
 
 def lower_relayout(env, kernel, source, target):
-    """Each output ciphertext is a sum of masked rotations of the input's."""
+    """Each output ciphertext is a sum of masked rotations of the input's,
+    replicated where the target holds copies."""
     n = target.n
     in_cts = env[kernel.cs[2]]
     rotated = {}
@@ -44,8 +37,17 @@ def lower_relayout(env, kernel, source, target):
             term = rotated[(in_ct, shift)]
         term = term * HETerm.mask([relayout_mask(source, target, key)])
         cts[out_ct] = term if out_ct not in cts else cts[out_ct] + term
-    for out_ct in range(target.num_ct()):
-        cts.setdefault(out_ct, HETerm(HEOp.ZERO_MASK, [], False))
+    # The groups write each element once. Copies in slots are doubled from
+    # it; copies on ciphertexts are the same ciphertext again.
+    _, slot_copies = copy_pieces(target)
+    for out_ct in cts:
+        for extent, stride in slot_copies:
+            cts[out_ct] = rotate_and_sum(cts[out_ct], extent, stride, True)
+    zero = HETerm(HEOp.ZERO_MASK, [], False)
+    cts = {
+        out_ct: cts.get(first_copy_ct(target, out_ct), zero)
+        for out_ct in range(target.num_ct())
+    }
     return LayoutCiphertexts(layout=target, cts=cts)
 
 

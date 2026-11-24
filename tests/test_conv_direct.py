@@ -6,9 +6,10 @@ import pytest
 from assignment.alignment import conv_spec
 from assignment.assignment import LayoutAssignment
 from assignment.gen.gen_window import FILLS, direct_dims
+from backends.toy import Toy
 from frontends.tensor import TensorTerm
 from ir.he import HEOp, HETerm
-from ir.kernel import KernelOp
+from ir.kernel import Kernel, KernelOp
 from ir.kernel_cost import KernelCost
 from ir.layout import Layout
 from lower.lower import Lower
@@ -23,6 +24,7 @@ from util.window import (
     summed_pieces,
     window_keys,
     window_ops,
+    relayout_ops,
 )
 
 
@@ -270,32 +272,64 @@ def test_two_convs_match_eval_and_count_the_first_conv():
     )
 
 
-@pytest.mark.parametrize(
-    "source,target,n",
-    [
-        (
-            "[0:2:8][1:8:1][0:2:4][2:8:1][G:2][0:4:1][G:2]",
-            "[0:2:8][1:8:1][0:2:4][2:8:1][0:2:2][G:4][0:2:1]",
-            4096,
-        ),
-        ("[0:4:1];[G:4][1:8:1][2:8:1]", "[1:8:1][0:4:1][2:8:1][G:4]", 256),
-        ("[1:8:1][2:8:1][0:4:1]", "[0:2:2];[G:2][0:2:1][2:8:1][1:8:1]", 256),
-        ("[0:4:1][1:8:1][2:8:1]", "[R:2:1];[0:4:1][2:8:1][1:8:1]", 256),
-    ],
-)
-def test_relayout_moves_every_element(source, target, n):
-    from util.window import layout_shape, relayout_keys, relayout_mask
+RELAYOUTS = [
+    (
+        "[0:2:8][1:8:1][0:2:4][2:8:1][G:2][0:4:1][G:2]",
+        "[0:2:8][1:8:1][0:2:4][2:8:1][0:2:2][G:4][0:2:1]",
+        4096,
+    ),
+    ("[0:4:1];[G:4][1:8:1][2:8:1]", "[1:8:1][0:4:1][2:8:1][G:4]", 256),
+    ("[1:8:1][2:8:1][0:4:1]", "[0:2:2];[G:2][0:2:1][2:8:1][1:8:1]", 256),
+    # copies in slots, on ciphertexts, and in the source
+    ("[0:4:1][1:8:1][2:8:1]", "[R:2:1];[0:4:1][2:8:1][1:8:1]", 256),
+    ("[G:4][0:4:1][1:8:1]", "[1:8:1][R:4:1][0:4:1]", 128),
+    ("[R:4:1];[0:4:1][1:8:1]", "[1:8:1];[R:4:1][0:4:1]", 32),
+    ("[R:2:1][0:4:1];[G:2][1:8:1][2:2:1]", "[1:8:1];[R:2:1][2:2:1][R:2:1][0:4:1]", 32),
+]
 
+
+def _conversion(source, target, n):
+    """A CONVERSION kernel between two layouts of one placeholder tensor."""
+    from util.window import layout_shape
+
+    shape = layout_shape(parse_layout(target, n, True))
+    term = TensorTerm.Tensor("x", list(shape), True)
     a = parse_layout(source, n, True)
     b = parse_layout(target, n, True)
-    x = np.random.default_rng(0).normal(size=layout_shape(b))
-    in_cts = [np.asarray(ct, dtype=np.float64) for ct in apply_layout(x, a)]
-    cts = [np.zeros(n) for _ in range(b.num_ct())]
-    for key in relayout_keys(a, b):
-        out_ct, in_ct, shift = (int(k) for k in key)
-        cts[out_ct] += np.roll(in_cts[in_ct], -shift) * relayout_mask(a, b, key)
-    expected = [np.asarray(ct, dtype=np.float64) for ct in apply_layout(x, b)]
-    assert np.allclose(np.concatenate(cts), np.concatenate(expected))
+    a = Layout(term, [], a.get_dims(), n, True)
+    b = Layout(term, [], b.get_dims(), n, True)
+    child = Kernel(KernelOp.TENSOR, [], a)
+    kernel = Kernel(
+        KernelOp.CONVERSION, [tuple(a.get_dims()), tuple(b.get_dims()), child], b
+    )
+    return kernel, {"x": np.random.default_rng(0).normal(size=shape)}
+
+
+@pytest.mark.parametrize("source,target,n", RELAYOUTS)
+def test_relayout_moves_every_element(source, target, n):
+    kernel, inputs = _conversion(source, target, n)
+    args = get_default_args()
+    args.n = n
+    args.backend = "toy"
+    # the toy backend checks each kernel's ciphertexts against its layout
+    Toy(Lower(kernel).run(), inputs, args).run()
+
+
+@pytest.mark.parametrize("source,target,n", RELAYOUTS)
+def test_relayout_cost_counts_the_lowered_circuit(source, target, n):
+    kernel, _ = _conversion(source, target, n)
+    circuit = Lower(kernel).run()
+    counts = {"mul": 0, "rot": 0, "add": 0}
+    seen = set()
+    for root in circuit[kernel].values():
+        for term in root.post_order():
+            if term in seen:
+                continue
+            seen.add(term)
+            name = {HEOp.MUL: "mul", HEOp.ROT: "rot", HEOp.ADD: "add"}.get(term.op)
+            if name:
+                counts[name] += 1
+    assert counts == relayout_ops(kernel.cs[2].layout, kernel.layout)
 
 
 def test_downsampling_block_with_a_conversion_matches_eval():
