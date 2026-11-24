@@ -172,6 +172,75 @@ def init_weights(config: Config, seed: int = 0) -> Weights:
     return weights
 
 
+def from_official(variables, config: Config = A0, epsilon: float = 1e-3) -> Weights:
+    """The weights of the Model Garden's ``MovinetClassifier``, folded.
+
+    Args:
+        variables: the Keras model's variables by name (``{v.name: v.numpy()}``)
+        epsilon: the model's batch norm epsilon
+
+    Batch norm and the block's rezero scale go into the conv before them.
+    """
+
+    def one(prefix, suffix):
+        names = [n for n in variables if n.startswith(prefix) and n.endswith(suffix)]
+        if len(names) != 1:
+            raise KeyError(f"{prefix}*{suffix}: {names}")
+        return np.asarray(variables[names[0]], dtype=np.float64)
+
+    def has(prefix, suffix):
+        return any(n.startswith(prefix) and n.endswith(suffix) for n in variables)
+
+    def site(prefix, scale=1.0):
+        if has(prefix, "depthwise_kernel:0"):
+            # [K_a, K_b, C, 1], over (H, W) or over (T, 1)
+            kernel = np.transpose(one(prefix, "depthwise_kernel:0"), (2, 3, 0, 1))
+            if "temporal" in prefix:
+                weight = kernel.reshape(kernel.shape[0], 1, kernel.shape[2], 1, 1)
+            else:
+                weight = kernel[:, :, None]
+        else:
+            # [K_h, K_w, C_in, C_out]
+            weight = np.transpose(one(prefix, "kernel:0"), (3, 2, 0, 1))[:, :, None]
+        if has(prefix, "gamma:0"):
+            gain = one(prefix, "gamma:0") / np.sqrt(
+                one(prefix, "moving_variance:0") + epsilon
+            )
+            shift = one(prefix, "beta:0") - one(prefix, "moving_mean:0") * gain
+        else:
+            gain, shift = np.ones(weight.shape[0]), one(prefix, "bias:0")
+        gain, shift = gain * scale, shift * scale
+        return weight * gain[:, None, None, None, None], shift
+
+    parts = {
+        "expand": "expansion/",
+        "spatial": "feature/conv2d/",
+        "temporal": "feature/conv2d_temporal/",
+        "se_reduce": "se/se_reduce/",
+        "se_expand": "se/se_expand/",
+        "project": "projection/",
+        "skip": "skip/",
+    }
+    top = {
+        "stem": "stem/",
+        "head": "head/",
+        "hidden": "classifier_head/head/",
+        "classifier": "classifier_head/classifier/",
+    }
+    weights = {}
+    for name, shape in sites(config):
+        if name in top:
+            weights[name] = site(top[name])
+        else:
+            layer, part = name.split("/")
+            block = f"block{layer[1 : layer.index('l')]}_layer{layer[layer.index('l') + 1 :]}"
+            scale = float(variables[f"{block}/scale:0"]) if part == "project" else 1.0
+            weights[name] = site(f"{block}/bneck/{parts[part]}", scale)
+        if weights[name][0].shape != tuple(shape):
+            raise ValueError(f"{name}: {weights[name][0].shape} is not {shape}")
+    return weights
+
+
 def _spatial_padding(height: int, width: int, layer_kernel, stride):
     """TensorFlow ``SAME`` on H and W, nothing in time."""
     return (
