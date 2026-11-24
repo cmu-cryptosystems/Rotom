@@ -11,19 +11,24 @@ from util.window import (
     conversion_layouts,
     copy_pieces,
     first_copy_ct,
+    masked_groups,
     relayout_keys,
     relayout_mask,
 )
 
 
-def lower_relayout(env, kernel, source, target):
+def lower_relayout(in_cts, source, target, zero_gaps=False):
     """Each output ciphertext is a sum of masked rotations of the input's,
-    replicated where the target holds copies."""
+    replicated where the target holds copies.
+
+    With `zero_gaps`, the input's free slots are zero, and a ciphertext that
+    moves whole is rotated without a mask (``util.window.masked_groups``).
+    """
     n = target.n
-    in_cts = env[kernel.cs[2]]
     rotated = {}
     cts = {}
-    for key in relayout_keys(source, target):
+    keys = relayout_keys(source, target)
+    for key, masked in zip(keys, masked_groups(source, target, zero_gaps)):
         out_ct, in_ct, shift = (int(k) for k in key)
         term = in_cts[in_ct]
         if term.op == HEOp.ZERO_MASK:
@@ -35,7 +40,8 @@ def lower_relayout(env, kernel, source, target):
                     HEOp.ROT, [term, amount], target.secret, "relayout"
                 )
             term = rotated[(in_ct, shift)]
-        term = term * HETerm.mask([relayout_mask(source, target, key)])
+        if masked:
+            term = term * HETerm.mask([relayout_mask(source, target, key)])
         cts[out_ct] = term if out_ct not in cts else cts[out_ct] + term
     # The groups write each element once. Copies in slots are doubled from
     # it; copies on ciphertexts are the same ciphertext again.
@@ -54,7 +60,7 @@ def lower_relayout(env, kernel, source, target):
 def lower_conversion(env, kernel):
     layouts = conversion_layouts(kernel)
     if layouts is not None:
-        return lower_relayout(env, kernel, *layouts)
+        return lower_relayout(env[kernel.cs[2]], *layouts)
 
     n = kernel.layout.n
 

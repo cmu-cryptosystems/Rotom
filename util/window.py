@@ -24,6 +24,7 @@ Key functions:
 - window_keys: the groups of a window under two layouts
 - window_mismatches: why a layout of ``Z`` is not aligned with the input
 - window_ops: the HE operation counts of the kernel
+- relayout_keys: the groups that move a tensor from one layout to another
 - GroupWeights: the filter elements one group multiplies by
 """
 
@@ -410,7 +411,9 @@ class GroupWeights:
         """The plaintext: `source`'s elements at the slots this group fills."""
         slots, index = self.entries()
         out = np.zeros(self.n, dtype=np.float64)
-        out[slots] = np.asarray(source, dtype=np.float64)[index]
+        # The filter in the spec's shape: a depthwise filter drops its unit axis.
+        source = np.asarray(source, dtype=np.float64).reshape(self.window.filter_shape)
+        out[slots] = source[index]
         return out
 
 
@@ -515,9 +518,25 @@ def relayout_mask(in_layout, out_layout, key):
     return ((out[:, 0] >= 0) & (out == source).all(axis=1)).astype(int).tolist()
 
 
-def relayout_ops(in_layout, out_layout):
-    """The HE operations of a relayout: a masked rotation per group, then a
-    rotate-and-add per doubling of each copy the output holds in slots."""
+def masked_groups(in_layout, out_layout, zero_gaps):
+    """Which relayout groups need their mask, one bool per group.
+
+    A mask keeps the slots a group moves and clears the rest of the rotated
+    ciphertext. When the input's free slots are zero (`zero_gaps`) and an
+    input ciphertext moves whole, in one group, there is nothing to clear.
+    Copies in the input's slots are never free: they are always masked off.
+    """
+    keys = relayout_keys(in_layout, out_layout)
+    if not zero_gaps or copy_pieces(in_layout)[1]:
+        return np.ones(keys.shape[0], dtype=bool)
+    groups = np.bincount(keys[:, 1], minlength=max(int(in_layout.num_ct()), 1))
+    return groups[keys[:, 1]] > 1
+
+
+def relayout_ops(in_layout, out_layout, zero_gaps=False):
+    """The HE operations of a relayout: a rotation and a mask per group (see
+    ``masked_groups``), then a rotate-and-add per doubling of each copy the
+    output holds in slots."""
     keys = relayout_keys(in_layout, out_layout)
     n = int(out_layout.n)
     moved = keys[keys[:, 2] != 0]
@@ -526,7 +545,7 @@ def relayout_ops(in_layout, out_layout):
         int(math.ceil(math.log2(extent))) for extent, _ in copy_pieces(out_layout)[1]
     )
     return {
-        "mul": int(keys.shape[0]),
+        "mul": int(masked_groups(in_layout, out_layout, zero_gaps).sum()),
         "rot": int(np.unique(moved[:, 1] * n + moved[:, 2]).shape[0]) + doublings,
         "add": int(keys.shape[0]) - written + doublings,
     }
