@@ -471,6 +471,42 @@ def get_aligned_dimensions(alignment, a_dims, b_dims):
     return aligned_b_dims, aligned_a_dims
 
 
+def plaintext_side(alignment, a_kernel, b_kernel):
+    """The side (0 or 1) of an operand that is a plaintext in the other
+    operand's layout, or None.
+
+    That is a public operand, not replicated, whose every dim faces a dim of
+    the other operand. It needs no layout of its own and no replication.
+    """
+    if (
+        not b_kernel.layout.secret
+        and b_kernel.op == KernelOp.CS
+        and all(a is not None for a, _ in alignment)
+    ):
+        return 1
+    if (
+        not a_kernel.layout.secret
+        and a_kernel.op == KernelOp.CS
+        and all(b is not None for _, b in alignment)
+    ):
+        return 0
+    return None
+
+
+def _dims_like(dims, partners):
+    """A public operand's layout, read off the other operand's `dims`: each
+    piece holds the dim it faces, or replication where the public operand has
+    an axis of extent 1, whatever extents the two operands were padded to."""
+    out = []
+    for piece in dims:
+        if piece.dim_type == DimType.EMPTY or piece.dim is None:
+            out.append(copy(piece))
+            continue
+        (partner,) = partners[piece.dim]
+        out.append(Dim(partner, piece.extent, piece.stride, DimType.FILL))
+    return out
+
+
 def match_public_kernel(alignment, a_kernel, b_kernel, left):
     """The public operand (the lhs if `left`) laid out like the other one.
 
@@ -481,8 +517,13 @@ def match_public_kernel(alignment, a_kernel, b_kernel, left):
     a_partners, b_partners = _partners(alignment)
     a_dims, b_dims = a_kernel.layout.get_dims(), b_kernel.layout.get_dims()
     try:
-        if left:
+        side = plaintext_side(alignment, a_kernel, b_kernel)
+        if left and side == 0:
+            aligned_a_dims = _dims_like(b_dims, b_partners)
+        elif left:
             aligned_a_dims = _facing_dims(b_dims, a_dims, b_partners, "b")
+        elif side == 1:
+            aligned_b_dims = _dims_like(a_dims, a_partners)
         else:
             aligned_b_dims = _facing_dims(a_dims, b_dims, a_partners, "a")
     except KeyError:
