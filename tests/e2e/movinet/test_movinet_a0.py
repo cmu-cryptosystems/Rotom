@@ -100,6 +100,23 @@ def test_one_layer_compiles_and_matches_the_reference():
     )
 
 
+@pytest.mark.parametrize(
+    "frames,size",
+    [
+        (2, 4),  # the layer's feature map is 1x1: its squeeze mean is the identity
+        (1, 8),  # one frame: the layouts have no frame dim
+    ],
+)
+def test_one_layer_compiles_on_a_clip_with_an_axis_of_extent_one(frames, size):
+    weights = init_weights(ONE_LAYER)
+    x = _clip(frames, size)
+    term, inputs = tensor_ir(ONE_LAYER, weights, x)
+    _run(term, inputs, 1024)
+    np.testing.assert_allclose(
+        term.eval(inputs).reshape(-1), reference(ONE_LAYER, weights, x), atol=1e-12
+    )
+
+
 @pytest.mark.slow
 def test_tiny_compiles_and_matches_the_reference():
     weights = init_weights(TINY)

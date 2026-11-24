@@ -366,10 +366,11 @@ def tensor_ir(config: Config, weights: Weights, x: np.ndarray):
         w = public(name + "/w", np.transpose(weights[name][0], (1, 2, 3, 4, 0)))
         return TensorTerm.depthwise_conv3d(h, w, stride, padding) + bias(name)
 
-    # 1 / (t + 1): the divisor of the cumulative average at frame t
-    frame_scale = public(
-        "frame_scale", (1.0 / np.arange(1, frames + 1)).reshape(1, frames, 1, 1)
-    )
+    if frames > 1:
+        # 1 / (t + 1): the divisor of the cumulative average at frame t
+        frame_scale = public(
+            "frame_scale", (1.0 / np.arange(1, frames + 1)).reshape(1, frames, 1, 1)
+        )
     causal_all = ((frames - 1, 0), (0, 0), (0, 0))
 
     def gate(h, p, channels):
@@ -382,8 +383,11 @@ def tensor_ir(config: Config, weights: Weights, x: np.ndarray):
             p + "se_reduce/w_cumulative", np.repeat(w[:, :channels], frames, axis=2)
         )
         w_frame = public(p + "se_reduce/w_frame", w[:, channels:])
+        cumulative = TensorTerm.conv3d(frame_mean, w_cumulative, 1, causal_all)
+        if frames > 1:  # with one frame the divisor is 1
+            cumulative = cumulative * frame_scale
         squeezed = (
-            TensorTerm.conv3d(frame_mean, w_cumulative, 1, causal_all) * frame_scale
+            cumulative
             + TensorTerm.conv3d(frame_mean, w_frame, 1, "same")
             + bias(p + "se_reduce")
         ).hard_swish()
@@ -398,12 +402,20 @@ def tensor_ir(config: Config, weights: Weights, x: np.ndarray):
         # An average pool then a 1x1 conv is one 3x3 conv, scaled where the
         # window hangs over the edge.
         w, _ = weights[p + "skip"]
-        w = public(p + "skip/w", np.tile(w, (1, 1, 1, 3, 3)) / 9.0)
+        w = np.tile(w, (1, 1, 1, 3, 3)) / 9.0
+        correction = pool_correction(height, width)
+        if correction.size == 1:
+            # a 1x1 output: the correction is one number, folded into the taps
+            w = w * correction.item()
         pooled = TensorTerm.conv3d(
-            h, w, layer.stride, _spatial_padding(height, width, (1, 3, 3), layer.stride)
+            h,
+            public(p + "skip/w", w),
+            layer.stride,
+            _spatial_padding(height, width, (1, 3, 3), layer.stride),
         )
-        correction = public(p + "skip/correction", pool_correction(height, width))
-        return pooled * correction + bias(p + "skip")
+        if correction.size > 1:
+            pooled = pooled * public(p + "skip/correction", correction)
+        return pooled + bias(p + "skip")
 
     h = TensorTerm.Tensor("x", [3, frames, height, width], True)
     h = conv(h, "stem", _DOWN, _spatial_padding(height, width, (1, 3, 3), _DOWN))
