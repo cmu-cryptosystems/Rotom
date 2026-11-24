@@ -187,12 +187,12 @@ class Shape:
                 w_i = logical_a[2]
 
                 # Logical output channels (match layout gen / eval; filter c_out is not p2-padded).
-                c_o = logical_b[0]
+                c_o = args.out_channels(logical_b)
+                if args.depthwise:
+                    # The channel is carried, in the pieces the input holds it in.
+                    c_o = _c_i
                 # Use logical filter spatial sizes (declared shape), not power-of-2-padded filter.
-                if len(logical_b) == 4:
-                    f_h, f_w = logical_b[2], logical_b[3]
-                else:
-                    f_h, f_w = logical_b[1], logical_b[2]  # 3D: assume c_in=1
+                f_h, f_w = args.taps(logical_b)
 
                 (h_o, _, _), (w_o, _, _) = (
                     window_axis(extent, kernel, s, args.padding)
@@ -350,11 +350,8 @@ class Shape:
                 a_shape = copy(self.get_shape(a))
                 b_shape = copy(self.get_shape(b))
 
-                c_o = b_shape[0]
-                if len(b_shape) == 4:
-                    f_h, f_w = b_shape[2], b_shape[3]
-                else:
-                    f_h, f_w = b_shape[1], b_shape[2]  # 3D: assume c_in=1
+                c_o = args.out_channels(b_shape)
+                f_h, f_w = args.taps(b_shape)
                 h_i = a_shape[1]
                 w_i = a_shape[2]
 

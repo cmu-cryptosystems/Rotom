@@ -561,7 +561,8 @@ def conv_spec(strides: Sequence[int], depthwise: bool = False) -> OperatorSpec:
 
     Input is ``[C_in, *spatial]``, filter is ``[C_out, C_in, *taps]`` and
     output is ``[C_out, *spatial_out]``. The input channel is contracted. For
-    depthwise, the filter is ``[C, *taps]`` and the channel is carried.
+    depthwise, the filter is ``[*taps, C]`` (TFLite's ``[1, K_h, K_w, C]``
+    without its unit axis) and the channel is carried.
 
     conv2d is ``c_in h w, c_out c_in kh kw -> c_out h_out w_out`` with
     ``h = s*h_out + kh`` and ``w = s*w_out + kw``.
@@ -576,7 +577,7 @@ def conv_spec(strides: Sequence[int], depthwise: bool = False) -> OperatorSpec:
         for i, o, t, s in zip(spatial, outs, taps, strides)
     )
     if depthwise:
-        return OperatorSpec(("c",) + spatial, ("c",) + taps, ("c",) + outs, windows)
+        return OperatorSpec(("c",) + spatial, taps + ("c",), ("c",) + outs, windows)
     return OperatorSpec(
         ("c_in",) + spatial, ("c_out", "c_in") + taps, ("c_out",) + outs, windows
     )
@@ -662,11 +663,9 @@ def spec_for_term(term, shapes) -> OperatorSpec:
             return matmul_spec(len(shapes[0]), len(shapes[1]))
         case TensorOp.CONV2D:
             args = Conv2dArgs.from_term(term)
-            # Depthwise terms carry a TFLite-style [1, Kh, Kw, C] filter, which
-            # is not the [C, Kh, Kw] filter of conv_spec(depthwise=True).
-            if args.groups != 1:
+            if args.groups not in (1, "depthwise"):
                 raise NotImplementedError(f"conv2d groups: {args.groups}")
-            return conv_spec(args.strides)
+            return conv_spec(args.strides, depthwise=args.depthwise)
         case TensorOp.CONV3D:
             return conv_spec(Conv3dArgs.from_term(term).strides)
         case (

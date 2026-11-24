@@ -142,9 +142,10 @@ def test_conv3d_spec_and_per_axis_strides():
 
 def test_depthwise_conv_spec_carries_the_channel():
     spec = conv_spec([1, 1], depthwise=True)
-    assert str(spec) == "c h w, c kh kw -> c h_out w_out [h=h_out+kh] [w=w_out+kw]"
+    # The filter is TFLite's [1, K_h, K_w, C] without its unit axis.
+    assert str(spec) == "c h w, kh kw c -> c h_out w_out [h=h_out+kh] [w=w_out+kw]"
     assert spec.contracted() == ()
-    assert spec.alignment() == {(0, 0), (1, None), (2, None), (None, 1), (None, 2)}
+    assert spec.alignment() == {(0, 2), (1, None), (2, None), (None, 0), (None, 1)}
     assert spec.lhs_out_dims() == (0, 1, 2)
 
 

@@ -85,6 +85,25 @@ class Conv2dArgs:
         """The stride of the H and W axes."""
         return axis_strides(self.stride, 2)
 
+    @property
+    def depthwise(self) -> bool:
+        """True when each channel is convolved on its own.
+
+        The filter is then TFLite's ``[1, K_h, K_w, C * multiplier]``, not
+        ``[C_out, C_in, K_h, K_w]``.
+        """
+        return self.groups == "depthwise"
+
+    def taps(self, filter_shape) -> Tuple[int, int]:
+        """``(K_h, K_w)`` of a filter of the given shape."""
+        if self.depthwise:
+            return int(filter_shape[1]), int(filter_shape[2])
+        return int(filter_shape[-2]), int(filter_shape[-1])
+
+    def out_channels(self, filter_shape) -> int:
+        """The number of output channels of a filter of the given shape."""
+        return int(filter_shape[3] if self.depthwise else filter_shape[0])
+
     @classmethod
     def from_term(cls, term: Any) -> "Conv2dArgs":
         groups = 1
