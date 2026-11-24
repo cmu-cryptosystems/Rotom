@@ -23,9 +23,10 @@ def convolution():
             for _ in range(input_channels)
         ]
     )
-    inputs["b"] = np.array([[[[1 for i in range(f_size)] for j in range(f_size)]]])
+    # one output channel over every input channel: [1, C_in, K, K]
+    inputs["b"] = np.ones((1, input_channels, f_size, f_size), dtype=int)
 
     tensor_ir = run_convolution(
-        dim_size, input_channels, 1, 1, f_size, f_size, 1, padding
+        dim_size, input_channels, 1, input_channels, f_size, f_size, 1, padding
     )
     return tensor_ir, inputs, 8192
