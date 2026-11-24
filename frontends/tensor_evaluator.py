@@ -423,6 +423,10 @@ class TensorEvaluator:
                 x = np.asarray(env[term.cs[0]], dtype=np.float64)
                 y = x * np.clip(x + 3.0, 0.0, 6.0) / 6.0
                 return self._trim_to_declared_shape(y, term)
+            case "Gather":
+                # cs = [source term, weights]: a vector of ``weights.n`` zeros
+                # with the source's elements at the slots ``weights`` names.
+                return term.cs[1].vector(env[term.cs[0]])
             case _:
                 raise NotImplementedError(op_name)
 

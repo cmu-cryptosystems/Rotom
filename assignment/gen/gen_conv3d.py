@@ -62,6 +62,8 @@ def gen_conv3d(term, cs_kernels, shapes):
     for a_kernel in cs_kernels:
         if a_kernel.layout.rolls:
             continue
+        # The input is a placeholder, so the search adds the input's own cost.
+        a_kernel = Kernel(KernelOp.CS, [0], a_kernel.layout)
 
         replicated_dims, b_dims = replication_dims(spec, a_shape, b_shape)
         for dim in replicated_dims[::-1]:

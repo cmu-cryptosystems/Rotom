@@ -305,6 +305,12 @@ class Toy:
             The packed vector at the specified index
         """
         layout = term.cs[0]
+        if layout.term.op == TensorOp.GATHER:
+            # One plaintext for one multiply, already in slot order. A network
+            # has thousands of them, so none is kept past its use.
+            source, weights = layout.term.cs
+            return weights.vector(self._dense_eval_for_tensor_term(source))
+
         pkey = self._pack_cache_key(layout)
         if pkey not in self.input_cache:
             tensor = self._dense_eval_for_tensor_term(layout.term)

@@ -15,7 +15,9 @@ import math
 
 from ir.dim import DimType
 from ir.kernel import KernelOp
+from ir.layout import Layout
 from util.util import get_slot_dims, prod
+from util.window import relayout_ops, summed_pieces, window_ops
 
 from .layout_utils import dimension_merging
 
@@ -530,6 +532,15 @@ class KernelCost:
         from_dims = self.kernel.cs[0]
         to_dims = self.kernel.cs[1]
 
+        # Without rolls the conversion is lowered as a relayout: count it.
+        child = self.kernel.cs[2].layout
+        if not self.kernel.layout.rolls and not child.rolls:
+            source = Layout(child.term, [], list(from_dims), child.n, child.secret)
+            if source.num_ct() == child.num_ct():
+                for op, count in relayout_ops(source, self.kernel.layout).items():
+                    ops[op] += count
+                return ops
+
         _, from_slot_dims = get_slot_dims(from_dims, self.kernel.layout.n)
         _, to_slot_dims = get_slot_dims(to_dims, self.kernel.layout.n)
 
@@ -551,6 +562,20 @@ class KernelCost:
         ops["add"] = ops["rot"]
         ops["rot"] *= 2
 
+        return ops
+
+    def conv_direct_ops(self, ops):
+        """The operations of a direct convolution, counted from its groups.
+
+        Args:
+            ops: Dictionary of operation counts
+
+        Returns:
+            dict: Updated operation counts
+        """
+        a_kernel, z_layout, window = self.kernel.cs
+        for op, count in window_ops(window, a_kernel.layout, z_layout).items():
+            ops[op] += count
         return ops
 
     def conv2d_ops(self, ops):
@@ -628,10 +653,10 @@ class KernelCost:
                 ops = self.bsgs_matmul_ops(ops)
             case KernelOp.STRASSEN_MATMUL:
                 ops = self.strassen_ops(ops)
-            case KernelOp.CONV2D:
-                ops = self.conv2d_ops(ops)
             case KernelOp.CONV3D:
                 ops = self.conv2d_ops(ops)
+            case KernelOp.CONV_DIRECT:
+                ops = self.conv_direct_ops(ops)
             case KernelOp.ROLL:
                 ops = self.roll_ops(ops)
             case KernelOp.BSGS_ROLL:
@@ -766,11 +791,15 @@ class KernelCost:
                         pass
                     case KernelOp.MUL | KernelOp.ROLL | KernelOp.CONVERSION:
                         d += 1
-                    case KernelOp.MATMUL | KernelOp.CONV2D:
+                    case KernelOp.MATMUL:
                         # HACK: depth actually varies if masking is required or not
                         d += 2
                     case KernelOp.CONV3D:
                         d += 2
+                    case KernelOp.CONV_DIRECT:
+                        # the weights, then the mask after a sum over slots
+                        _, z_layout, window = term.cs
+                        d += 2 if summed_pieces(window, z_layout)[1] else 1
                     case _:
                         raise NotImplementedError(term.op)
         return d

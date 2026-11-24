@@ -240,7 +240,7 @@ class KernelCost(MatmulCostMixin, ConvCostMixin, RollCostMixin):
                 ops = self.bsgs_matmul_ops(ops)
             case KernelOp.STRASSEN_MATMUL:
                 ops = self.strassen_ops(ops)
-            case KernelOp.CONV2D | KernelOp.CONV3D:
+            case KernelOp.CONV3D:
                 # ConvCostMixin only defines conv2d_ops; it is layout-geometry based and
                 # applies equally to 3D conv kernels.
                 ops = self.conv2d_ops(ops)
@@ -344,7 +344,7 @@ class KernelCost(MatmulCostMixin, ConvCostMixin, RollCostMixin):
                         pass
                     case KernelOp.MUL | KernelOp.ROLL | KernelOp.CONVERSION:
                         d += 1
-                    case KernelOp.MATMUL | KernelOp.CONV2D | KernelOp.CONV3D:
+                    case KernelOp.MATMUL | KernelOp.CONV3D:
                         d += 2
                     case _:
                         raise NotImplementedError(term.op)

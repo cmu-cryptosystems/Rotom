@@ -1,16 +1,16 @@
 """
 2D Convolution layout generation utilities.
 
-This module provides functions for generating optimal layouts for 2D convolution
-operations in FHE computations. Convolution operations require special handling
-for padding, stride, and spatial dimensions to ensure correct computation
-in the homomorphic encryption domain.
+A convolution is generated as a direct kernel: rotations of the input, each
+multiplied by a plaintext of filter elements (``util.window``). Its output
+layout follows the input layout, with the output channel on ciphertexts or in
+the positions the input leaves free.
 
 Key functions:
-- apply_replication: Applies replication to convolution kernels
+- apply_replication: Applies replication to a kernel (used by pooling)
 - calculate_padding: Calculates padding requirements for convolution
+- direct_kernels: The direct kernel of one input layout, and its compaction
 - gen_conv2d: Main function for generating convolution layouts
-
 """
 
 from copy import deepcopy as copy
@@ -18,15 +18,14 @@ from copy import deepcopy as copy
 from assignment.alignment import conv_spec
 from assignment.gen.gen_compaction import find_compaction
 from assignment.gen.gen_window import (
-    filter_dims,
-    materialized_shape,
-    output_dims,
-    replication_dims,
+    FILLS,
+    direct_dims,
 )
 from frontends.tensor_args import Conv2dArgs, axis_strides, window_axis
 from ir.kernel import Kernel, KernelOp
+from ir.kernel_cost import KernelCost
 from ir.layout import Layout
-from util.util import round_to_ceiling_power_of_2
+from util.window import Window, window_keys
 
 
 def apply_replication(term, kernel, dim):
@@ -68,33 +67,53 @@ def calculate_padding(input_shape, filter_shape, stride, padding):
     return pads
 
 
+def direct_kernels(term, window, a_kernel):
+    """The direct kernel of one input layout, and its compaction.
+
+    The output channel can go on ciphertexts, in the positions a stride frees,
+    or in every gap (``FILLS``). The one kept is the cheapest to compute and
+    compact, since each placement gives the operators downstream another
+    layout to consider.
+    """
+    best = None
+    a_layout = a_kernel.layout
+    for fill in FILLS:
+        dims = direct_dims(window, a_layout, fill)
+        if dims is None:
+            continue
+        z_dims, out_dims = dims
+        z_layout = Layout(term, [], z_dims, a_layout.n, a_layout.secret)
+        output_layout = Layout(term, [], out_dims, a_layout.n, a_layout.secret)
+        try:
+            window_keys(window, a_layout, z_layout)
+        except ValueError:
+            # a layout that does not hold every element the window reads
+            continue
+        kernel = Kernel(
+            KernelOp.CONV_DIRECT, [a_kernel, z_layout, window], output_layout
+        )
+        compacted = find_compaction(kernel)
+        cost = KernelCost(compacted, "lan").total_cost()
+        if best is None or cost < best[0]:
+            best = (cost, {kernel, compacted})
+    return best[1] if best else set()
+
+
 def gen_conv2d(term, cs_kernels, shapes):
-    # assumption is that a_kernel (input) is secret and b_kernel (weights) is public
-    #
-    # Implementation goal:
-    # - gen_conv2d should analyze the input layout and determine the output layout
-    # - lower_conv2d should convert the convolution to a matrix-vector multiplication
-    # - lower_conv2d should determine the packing for the convolution, since the weights are public
-    #
-    # Input layout:
-    # - Input channel, dimension 1 (height), dimension 2 (width)
-    # Filter layout:
-    # - Output channel, kernel dimension 1, kernel dimension 2
-    # Stride:
-    # - Stride is either 1 or 2
-    # Padding:
-    # - Padding is either valid or same
-    # Output layout:
-    # - Output channel, dimension 0 (height), dimension 1 (width) (depending on stride and padding)
+    """Generates the kernels of a 2D convolution, one input layout at a time.
 
-    # The question is given any generalized input layout, how to figure out the summation dimensions and output layout?
-    # Step 1: Replicate the input layout to find dimension alignment
-    # Step 2: Identify the summation dimensions:
-    # - This should be: the input channel, kernel dimension 0, kernel dimension 1
-    # Step 3: Identify the output dimensions:
-    # - This should be: the output channel, dimension 0 (height), dimension 1 (width) (depending on stride and padding)
-    # Step 4: Create the layout and kernel
+    The input ``[C_in, H, W]`` is secret and the filter ``[C_out, C_in, K_h,
+    K_w]`` is public, so the filter takes whatever packing the input and
+    output layouts ask for (see ``util.window``).
 
+    Args:
+        term: the CONV2D term
+        cs_kernels: the input's candidate kernels
+        shapes: the unpadded shapes of the input and the filter
+
+    Returns:
+        Set of CONV_DIRECT kernels and their compactions
+    """
     a_shape = shapes[0]
     b_shape = shapes[1]
 
@@ -102,57 +121,24 @@ def gen_conv2d(term, cs_kernels, shapes):
     spec = conv_spec(args.strides)
     # find padding
     padding = calculate_padding(a_shape, b_shape, args.stride, args.padding)
-    term.cs.append(padding)
-
-    b_term = args.filter
-    b_term.cs.append(padding)
 
     output_kernels = set()
+    window = Window(
+        spec,
+        tuple(a_shape),
+        tuple(b_shape),
+        (b_shape[0],)
+        + tuple(
+            window_axis(a_shape[axis + 1], b_shape[axis + 2], s, args.padding)[0]
+            for axis, s in enumerate(args.strides)
+        ),
+        tuple(padding[::2]),
+    )
     for a_kernel in cs_kernels:
         # assumes that a layout does not have any rolls applied to it
         if a_kernel.layout.rolls:
             continue
-
-        # Replicate the input over the filter labels it does not hold
-        replicated_dims, b_dims = replication_dims(spec, a_shape, b_shape)
-        for dim in replicated_dims[::-1]:
-            a_kernel = apply_replication(args.input, a_kernel, dim)
-
-        # Since b is public, its layout is the one that faces the input's
-        b_dims = filter_dims(spec, a_kernel.layout.get_dims(), b_dims)
-        if b_dims is None:
-            continue
-
-        b_layout = Layout(b_term, [], b_dims, a_kernel.layout.n, False)
-        b_kernel = Kernel(KernelOp.PUNCTURED_TENSOR, [], b_layout)
-
-        # Output spatial size (depends on stride and padding)
-        h_o, w_o = (
-            window_axis(a_shape[axis + 1], b_shape[axis + 2], s, args.padding)[0]
-            for axis, s in enumerate(args.strides)
-        )
-        h_o_p2 = round_to_ceiling_power_of_2(h_o)
-        w_o_p2 = round_to_ceiling_power_of_2(w_o)
-
-        # Output layout:
-        dims = output_dims(
-            spec,
-            a_kernel.layout.get_dims(),
-            b_dims,
-            {"h_out": h_o_p2, "w_out": w_o_p2},
-        )
-        if dims is None:
-            continue
-        output_layout = Layout(
-            term, [], dims, a_kernel.layout.n, a_kernel.layout.secret
-        )
-
-        expected = [b_shape[0], h_o_p2, w_o_p2]
-        if materialized_shape(output_layout) != expected:
-            continue
-
-        kernel = Kernel(KernelOp.CONV2D, [a_kernel, b_kernel], output_layout)
-        output_kernels.add(kernel)
-        if not kernel.layout.rolls:
-            output_kernels.add(find_compaction(kernel))
+        # The input is a placeholder, so the search adds the input's own cost.
+        a_kernel = Kernel(KernelOp.CS, [0], a_kernel.layout)
+        output_kernels |= direct_kernels(term, window, a_kernel)
     return output_kernels

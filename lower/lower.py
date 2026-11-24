@@ -22,8 +22,8 @@ from lower.lower_combine import lower_combine
 from lower.lower_compact import lower_compact
 from lower.lower_concat import lower_concat
 from lower.lower_const import lower_const
-from lower.lower_conv2d import lower_conv2d
 from lower.lower_conv3d import lower_conv3d
+from lower.lower_conv_direct import lower_conv_direct
 from lower.lower_conversion import lower_conversion
 from lower.lower_cs_pack import lower_cs_pack
 from lower.lower_index import lower_index
@@ -83,10 +83,10 @@ class Lower:
                     self.env[term] = lower_sub(self.env, term)
                 case KernelOp.MUL:
                     self.env[term] = lower_mul(self.env, term)
-                case KernelOp.CONV2D:
-                    self.env[term] = lower_conv2d(self.env, term)
                 case KernelOp.CONV3D:
                     self.env[term] = lower_conv3d(self.env, term)
+                case KernelOp.CONV_DIRECT:
+                    self.env[term] = lower_conv_direct(self.env, term)
                 case KernelOp.SUM:
                     self.env[term] = lower_sum(self.env, term)
                 case KernelOp.MEAN:

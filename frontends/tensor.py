@@ -84,6 +84,7 @@ class TensorOp(Enum):
     CUMSUM = "CumSum"  # cumulative sum along axis
     AVG_POOL2D = "AvgPool2D"  # average pooling over H/W
     HARD_SWISH = "HardSwish"  # x * relu6(x + 3) / 6
+    GATHER = "Gather"  # a plaintext vector of elements gathered from a tensor
 
 
 class TensorTerm:
