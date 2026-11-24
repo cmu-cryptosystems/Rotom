@@ -211,6 +211,10 @@ class TensorEvaluator:
             or (isinstance(func, tuple) and len(func) >= 1 and func[0] == "relu")
         ):
             return np.maximum(x, 0.0)
+        if func == "hard_sigmoid_centered" or (
+            isinstance(func, tuple) and func[:1] == ("hard_sigmoid_centered",)
+        ):
+            return np.clip(np.asarray(x, dtype=np.float64) / 6.0, -0.5, 0.5)
         if func == "silu":
             # Legacy wire format without explicit bounds; use a default interval for ``poly``.
             return eval_silu_polycall(
