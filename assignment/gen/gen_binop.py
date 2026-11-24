@@ -16,7 +16,9 @@ from assignment.alignment import spec_for_term
 from assignment.gen.gen_align import (
     apply_sum_rolls,
     match_layout,
+    match_public_kernel,
     output_layout,
+    plaintext_side,
     replicate_dimensions,
 )
 from assignment.gen.gen_compaction import find_compaction
@@ -121,6 +123,14 @@ def gen_binop(term, cs_kernels, shapes, roll_flag):
             # create placeholders
             a_cs_placeholder = Kernel(KernelOp.CS, [0], a.layout)
             b_cs_placeholder = Kernel(KernelOp.CS, [1], b.layout)
+            if (
+                term.op != TensorOp.MATMUL
+                and plaintext_side(alignment, a_cs_placeholder, b_cs_placeholder)
+                is not None
+            ):
+                # a plaintext laid out like the other operand
+                replicated_kernels.append((a_cs_placeholder, b_cs_placeholder))
+                continue
             replicated_kernels.append(
                 tuple(
                     replicate_dimensions(
@@ -135,8 +145,16 @@ def gen_binop(term, cs_kernels, shapes, roll_flag):
 
     output_kernels = set()
     for kernels in replicated_kernels:
-        # add conversions or rolls to align layouts
-        matched_layouts = match_layout(spec, kernels, alignment, roll_flag)
+        side = None
+        if term.op != TensorOp.MATMUL:
+            side = plaintext_side(alignment, *kernels)
+        if side is not None:
+            # a plaintext, laid out like the other operand
+            matched = match_public_kernel(alignment, *kernels, left=side == 0)
+            matched_layouts = [] if matched is None else [matched]
+        else:
+            # add conversions or rolls to align layouts
+            matched_layouts = match_layout(spec, kernels, alignment, roll_flag)
 
         for matched_a_kernel, matched_b_kernel in matched_layouts:
             # find output layout
