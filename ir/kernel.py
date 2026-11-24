@@ -81,6 +81,25 @@ class KernelOp(Enum):
     AVG_POOL2D = "AVG_POOL2D"
 
 
+_MERGED_LAYOUT_STRS: dict = {}
+
+
+def _merged_layout_str(layout):
+    """`dimension_merging(layout).layout_str()`, computed once per layout.
+
+    A kernel's hash is its string, and the layout search hashes kernels
+    hundreds of thousands of times; merging the dims builds a new layout each
+    time. The merged string depends only on the pieces, the rolls and `n`,
+    all of which the layout's own string and `n` determine.
+    """
+    key = (layout.layout_str(), layout.n)
+    merged = _MERGED_LAYOUT_STRS.get(key)
+    if merged is None:
+        merged = dimension_merging(layout).layout_str()
+        _MERGED_LAYOUT_STRS[key] = merged
+    return merged
+
+
 class Kernel:
     """
     Represents a kernel operation in the layout IR.
@@ -115,11 +134,11 @@ class Kernel:
         Returns:
             str: Human-readable representation of the kernel
         """
-        layout = dimension_merging(self.layout)
+        layout = _merged_layout_str(self.layout)
         if self.op == KernelOp.TENSOR or self.op == KernelOp.PUNCTURED_TENSOR:
-            return f"{self.op}: {self.layout.term.cs[0]} {layout.layout_str()}"
+            return f"{self.op}: {self.layout.term.cs[0]} {layout}"
         else:
-            return f"{self.op}: {layout.layout_str()}"
+            return f"{self.op}: {layout}"
 
     def copy(self):
         """Create a copy of the kernel.
