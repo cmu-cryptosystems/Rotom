@@ -26,6 +26,19 @@ from frontends.tensor_args import (
 from util.util import round_to_ceiling_power_of_2
 
 
+def _broadcast_shape(a_shape, b_shape):
+    """The shape of an elementwise op: axes align from the right, and an axis
+    of extent 1 takes the other operand's extent."""
+    long, short = (
+        (a_shape, b_shape) if len(a_shape) >= len(b_shape) else (b_shape, a_shape)
+    )
+    out = list(long)
+    for i in range(1, len(short) + 1):
+        if out[-i] == 1:
+            out[-i] = short[-i]
+    return out
+
+
 def _avg_pool_out_hw(
     h_i: int, w_i: int, k: int, s: int, padding: str
 ) -> tuple[int, int]:
@@ -120,10 +133,7 @@ class Shape:
                     return b_shape
                 if b_shape is None:
                     return a_shape
-                if len(a_shape) > len(b_shape):
-                    return a_shape
-                else:
-                    return b_shape
+                return _broadcast_shape(a_shape, b_shape)
             case TensorOp.RESCALE | TensorOp.CAST:
                 # Rescale / cast preserve the shape of the input tensor
                 return copy(self.padded_shapes[term.cs[0]])
@@ -302,10 +312,7 @@ class Shape:
                     return b_shape
                 if b_shape is None:
                     return a_shape
-                if len(a_shape) > len(b_shape):
-                    return a_shape
-                else:
-                    return b_shape
+                return _broadcast_shape(a_shape, b_shape)
             case TensorOp.RESCALE | TensorOp.CAST:
                 # Rescale / cast preserve the shape of the input tensor
                 return copy(self.get_shape(term.cs[0]))

@@ -82,12 +82,15 @@ class OperatorSpec:
     - related:    an lhs label defined by a ``Relation``
     - a relation term: a label a relation reads, found in the rhs (a window
       tap), in the output (a window, split or slice output), or in both
+    - a unit: the label of an operand axis of extent 1 that the other operand
+      broadcasts over. No layout holds it, so it aligns with nothing.
     """
 
     lhs: Tuple[str, ...]
     rhs: Optional[Tuple[str, ...]]
     out: Tuple[str, ...]
     relations: Tuple[Relation, ...] = ()
+    units: Tuple[str, ...] = ()
 
     def __post_init__(self):
         rhs = self.rhs or ()
@@ -115,16 +118,22 @@ class OperatorSpec:
                     raise ValueError(f"label {term!r} is read by two relations")
                 terms.add(term)
 
+        for label in self.units:
+            sides = (label in self.lhs) + (label in rhs)
+            if sides != 1 or label in self.out or label in related or label in terms:
+                raise ValueError(f"unit label {label!r} must be in one operand only")
+
         for label in self.out:
             if label not in self.lhs and label not in rhs and label not in terms:
                 raise ValueError(f"output label {label!r} has no source")
         if self.rhs is None:
             return
+        held = set(self.out) | set(self.units)
         for label in self.lhs:
-            if label not in rhs and label not in self.out and label not in related:
+            if label not in rhs and label not in held and label not in related:
                 raise ValueError(f"lhs label {label!r} is summed over one operand")
         for label in rhs:
-            if label not in self.lhs and label not in self.out and label not in terms:
+            if label not in self.lhs and label not in held and label not in terms:
                 raise ValueError(f"rhs label {label!r} is summed over one operand")
 
     @classmethod
@@ -177,15 +186,17 @@ class OperatorSpec:
         """The set of (lhs dim, rhs dim) pairs; None where the other side has no dim.
 
         A label in both operands aligns its two dims. A label in one operand
-        aligns with replication on the other side.
+        aligns with replication on the other side. A unit has no dim.
         """
         if self.rhs is None:
             raise ValueError(f"a unary operator has no alignment: {self}")
         pairs = set()
         for a_dim, label in enumerate(self.lhs):
+            if label in self.units:
+                continue
             pairs.add((a_dim, self.rhs.index(label) if label in self.rhs else None))
         for b_dim, label in enumerate(self.rhs):
-            if label not in self.lhs:
+            if label not in self.lhs and label not in self.units:
                 pairs.add((None, b_dim))
         return pairs
 
@@ -536,11 +547,35 @@ def _dims(rank: int) -> Tuple[str, ...]:
     return tuple(f"d{i}" for i in range(rank))
 
 
-def elementwise_spec(lhs_rank: int, rhs_rank: int) -> OperatorSpec:
-    """Elementwise op with rank broadcasting: dims align from the right."""
-    rank = max(lhs_rank, rhs_rank)
+def elementwise_spec(lhs_shape, rhs_shape) -> OperatorSpec:
+    """Elementwise op with broadcasting: dims align from the right, and an
+    axis of extent 1 broadcasts over the other operand's.
+
+    Args:
+        lhs_shape, rhs_shape: the operand shapes, or their ranks when no axis
+            broadcasts
+
+    ``[C, T, H, W] * [C, T, 1, 1]`` is ``d0 d1 d2 d3, d0 d1 u2 u3 -> d0 d1 d2
+    d3`` with units ``u2`` and ``u3``.
+    """
+    shapes = [
+        (None,) * shape if isinstance(shape, int) else tuple(shape)
+        for shape in (lhs_shape, rhs_shape)
+    ]
+    rank = max(len(shape) for shape in shapes)
     out = _dims(rank)
-    return OperatorSpec(out[rank - lhs_rank :], out[rank - rhs_rank :], out)
+    operands = [list(out[rank - len(shape) :]) for shape in shapes]
+    units = []
+    for side, other in ((0, 1), (1, 0)):
+        for i in range(1, len(shapes[side]) + 1):
+            if i > len(shapes[other]):
+                break
+            if shapes[side][-i] == 1 and shapes[other][-i] != 1:
+                operands[side][-i] = f"u{rank - i}"
+                units.append(operands[side][-i])
+    return OperatorSpec(
+        tuple(operands[0]), tuple(operands[1]), out, units=tuple(sorted(units))
+    )
 
 
 def matmul_spec(lhs_rank: int, rhs_rank: int) -> OperatorSpec:
@@ -657,7 +692,7 @@ def spec_for_term(term, shapes) -> OperatorSpec:
     """
     match term.op:
         case TensorOp.ADD | TensorOp.SUB | TensorOp.MUL:
-            return elementwise_spec(len(shapes[0]), len(shapes[1]))
+            return elementwise_spec(shapes[0], shapes[1])
         case TensorOp.MATMUL:
             return matmul_spec(len(shapes[0]), len(shapes[1]))
         case TensorOp.CONV2D:
