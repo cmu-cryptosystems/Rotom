@@ -28,6 +28,7 @@ Layout Example:
     >>> d = a.sum(0, layout="[0:1:1]")  # Sum with specific layout
 """
 
+import hashlib
 from enum import Enum
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -85,6 +86,26 @@ class TensorOp(Enum):
     AVG_POOL2D = "AvgPool2D"  # average pooling over H/W
     HARD_SWISH = "HardSwish"  # x * relu6(x + 3) / 6
     GATHER = "Gather"  # a plaintext vector of elements gathered from a tensor
+
+
+# A child whose string is longer than this is written as a digest of it.
+_LONG_CHILD = 96
+
+
+def _child_str(child) -> str:
+    """A term's child as it appears in the term's string.
+
+    A term is hashed by its string. Writing every child in full repeats a
+    shared subterm once per use, so a network of residual blocks has a string
+    that doubles per block. A long child is named by its op and a digest of
+    its string instead, which keeps every string short and still tells apart
+    two terms that differ anywhere below.
+    """
+    text = str(child)
+    if isinstance(child, TensorTerm) and len(text) > _LONG_CHILD:
+        digest = hashlib.blake2b(text.encode(), digest_size=8).hexdigest()
+        return f"<{child.op.value} {digest}>"
+    return text
 
 
 class TensorTerm:
@@ -164,7 +185,7 @@ class TensorTerm:
         """
         # Cache the string representation to avoid recomputing for large graphs
         if not hasattr(self, "_str_cache"):
-            cs = " ".join([str(c) for c in self.cs])
+            cs = " ".join([_child_str(c) for c in self.cs])
             match self.op:
                 case TensorOp.TENSOR:
                     self._str_cache = str(self.cs[0])
@@ -177,13 +198,17 @@ class TensorTerm:
                 case TensorOp.CONST:
                     self._str_cache = str(self.cs[0])
                 case TensorOp.INDEX:
-                    self._str_cache = f"({self.cs[0]}[{self.cs[1]}])"
+                    self._str_cache = f"({_child_str(self.cs[0])}[{self.cs[1]}])"
                 case TensorOp.CONV2D:
                     args = Conv2dArgs.from_term(self)
-                    self._str_cache = f"(conv2d {str(args.input)} {str(args.filter)})"
+                    self._str_cache = (
+                        f"(conv2d {_child_str(args.input)} {_child_str(args.filter)})"
+                    )
                 case TensorOp.CONV3D:
                     args = Conv3dArgs.from_term(self)
-                    self._str_cache = f"(conv3d {str(args.input)} {str(args.filter)})"
+                    self._str_cache = (
+                        f"(conv3d {_child_str(args.input)} {_child_str(args.filter)})"
+                    )
                 case _:
                     self._str_cache = f"({self.op} {cs})"
         return self._str_cache
