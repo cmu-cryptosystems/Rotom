@@ -138,8 +138,11 @@ def test_alexnet_small_silu_poly_full_tensor_eval_matches_pytorch() -> None:
     with torch.no_grad():
         pt = model(x).cpu().numpy()
 
-    assert dense.shape == pt.shape
-    assert np.allclose(dense, pt, rtol=1e-9, atol=1e-7)
+    # The evaluator pads every dim to a power of two: 10 classes become 16.
+    classes = pt.shape[1]
+    assert dense.shape == (1, 16)
+    assert not dense[:, classes:].any()
+    assert np.allclose(dense[:, :classes], pt, rtol=1e-9, atol=1e-7)
 
 
 @pytest.mark.slow
