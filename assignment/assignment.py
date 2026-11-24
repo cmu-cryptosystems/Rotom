@@ -64,6 +64,7 @@ from util.layout_simplicity import (
     embedded_secret_conv2d_input_channel_adjacent_gap_penalty,
     layout_simplicity_penalty,
 )
+from util.util import round_to_ceiling_power_of_2
 
 
 class LayoutAssignment:
@@ -629,7 +630,14 @@ class LayoutAssignment:
 
             norm_kernel = [k for k in kernel_shape if k != 1]
             norm_shape = [s for s in shape if s != 1]
-            if norm_kernel != norm_shape:
+            # A dim whose extent is not a power of two (a conv's output
+            # channel) is held exactly on ciphertexts and padded to the next
+            # power of two in slots, or anything between when it is split.
+            fits = len(norm_kernel) == len(norm_shape) and all(
+                s <= k <= round_to_ceiling_power_of_2(s)
+                for k, s in zip(norm_kernel, norm_shape)
+            )
+            if not fits:
                 # Conv3D(valid): layout keeps input-sized spatial extents; lowering masks outside
                 # the logical output box. Analysis shape is [C_out, D_out_p2, H_out_p2, W_out_p2].
                 if (
