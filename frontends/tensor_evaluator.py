@@ -13,6 +13,8 @@ import numpy as np
 
 from util.silu_polycall_eval import eval_silu_polycall
 
+from .tensor_args import axis_strides, window_axis
+
 
 class TensorEvaluator:
     """Evaluate TensorTerm graphs.
@@ -68,76 +70,16 @@ class TensorEvaluator:
             )
             filter_tensor = filt
             filter_shape = filter_tensor.shape
-        if padding == "valid":
-            h_o = (input_shape[1] - filter_shape[2]) // stride + 1
-            w_o = (input_shape[2] - filter_shape[3]) // stride + 1
-            output_shape = [filter_shape[0], h_o, w_o]
-        elif padding == "same":
-            if stride == 1:
-                output_shape = [filter_shape[0], input_shape[1], input_shape[2]]
-            else:
-                p_h = filter_shape[2] // 2
-                p_w = filter_shape[3] // 2
-                h_pad = input_shape[1] + 2 * p_h
-                w_pad = input_shape[2] + 2 * p_w
-                h_o = (h_pad - filter_shape[2]) // stride + 1
-                w_o = (w_pad - filter_shape[3]) // stride + 1
-                output_shape = [filter_shape[0], h_o, w_o]
-        else:
-            raise ValueError(f"Unsupported padding mode: {padding!r}")
+        strides = axis_strides(stride, 2)
+        (h_o, pad_top, pad_bot), (w_o, pad_left, pad_right) = (
+            window_axis(
+                int(input_shape[axis + 1]), int(filter_shape[axis + 2]), s, padding
+            )
+            for axis, s in enumerate(strides)
+        )
+        output_shape = [filter_shape[0], h_o, w_o]
 
-        if padding == "same":
-            if stride == 1:
-                pad_top = max(
-                    0,
-                    math.floor(
-                        (
-                            stride * (output_shape[1] - 1)
-                            - input_shape[1]
-                            + filter_shape[2]
-                        )
-                        / 2
-                    ),
-                )
-                pad_bot = max(
-                    0,
-                    math.ceil(
-                        (
-                            stride * (output_shape[1] - 1)
-                            - input_shape[1]
-                            + filter_shape[2]
-                        )
-                        / 2
-                    ),
-                )
-                pad_left = max(
-                    0,
-                    math.floor(
-                        (
-                            stride * (output_shape[2] - 1)
-                            - input_shape[2]
-                            + filter_shape[3]
-                        )
-                        / 2
-                    ),
-                )
-                pad_right = max(
-                    0,
-                    math.ceil(
-                        (
-                            stride * (output_shape[2] - 1)
-                            - input_shape[2]
-                            + filter_shape[3]
-                        )
-                        / 2
-                    ),
-                )
-            else:
-                p_h = filter_shape[2] // 2
-                p_w = filter_shape[3] // 2
-                pad_top = pad_bot = p_h
-                pad_left = pad_right = p_w
-
+        if any((pad_top, pad_bot, pad_left, pad_right)):
             padded_input_tensor = []
             for channel_tensor in input_tensor:
                 padded_input_tensor.append(
@@ -179,8 +121,8 @@ class TensorEvaluator:
                 f_in_idx = in_c_idx - in_start
                 for i in range(output_shape[1]):
                     for j in range(output_shape[2]):
-                        i_start = i * stride
-                        j_start = j * stride
+                        i_start = i * strides[0]
+                        j_start = j * strides[1]
                         i_end = i_start + filter_shape[2]
                         j_end = j_start + filter_shape[3]
                         patch = input_tensor[in_c_idx][i_start:i_end, j_start:j_end]
@@ -195,26 +137,8 @@ class TensorEvaluator:
         input_tensor: np.ndarray, kernel: int, stride: int, padding: str
     ) -> np.ndarray:
         c, h, w = input_tensor.shape
-        if padding == "valid":
-            h_o = (h - kernel) // stride + 1
-            w_o = (w - kernel) // stride + 1
-            pad_top = pad_bottom = pad_left = pad_right = 0
-        elif padding == "same":
-            if stride == 1:
-                h_o, w_o = h, w
-                total_ph = max(0, (h_o - 1) * stride + kernel - h)
-                total_pw = max(0, (w_o - 1) * stride + kernel - w)
-                pad_top = total_ph // 2
-                pad_bottom = total_ph - pad_top
-                pad_left = total_pw // 2
-                pad_right = total_pw - pad_left
-            else:
-                p = kernel // 2
-                pad_top = pad_bottom = pad_left = pad_right = p
-                h_o = (h + 2 * p - kernel) // stride + 1
-                w_o = (w + 2 * p - kernel) // stride + 1
-        else:
-            raise ValueError(f"Unsupported padding mode: {padding!r}")
+        h_o, pad_top, pad_bottom = window_axis(h, kernel, stride, padding)
+        w_o, pad_left, pad_right = window_axis(w, kernel, stride, padding)
 
         if any(x != 0 for x in (pad_top, pad_bottom, pad_left, pad_right)):
             padded = np.zeros((c, h + pad_top + pad_bottom, w + pad_left + pad_right))
@@ -255,40 +179,13 @@ class TensorEvaluator:
 
         c_in, d_in, h_in, w_in = in_shape
         c_out, _c_in_f, k_d, k_h, k_w = f_shape
-        if padding == "valid":
-            d_o = (d_in - k_d) // stride + 1
-            h_o = (h_in - k_h) // stride + 1
-            w_o = (w_in - k_w) // stride + 1
-            pad = (0, 0, 0, 0, 0, 0)
-        elif padding == "same":
-            if stride == 1:
-                d_o, h_o, w_o = d_in, h_in, w_in
-                total_pd = max(0, (d_o - 1) * stride + k_d - d_in)
-                total_ph = max(0, (h_o - 1) * stride + k_h - h_in)
-                total_pw = max(0, (w_o - 1) * stride + k_w - w_in)
-                pf = total_pd // 2
-                pb = total_pd - pf
-                pt = total_ph // 2
-                pbot = total_ph - pt
-                pl = total_pw // 2
-                pr = total_pw - pl
-                pad = (pf, pb, pt, pbot, pl, pr)
-            else:
-                # Match the Conv2D evaluator convention: symmetric k//2 when stride>1.
-                pf = pb = k_d // 2
-                pt = pbot = k_h // 2
-                pl = pr = k_w // 2
-                d_pad = d_in + 2 * pf
-                h_pad = h_in + 2 * pt
-                w_pad = w_in + 2 * pl
-                d_o = (d_pad - k_d) // stride + 1
-                h_o = (h_pad - k_h) // stride + 1
-                w_o = (w_pad - k_w) // stride + 1
-                pad = (pf, pb, pt, pbot, pl, pr)
-        else:
-            raise ValueError(f"Unsupported padding mode: {padding!r}")
+        strides = axis_strides(stride, 3)
+        (d_o, pf, pb), (h_o, pt, pbot), (w_o, pl, pr) = (
+            window_axis(extent, kernel, s, padding)
+            for extent, kernel, s in zip((d_in, h_in, w_in), (k_d, k_h, k_w), strides)
+        )
+        pad = (pf, pb, pt, pbot, pl, pr)
 
-        pf, pb, pt, pbot, pl, pr = pad
         if any(x != 0 for x in pad):
             padded = np.zeros((c_in, d_in + pf + pb, h_in + pt + pbot, w_in + pl + pr))
             padded[:, pf : pf + d_in, pt : pt + h_in, pl : pl + w_in] = input_tensor
@@ -299,13 +196,13 @@ class TensorEvaluator:
             for out_c in range(c_out):
                 f_in_idx = min(in_c, f_shape[1] - 1)
                 for od in range(d_o):
-                    d_start = od * stride
+                    d_start = od * strides[0]
                     d_end = d_start + k_d
                     for oh in range(h_o):
-                        h_start = oh * stride
+                        h_start = oh * strides[1]
                         h_end = h_start + k_h
                         for ow in range(w_o):
-                            w_start = ow * stride
+                            w_start = ow * strides[2]
                             w_end = w_start + k_w
                             patch = input_tensor[
                                 in_c, d_start:d_end, h_start:h_end, w_start:w_end

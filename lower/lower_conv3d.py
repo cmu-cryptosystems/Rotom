@@ -1,5 +1,6 @@
 import numpy as np
 
+from frontends.tensor_args import axis_strides
 from ir.analysis.shape import Shape
 from ir.dim import DimType
 from ir.he import HEOp, HETerm
@@ -140,7 +141,7 @@ def lower_conv3d(env, kernel):
     rot_offset = -pad_front * d_stride - pad_top * h_stride - pad_left * w_stride
 
     k_d, k_h, k_w = b_shape[2], b_shape[3], b_shape[4]
-    _stride = kernel.layout.term.cs[2]
+    unit_stride = all(s == 1 for s in axis_strides(kernel.layout.term.cs[2], 3))
     _a_shape = get_term_shape(kernel.cs[0].layout.term)
 
     rot_amts = []
@@ -152,7 +153,7 @@ def lower_conv3d(env, kernel):
     filter_masks: list[list[int]] = []
     base_by_ct: list | None = None
     din = hin = win = 0
-    if int(_stride) != 1:
+    if not unit_stride:
         for i in range(k_d):
             for j in range(k_h):
                 for k in range(k_w):
@@ -220,7 +221,7 @@ def lower_conv3d(env, kernel):
         filter_idx = f_d * flat_hw + f_h * flat_w + f_w
         rot_amt = rot_amts[filter_idx]
         a_idx = min(ct_idx, len(a_cs) - 1)
-        if int(_stride) == 1:
+        if unit_stride:
             assert base_by_ct is not None
             m = _slot_mask_conv3d_same_stride1(
                 base_indices_ct=base_by_ct[a_idx],

@@ -590,9 +590,9 @@ def spec_for_term(term, shapes) -> OperatorSpec:
             # is not the [C, Kh, Kw] filter of conv_spec(depthwise=True).
             if args.groups != 1:
                 raise NotImplementedError(f"conv2d groups: {args.groups}")
-            return conv_spec([args.stride] * 2)
+            return conv_spec(args.strides)
         case TensorOp.CONV3D:
-            return conv_spec([Conv3dArgs.from_term(term).stride] * 3)
+            return conv_spec(Conv3dArgs.from_term(term).strides)
         case (
             TensorOp.POLY_CALL
             | TensorOp.HARD_SWISH
