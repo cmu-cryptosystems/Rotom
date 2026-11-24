@@ -11,6 +11,7 @@ Key functions:
 - find_compaction: Finds optimal compaction strategies for layouts
 """
 
+import math
 from copy import deepcopy as copy
 
 from ir.dim import Dim, DimType
@@ -18,7 +19,12 @@ from ir.kernel import Kernel, KernelOp
 from ir.layout import Layout
 from ir.layout_utils import dimension_merging
 from ir.roll import Roll
-from util.util import get_dim_map_by_dim, next_non_empty_dim, split_dim
+from util.util import (
+    get_dim_map_by_dim,
+    next_non_empty_dim,
+    round_to_ceiling_power_of_2,
+    split_dim,
+)
 
 
 def compact_ct_dim(ct_dim, slot_dims):
@@ -130,8 +136,11 @@ def compaction_heuristic(ct_dims, slot_dims):
             ct_dim = cts[0]
 
             # compact slot dimension with ct_dim
-            if slot_dim.extent > ct_dim.extent:
-                split_slot_1, split_slot_2 = split_dim(slot_dim, ct_dim.extent)
+            # A ciphertext dim can hold a number of indices that is not a
+            # power of two; in slots it takes the next power of two.
+            held = round_to_ceiling_power_of_2(ct_dim.extent)
+            if slot_dim.extent > held:
+                split_slot_1, split_slot_2 = split_dim(slot_dim, held)
                 new_ct_dim = Dim(ct_dim.dim, split_slot_1.extent, ct_dim.stride)
                 remaining_slot_dims.remove(slot_dim)
                 next_remaining_slot_dim = next_non_empty_dim(remaining_slot_dims[1:])
@@ -151,8 +160,8 @@ def compaction_heuristic(ct_dims, slot_dims):
                     del ct_dim_map[next_dim_index]
                 else:
                     ct_dim_map[next_dim_index] = cts
-            elif slot_dim.extent == ct_dim.extent:
-                new_slot_dims.append(ct_dim.copy())
+            elif slot_dim.extent == held:
+                new_slot_dims.append(Dim(ct_dim.dim, held, ct_dim.stride))
                 remaining_slot_dims.remove(slot_dim)
                 remaining_ct_dims.remove(ct_dim)
                 cts.remove(ct_dim)
@@ -164,7 +173,18 @@ def compaction_heuristic(ct_dims, slot_dims):
                 if remaining_slot_dims:
                     slot_dim = remaining_slot_dims[0]
             else:
-                split_ct_1, split_ct_2 = split_dim(ct_dim, slot_dim.extent)
+                if held == ct_dim.extent:
+                    split_ct_1, split_ct_2 = split_dim(ct_dim, slot_dim.extent)
+                else:
+                    # The gap takes the fine digit, so that the coarse one
+                    # stays on as few ciphertexts as the indices need:
+                    # [c:12:1] into [G:2] is [c:6:2];[c:2:1], not 8 ciphertexts.
+                    split_ct_1 = Dim(ct_dim.dim, slot_dim.extent, ct_dim.stride)
+                    split_ct_2 = Dim(
+                        ct_dim.dim,
+                        math.ceil(ct_dim.extent / slot_dim.extent),
+                        ct_dim.stride * slot_dim.extent,
+                    )
                 new_slot_dims.append(
                     Dim(ct_dim.dim, split_ct_1.extent, split_ct_1.stride)
                 )
