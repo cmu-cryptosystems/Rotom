@@ -145,7 +145,11 @@ def replicate_dimensions(a_kernel, b_kernel, shapes, alignment):
 
     a_fill_len = get_fill_len(replicated_kernels[0].layout.get_dims())
     b_fill_len = get_fill_len(replicated_kernels[1].layout.get_dims())
-    assert a_fill_len == b_fill_len
+    if a_fill_len != b_fill_len:
+        # The operands hold a dim that is not a power of two differently
+        # (40 channels as 3 ciphertexts of 16, and padded to 64 in slots):
+        # replication does not bring one to the other.
+        return None
     return replicated_kernels
 
 
@@ -578,6 +582,51 @@ def match_public_kernel(alignment, a_kernel, b_kernel, left):
         return (a_kernel, aligned_b_kernel)
 
 
+def _holds_a_dim_exactly(kernel):
+    """True when a piece of the layout has an extent that is not a power of
+    two: a ciphertext dim that holds exactly the channels a conv has."""
+    return any(dim.extent & (dim.extent - 1) for dim in kernel.layout.get_dims())
+
+
+def _conversions_like(alignment, a_kernel, b_kernel):
+    """Each operand converted to the other's layout, piece for piece.
+
+    The conversions below cut every piece into binary digits to pair the two
+    layouts, which a piece that is not a power of two does not have. An
+    operator that pairs every dim of one operand with a dim of the other
+    (elementwise) needs no cutting: the converted operand takes the other's
+    pieces, each holding the dim it faces.
+    """
+    if any(a is None or b is None for a, b in alignment):
+        return []
+    a_to_b = dict(alignment)
+    b_to_a = {b: a for a, b in alignment}
+
+    def like(kernel, other, partner):
+        dims = [
+            copy(piece)
+            if piece.dim is None
+            else Dim(partner[piece.dim], piece.extent, piece.stride, piece.dim_type)
+            for piece in other.layout.get_dims()
+        ]
+        layout = Layout(
+            kernel.layout.term,
+            other.layout.rolls,
+            dims,
+            kernel.layout.n,
+            kernel.layout.secret,
+        )
+        source = tuple(kernel.layout.get_dims())
+        return Kernel(KernelOp.CONVERSION, [source, tuple(dims), kernel], layout)
+
+    if a_kernel.layout.rolls or b_kernel.layout.rolls:
+        return []
+    return [
+        (a_kernel, like(b_kernel, a_kernel, a_to_b)),
+        (like(a_kernel, b_kernel, b_to_a), b_kernel),
+    ]
+
+
 def conv_dimensions(alignment, kernels):
     a_kernel = kernels[0]
     b_kernel = kernels[1]
@@ -593,6 +642,8 @@ def conv_dimensions(alignment, kernels):
             aligned_kernels.append(mk)
 
     if a_kernel.layout.secret and b_kernel.layout.secret:
+        if _holds_a_dim_exactly(a_kernel) or _holds_a_dim_exactly(b_kernel):
+            return aligned_kernels + _conversions_like(alignment, a_kernel, b_kernel)
         extent_a_dims, extent_b_dims = align_dimension_extents(
             a_kernel.layout.get_dims(), b_kernel.layout.get_dims()
         )

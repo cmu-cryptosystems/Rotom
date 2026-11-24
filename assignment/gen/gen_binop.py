@@ -131,13 +131,11 @@ def gen_binop(term, cs_kernels, shapes, roll_flag):
                 # a plaintext laid out like the other operand
                 replicated_kernels.append((a_cs_placeholder, b_cs_placeholder))
                 continue
-            replicated_kernels.append(
-                tuple(
-                    replicate_dimensions(
-                        a_cs_placeholder, b_cs_placeholder, shapes, alignment
-                    )
-                )
+            replicated = replicate_dimensions(
+                a_cs_placeholder, b_cs_placeholder, shapes, alignment
             )
+            if replicated is not None:
+                replicated_kernels.append(tuple(replicated))
 
     # if the roll_flag is set, apply rolls to move summation dimensions the vector dimensions
     if roll_flag and term.op == TensorOp.MATMUL:

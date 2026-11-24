@@ -11,13 +11,14 @@ import numpy as np
 import pytest
 
 from assignment.assignment import LayoutAssignment
+from assignment.gen.gen_align import _conversions_like, _holds_a_dim_exactly
 from assignment.gen.gen_compaction import find_compaction
 from backends.toy import Toy
 from frontends.tensor import TensorTerm
 from ir.kernel import Kernel, KernelOp
 from ir.kernel_cost import KernelCost
 from lower.lower import Lower
-from tests.test_conv_direct import _he_ops
+from tests.test_conv_direct import _he_ops, _run
 from tests.test_util import get_default_args
 from util.checker import check_results
 from util.layout_util import parse_layout
@@ -109,3 +110,90 @@ def test_every_plan_computes_the_convolution(c_in, c_out, size, k, stride, n):
             assert _he_ops({0: lowered.env[kernel]}) == {
                 op: conv[op] + compact[op] for op in conv
             }
+
+
+@pytest.mark.parametrize("channels,n", [(12, 256), (24, 1024), (40, 1024), (40, 4096)])
+def test_every_plan_of_the_sum_of_two_convs(channels, n):
+    """Each conv has layouts that hold its channels exactly on ciphertexts and
+    layouts padded to a power of two in slots. Operands that hold them
+    differently are added after one is converted to the other's layout."""
+    rng = np.random.default_rng(channels)
+    x = TensorTerm.Tensor("x", [8, 4, 4], True)
+    w1 = TensorTerm.Tensor("w1", [channels, 8, 1, 1], False)
+    w2 = TensorTerm.Tensor("w2", [channels, 8, 3, 3], False)
+    inputs = {
+        "x": rng.normal(size=(8, 4, 4)),
+        "w1": rng.normal(size=(channels, 8, 1, 1)),
+        "w2": rng.normal(size=(channels, 8, 3, 3)),
+    }
+    term = TensorTerm.conv2d(x, w1, 1, "same") + TensorTerm.conv2d(x, w2, 1, "same")
+    args = get_default_args()
+    args.n = n
+    args.backend = "toy"
+    search = LayoutAssignment(term, args)
+    search.run()
+
+    plans = [
+        search.combine_kernels(deepcopy(plan)) for plan in search.kernels[term].values()
+    ]
+    for kernel in plans:
+        results = Toy(Lower(kernel).run(), inputs, args).run()
+        check_results(term, inputs, kernel, results, 0, args)
+
+
+@pytest.mark.parametrize("channels,n", [(12, 256), (40, 1024)])
+def test_a_conv_output_converted_to_each_of_its_other_layouts(channels, n):
+    """The conversion the sum above is offered for operands that hold the
+    channels differently. The search never keeps it there (two operands in
+    one layout are cheaper), so it is run here on its own."""
+    term, inputs = _conv(8, channels, 4, 3, 1)
+    args = get_default_args()
+    args.n = n
+    args.backend = "toy"
+    search = LayoutAssignment(term, args)
+    search.run()
+    plans = [
+        search.combine_kernels(deepcopy(plan)) for plan in search.kernels[term].values()
+    ]
+
+    same_dims = {(0, 0), (1, 1), (2, 2)}
+    converted = 0
+    for source in plans:
+        for target in plans:
+            if source.layout == target.layout:
+                continue
+            if not (_holds_a_dim_exactly(source) or _holds_a_dim_exactly(target)):
+                continue
+            (_, _), (conversion, _) = _conversions_like(
+                same_dims,
+                Kernel(KernelOp.CS, [0], source.layout),
+                Kernel(KernelOp.CS, [1], target.layout),
+            )
+            kernel = Kernel(
+                KernelOp.CONVERSION,
+                [conversion.cs[0], conversion.cs[1], source],
+                conversion.layout,
+            )
+            assert kernel.layout.get_dims() == target.layout.get_dims()
+            results = Toy(Lower(kernel).run(), inputs, args).run()
+            check_results(term, inputs, kernel, results, 0, args)
+            converted += 1
+    assert converted
+
+
+def test_a_public_operand_on_channels_held_exactly_on_ciphertexts():
+    """80 channels on 5 ciphertexts of 16: the bias is padded to 128 on its
+    own, and is laid out like the conv output instead."""
+    rng = np.random.default_rng(6)
+    x = TensorTerm.Tensor("x", [8, 2, 4, 4], True, "[0:8:1][1:2:1][2:4:1][3:4:1]")
+    w = TensorTerm.Tensor("w", [80, 8, 1, 1, 1], False)
+    inputs = {
+        "x": rng.normal(size=(8, 2, 4, 4)),
+        "w": rng.normal(size=(80, 8, 1, 1, 1)),
+    }
+    conv = TensorTerm.conv3d(x, w, 1, "same")
+    for name, shape in (("bias", (80, 1, 1, 1)), ("full", (80, 2, 4, 4))):
+        inputs[name] = rng.normal(size=shape)
+        public = TensorTerm.Tensor(name, list(shape), False)
+        _run(conv + public, inputs, 4096)
+        _run(conv * public, inputs, 4096)
